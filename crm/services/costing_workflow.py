@@ -20,6 +20,7 @@ from crm.services.costing_currency import (
     normalize_costing_currency,
 )
 from crm.services.costing_engine import compute_costing
+from crm.services.invoice_state import create_draft_invoice
 from crm.services.order_lifecycle import (
     create_lifecycle_from_invoice,
     create_lifecycle_from_production,
@@ -121,20 +122,6 @@ def _supersede_previous_quick_revision(quick_costing, *, actor):
         new_value=quick_costing.revision_label,
     )
     return previous
-
-
-def _audit_invoice_draft_created(invoice, *, actor):
-    CRMAuditLog.objects.create(
-        actor=_user_or_none(actor),
-        module="invoice",
-        record_id=str(invoice.pk),
-        record_label=invoice.invoice_number or f"Invoice {invoice.pk}",
-        action_type=CRMAuditLog.ACTION_CREATED,
-        field_name="status",
-        previous_value="",
-        new_value=invoice.status or "draft",
-        target_url=f"/invoices/{invoice.pk}/",
-    )
 
 
 def approve_quick_costing(quick_costing, *, approver):
@@ -353,7 +340,7 @@ def create_invoice_from_costing(costing, user=None):
 
         amounts = get_costing_quote_amounts(costing)
         today = timezone.localdate()
-        invoice = Invoice.objects.create(
+        invoice = Invoice(
             costing_header=costing,
             customer=costing.customer,
             invoice_number=_next_invoice_number(),
@@ -385,9 +372,7 @@ def create_invoice_from_costing(costing, user=None):
             changed_by=_user_or_none(user),
             note=invoice.invoice_number,
         )
-        _audit_invoice_draft_created(invoice, actor=user)
-        create_lifecycle_from_invoice(invoice, user=user)
-        sync_opportunity_stage_from_invoice(invoice)
+        create_draft_invoice(invoice, actor=user)
         return invoice, True
 
 
@@ -450,7 +435,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             customer = production_order.customer
 
         today = timezone.localdate()
-        invoice = Invoice.objects.create(
+        invoice = Invoice(
             quick_costing=quick_costing,
             order=production_order,
             customer=customer,
@@ -478,11 +463,9 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             other_internal_cost=Decimal("0"),
             internal_cost_note="",
         )
-        _audit_invoice_draft_created(invoice, actor=user)
+        create_draft_invoice(invoice, actor=user)
         quick_costing.status = QuickCosting.STATUS_INVOICED
         quick_costing.save(update_fields=["status", "updated_at"])
-        create_lifecycle_from_invoice(invoice, user=user)
-        sync_opportunity_stage_from_invoice(invoice)
         return invoice, True
 
 

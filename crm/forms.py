@@ -1521,6 +1521,11 @@ class InvoiceForm(forms.ModelForm):
 
         if "status" in self.fields:
             self.fields["status"].required = False
+            self.fields["status"].disabled = True
+
+        if "paid_amount" in self.fields:
+            self.fields["paid_amount"].required = False
+            self.fields["paid_amount"].disabled = True
 
         if can_edit_historical_dates:
             if "historical_entry_mode" in self.fields:

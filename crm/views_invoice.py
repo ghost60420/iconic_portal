@@ -20,10 +20,6 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import (
-    AccountingEntry,
-    AccountingEntryAudit,
-    AccountingMonthClose,
-    AccountingMonthLock,
     CRMAuditLog,
     CostingHeader,
     Customer,
@@ -39,8 +35,7 @@ from .forms import InvoiceForm, InvoicePaymentForm, InvoiceSettingsForm
 from .permissions import can_view_internal_costing, get_access
 from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
-from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
-from .services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
+from .services.order_lifecycle import build_lifecycle_profit_breakdown
 from .services.product_reference_images import reference_images_for_opportunity, reference_images_for_production
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.historical_dates import (
@@ -48,6 +43,13 @@ from .services.historical_dates import (
     apply_invoice_reporting_date_filter,
     can_edit_historical_dates,
     with_invoice_reporting_date,
+)
+from .services.invoice_state import (
+    approve_invoice as approve_invoice_write,
+    capture_protected_state,
+    create_draft_invoice,
+    save_invoice_details,
+    void_invoice as void_invoice_write,
 )
 from .services.operations_permissions import (
     ROLE_ADMIN,
@@ -60,6 +62,13 @@ from .services.operations_permissions import (
     has_operations_role,
 )
 from .services.local_sewing import calculate_local_sewing, is_bangladesh_local_sewing
+from .services.payment_reconciliation import (
+    PaymentWriteError,
+    delete_invoice_payment,
+    invoice_payment_side,
+    is_accounting_period_closed,
+    record_invoice_payment,
+)
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -320,24 +329,6 @@ def _calc_totals(inv: Invoice) -> None:
         total = Decimal("0")
     inv.total_amount = total
 
-    paid = _d(inv.paid_amount)
-    if paid <= 0:
-        if inv.status not in ("draft", "sent", "cancelled"):
-            inv.status = "draft"
-    else:
-        if paid >= total and total > 0:
-            inv.status = "paid"
-        elif total > 0:
-            inv.status = "partial"
-
-
-def _invoice_payment_side(inv: Invoice) -> str:
-    region = (getattr(inv, "invoice_region", "") or "").upper().strip()
-    if region in {"CA", "BD"}:
-        return region
-    currency = (getattr(inv, "currency", "") or "").upper().strip()
-    return "BD" if currency == "BDT" else "CA"
-
 
 def _latest_cad_to_bdt() -> Decimal:
     row = ExchangeRate.objects.order_by("-updated_at").first()
@@ -382,73 +373,6 @@ def _invoice_total_cad_equivalent(inv: Invoice) -> dict | None:
         "display": format_finance_money(cad_amount, "CAD"),
         "rate": rate,
     }
-
-
-def _is_accounting_month_closed(payment_date, side: str) -> bool:
-    if not payment_date:
-        return False
-
-    year = payment_date.year
-    month = payment_date.month
-    side = (side or "").upper().strip()
-
-    if AccountingMonthClose.objects.filter(
-        year=year,
-        month=month,
-        is_closed=True,
-        side__in=[side, "ALL"],
-    ).exists():
-        return True
-
-    lock_fields = {field.name for field in AccountingMonthLock._meta.fields}
-    lock_filter = {"year": year, "month": month, "is_closed": True}
-    if "side" in lock_fields and side:
-        lock_filter["side"] = side
-    return AccountingMonthLock.objects.filter(**lock_filter).exists()
-
-
-def _entry_snapshot(entry: AccountingEntry) -> dict:
-    return {
-        "id": entry.id,
-        "date": str(entry.date) if entry.date else "",
-        "side": entry.side,
-        "direction": entry.direction,
-        "status": entry.status,
-        "main_type": entry.main_type,
-        "sub_type": entry.sub_type,
-        "currency": entry.currency,
-        "amount_original": str(entry.amount_original or ""),
-        "amount_cad": str(entry.amount_cad or ""),
-        "amount_bdt": str(entry.amount_bdt or ""),
-        "description": entry.description or "",
-        "internal_note": entry.internal_note or "",
-        "customer_id": entry.customer_id or "",
-        "production_order_id": entry.production_order_id or "",
-    }
-
-
-def _audit_accounting_entry(entry: AccountingEntry, user, note: str = "") -> None:
-    try:
-        AccountingEntryAudit.objects.create(
-            entry=entry,
-            action="CREATE",
-            changed_by=user if user and user.is_authenticated else None,
-            after_data=_entry_snapshot(entry),
-            note=note or "",
-        )
-    except Exception:
-        pass
-
-
-def _sync_invoice_payment_status(inv: Invoice) -> None:
-    total = _d(inv.total_amount)
-    paid = _d(inv.paid_amount)
-    if paid <= 0:
-        inv.status = "draft" if inv.status == "draft" else "sent"
-    elif total > 0 and paid >= total:
-        inv.status = "paid"
-    elif total > 0:
-        inv.status = "partial"
 
 
 def _invoice_payment_history_context(inv: Invoice, user) -> dict:
@@ -512,37 +436,6 @@ def _invoice_payment_error_response(request, inv: Invoice, message: str, *, stat
     return redirect("invoice_view", pk=inv.pk)
 
 
-def _payment_delete_audit_payload(payment: InvoicePayment, invoice: Invoice, reason: str, user) -> dict:
-    return {
-        "deleted_payment_id": payment.pk,
-        "invoice_id": invoice.pk,
-        "invoice_number": invoice.invoice_number,
-        "original_amount": str(_money(payment.amount)),
-        "currency": payment.currency,
-        "payment_date": str(payment.payment_date) if payment.payment_date else "",
-        "payment_method": payment.get_payment_method_display(),
-        "deleted_by": getattr(user, "username", "") if user and getattr(user, "is_authenticated", False) else "",
-        "deleted_time": timezone.now().isoformat(),
-        "deletion_reason": reason,
-        "accounting_entry_id": payment.accounting_entry_id,
-    }
-
-
-def _audit_invoice_payment_delete(payment: InvoicePayment, invoice: Invoice, user, reason: str) -> None:
-    payload = _payment_delete_audit_payload(payment, invoice, reason, user)
-    CRMAuditLog.objects.create(
-        actor=user if user and getattr(user, "is_authenticated", False) else None,
-        module="invoice_payment",
-        record_id=str(payment.pk),
-        record_label=f"{invoice.invoice_number} payment {payment.pk}",
-        action_type=CRMAuditLog.ACTION_DELETED,
-        field_name="payment",
-        previous_value=json.dumps(payload, sort_keys=True),
-        new_value=reason,
-        target_url=reverse("invoice_view", args=[invoice.pk]),
-    )
-
-
 def _payment_audit_log_rows(limit: int = 300) -> list[dict]:
     logs = (
         CRMAuditLog.objects.select_related("actor")
@@ -576,27 +469,6 @@ def _payment_audit_log_rows(limit: int = 300) -> list[dict]:
             }
         )
     return rows
-
-
-def _audit_invoice_status_change(invoice: Invoice, user, old_status, new_status, *, action_type=None) -> None:
-    old_status = old_status or ""
-    new_status = new_status or ""
-    if old_status == new_status and action_type != CRMAuditLog.ACTION_CREATED:
-        return
-    try:
-        CRMAuditLog.objects.create(
-            actor=user if user and getattr(user, "is_authenticated", False) else None,
-            module="invoice",
-            record_id=str(invoice.pk),
-            record_label=invoice.invoice_number or f"Invoice {invoice.pk}",
-            action_type=action_type or CRMAuditLog.ACTION_STATUS_CHANGED,
-            field_name="status",
-            previous_value=old_status,
-            new_value=new_status,
-            target_url=reverse("invoice_view", args=[invoice.pk]),
-        )
-    except Exception:
-        pass
 
 
 def _parse_ar_date(value):
@@ -2186,7 +2058,6 @@ def invoice_add(request):
                     inv.opportunity = source_costing.opportunity
                     if not inv.customer_id:
                         inv.customer = source_costing.customer
-                    inv.status = "draft"
                     inv.sewing_charge = _d(quotation_prefill["amounts"]["labor_total"])
                     inv.other_internal_cost = _d(quotation_prefill["amounts"]["other_cost_total"])
                     inv.internal_cost_note = (
@@ -2204,18 +2075,8 @@ def invoice_add(request):
                     _apply_local_sewing_invoice_source(inv, local_order)
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
-                inv.status = "draft"
-                inv.save()
+                create_draft_invoice(inv, actor=request.user)
                 form.save_m2m()
-                _audit_invoice_status_change(
-                    inv,
-                    request.user,
-                    "",
-                    inv.status,
-                    action_type=CRMAuditLog.ACTION_CREATED,
-                )
-                create_lifecycle_from_invoice(inv, user=request.user)
-                sync_opportunity_stage_from_invoice(inv)
 
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
@@ -2278,18 +2139,8 @@ def invoice_add_ca(request):
                 inv.invoice_region = "CA"
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
-                inv.status = "draft"
-                inv.save()
+                create_draft_invoice(inv, actor=request.user)
                 form.save_m2m()
-                _audit_invoice_status_change(
-                    inv,
-                    request.user,
-                    "",
-                    inv.status,
-                    action_type=CRMAuditLog.ACTION_CREATED,
-                )
-                create_lifecycle_from_invoice(inv, user=request.user)
-                sync_opportunity_stage_from_invoice(inv)
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -2351,18 +2202,8 @@ def invoice_add_bd(request):
                 inv.invoice_region = "BD"
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
-                inv.status = "draft"
-                inv.save()
+                create_draft_invoice(inv, actor=request.user)
                 form.save_m2m()
-                _audit_invoice_status_change(
-                    inv,
-                    request.user,
-                    "",
-                    inv.status,
-                    action_type=CRMAuditLog.ACTION_CREATED,
-                )
-                create_lifecycle_from_invoice(inv, user=request.user)
-                sync_opportunity_stage_from_invoice(inv)
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -2396,7 +2237,7 @@ def invoice_add_bd(request):
 @user_passes_test(superuser_only)
 def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
-    previous_status = inv.status
+    protected_state = capture_protected_state(inv)
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
     can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
 
@@ -2413,8 +2254,6 @@ def invoice_edit(request, pk):
 
                 if not (inv2.invoice_number or "").strip():
                     inv2.invoice_number = _next_invoice_number()
-                inv2.status = previous_status
-
                 if inv2.order_id and not inv2.customer_id:
                     try:
                         inv2.customer_id = inv2.order.customer_id
@@ -2430,11 +2269,12 @@ def invoice_edit(request, pk):
 
                 _sync_invoice_market_region(inv2)
                 _calc_totals(inv2)
-                inv2.save()
+                save_invoice_details(
+                    inv2,
+                    protected_state=protected_state,
+                    actor=request.user,
+                )
                 form.save_m2m()
-                _audit_invoice_status_change(inv2, request.user, previous_status, inv2.status)
-                create_lifecycle_from_invoice(inv2, user=request.user)
-                sync_opportunity_stage_from_invoice(inv2)
 
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
@@ -2512,7 +2352,7 @@ def invoice_view(request, pk):
     initial = {
         "payment_date": timezone.localdate(),
         "currency": inv.currency or "CAD",
-        "side": _invoice_payment_side(inv),
+        "side": invoice_payment_side(inv),
         "production_order": inv.order_id or None,
     }
     initial.update(_payment_rate_initial(inv.currency))
@@ -2526,7 +2366,7 @@ def invoice_view(request, pk):
             **payment_context,
             "reference_images": reference_images,
             "primary_reference_image": reference_images[0] if reference_images else None,
-            "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+            "is_payment_month_closed": is_accounting_period_closed(timezone.localdate(), invoice_payment_side(inv)),
             "can_manage_invoice_costing": can_view_invoice_costing,
             "lifecycle": lifecycle,
             "lifecycle_profit": lifecycle_profit,
@@ -2638,21 +2478,7 @@ def invoice_delete_or_void(request, pk):
                 messages.success(request, f"Invoice {invoice_label} was deleted. Reason recorded.")
                 return redirect("invoice_list")
 
-            invoice.status = "cancelled"
-            invoice.is_archived = True
-            invoice.archived_at = timezone.now()
-            invoice.archived_by = request.user
-            invoice.notes = (invoice.notes or "").strip()
-            void_note = f"Voided by {request.user.get_username()} on {timezone.now():%Y-%m-%d %H:%M}: {reason}"
-            invoice.notes = f"{invoice.notes}\n\n{void_note}".strip()
-            invoice.save(update_fields=["status", "is_archived", "archived_at", "archived_by", "notes", "updated_at"])
-            _audit_invoice_delete_or_void(
-                invoice,
-                request.user,
-                action="voided",
-                reason=reason,
-                previous_status=previous_status,
-            )
+            invoice = void_invoice_write(invoice, actor=request.user, reason=reason)
         messages.success(request, f"Invoice {invoice.invoice_number} was voided. Payment and accounting records were preserved.")
         return redirect("invoice_view", pk=invoice.pk)
 
@@ -3135,16 +2961,16 @@ def invoice_payment_add(request, pk):
                 "payment_history": payment_history,
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
-                "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+                "is_payment_month_closed": is_accounting_period_closed(timezone.localdate(), invoice_payment_side(inv)),
                 "can_manage_invoice_costing": can_view_invoice_costing,
                 "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             },
         )
 
     payment_date = form.cleaned_data["payment_date"]
-    side = (form.cleaned_data.get("side") or _invoice_payment_side(inv)).upper().strip()
+    side = (form.cleaned_data.get("side") or invoice_payment_side(inv)).upper().strip()
 
-    if _is_accounting_month_closed(payment_date, side):
+    if is_accounting_period_closed(payment_date, side):
         form.add_error(
             "payment_date",
             f"{side} accounting is closed for {payment_date:%Y-%m}. Open the month before recording this payment.",
@@ -3174,45 +3000,13 @@ def invoice_payment_add(request, pk):
             },
         )
 
-    with transaction.atomic():
-        payment = form.save(commit=False)
-        payment.invoice = inv
-        payment.side = side
-        payment.created_by = request.user if request.user.is_authenticated else None
-        if not payment.production_order_id and inv.order_id:
-            payment.production_order = inv.order
-        payment.save()
-
-        entry = AccountingEntry.objects.create(
-            date=payment.payment_date,
-            side=payment.side,
-            direction=AccountingEntry.DIR_IN,
-            status="PAID",
-            main_type="INCOME",
-            sub_type="Invoice payment received",
-            customer=inv.customer,
-            production_order=payment.production_order,
-            currency=payment.currency,
-            amount_original=payment.amount,
-            rate_to_cad=payment.rate_to_cad,
-            rate_to_bdt=payment.rate_to_bdt,
-            description=f"Payment received for invoice {inv.invoice_number}",
-            internal_note=payment.notes or "",
-            created_by=request.user if request.user.is_authenticated else None,
-        )
-        _audit_accounting_entry(entry, request.user, note=f"Invoice payment {inv.invoice_number}")
-
-        payment.accounting_entry = entry
-        payment.save(update_fields=["accounting_entry"])
-
-        previous_status = inv.status
-        inv.paid_amount = _d(inv.paid_amount) + _d(payment.amount)
-        _sync_invoice_payment_status(inv)
-        inv.updated_at = timezone.now()
-        inv.save(update_fields=["paid_amount", "status", "updated_at"])
-        _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
-        create_lifecycle_from_invoice(inv, user=request.user)
-        sync_opportunity_stage_from_invoice(inv)
+    payment = form.save(commit=False)
+    payment.side = side
+    try:
+        result = record_invoice_payment(inv, payment, actor=request.user)
+    except PaymentWriteError as exc:
+        return _invoice_payment_error_response(request, inv, str(exc), status=409)
+    inv = result.invoice
 
     if inv.payment_status_key == "overpaid":
         messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
@@ -3255,51 +3049,15 @@ def invoice_payment_delete(request, pk, payment_pk):
         messages.warning(request, "Payment was already removed. Invoice totals were not changed again.")
         return redirect("invoice_view", pk=inv.pk)
 
-    accounting_entry = payment.accounting_entry
-    locked_date = accounting_entry.date if accounting_entry else payment.payment_date
-    locked_side = accounting_entry.side if accounting_entry else payment.side
-    if _is_accounting_month_closed(locked_date, locked_side):
-        return _invoice_payment_error_response(
-            request,
+    try:
+        inv = delete_invoice_payment(
             inv,
-            "This payment is in a locked accounting period. Create a reversal entry instead.",
-            status=409,
+            payment,
+            actor=request.user,
+            reason=reason,
         )
-
-    if accounting_entry and accounting_entry.invoice_payments.exclude(pk=payment.pk).exists():
-        return _invoice_payment_error_response(
-            request,
-            inv,
-            "This payment shares an accounting entry with another payment. Review the accounting entry before deleting.",
-            status=409,
-        )
-
-    with transaction.atomic():
-        previous_status = inv.status
-        previous_paid = _d(inv.paid_amount)
-        payment_amount = _d(payment.amount)
-
-        if accounting_entry:
-            AccountingEntryAudit.objects.create(
-                entry=accounting_entry,
-                action="DELETE",
-                changed_by=request.user if request.user.is_authenticated else None,
-                before_data=_entry_snapshot(accounting_entry),
-                note=f"Deleted invoice payment {payment.pk}",
-            )
-
-        _audit_invoice_payment_delete(payment, inv, request.user, reason)
-
-        payment.delete()
-        if accounting_entry:
-            accounting_entry.delete()
-
-        inv.paid_amount = _money(max(previous_paid - payment_amount, Decimal("0")))
-        _sync_invoice_payment_status(inv)
-        inv.updated_at = timezone.now()
-        inv.save(update_fields=["paid_amount", "status", "updated_at"])
-        _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
-        sync_opportunity_stage_from_invoice(inv)
+    except PaymentWriteError as exc:
+        return _invoice_payment_error_response(request, inv, str(exc), status=409)
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return _invoice_payment_json_response(
@@ -3332,19 +3090,10 @@ def invoice_approve(request, pk):
     Explicit send endpoint. Kept under the existing URL name for compatibility.
     """
     inv = get_object_or_404(Invoice, pk=pk)
-    previous_status = inv.status
-    if previous_status != "draft":
+    inv, approved = approve_invoice_write(inv, actor=request.user)
+    if not approved:
         messages.info(request, "Only draft invoices can be sent.")
         return redirect("invoice_view", pk=inv.pk)
-    if hasattr(inv, "approved_at"):
-        inv.approved_at = timezone.now()
-    if hasattr(inv, "approved_by"):
-        inv.approved_by = request.user
-    inv.status = "sent"
-    inv.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
-    _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
-    create_lifecycle_from_invoice(inv, user=request.user)
-    sync_opportunity_stage_from_invoice(inv)
     messages.success(request, "Invoice sent.")
     return redirect("invoice_view", pk=inv.pk)
 
