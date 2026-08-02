@@ -5895,6 +5895,7 @@ class InvoicePayment(models.Model):
 
 
 class ReceivableEvent(models.Model):
+    KIND_INVOICE_ISSUED = "INVOICE_ISSUED"
     KIND_CASH_RECEIPT = "CASH_RECEIPT"
     KIND_CREDIT_NOTE = "CREDIT_NOTE"
     KIND_REFUND = "REFUND"
@@ -5902,6 +5903,7 @@ class ReceivableEvent(models.Model):
     KIND_ADJUSTMENT = "ADJUSTMENT"
     KIND_REVERSAL = "REVERSAL"
     KIND_CHOICES = [
+        (KIND_INVOICE_ISSUED, "Invoice issued"),
         (KIND_CASH_RECEIPT, "Cash receipt"),
         (KIND_CREDIT_NOTE, "Credit note"),
         (KIND_REFUND, "Refund"),
@@ -5930,6 +5932,13 @@ class ReceivableEvent(models.Model):
         on_delete=models.PROTECT,
         related_name="receivable_events",
     )
+    source_invoice = models.ForeignKey(
+        "Invoice",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="receivable_events",
+    )
     legacy_invoice_payment = models.OneToOneField(
         "InvoicePayment",
         null=True,
@@ -5939,6 +5948,13 @@ class ReceivableEvent(models.Model):
     )
     accounting_entry = models.OneToOneField(
         "AccountingEntry",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="receivable_event",
+    )
+    financial_journal = models.OneToOneField(
+        "JournalEntry",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -6016,6 +6032,8 @@ class ReceivableEvent(models.Model):
             raise ValidationError({"native_amount": "Only adjustment events may use a negative native amount."})
         if self.reverses_event_id and self.reverses_event_id == self.pk:
             raise ValidationError({"reverses_event": "A receivable event cannot reverse itself."})
+        if self.kind == self.KIND_INVOICE_ISSUED and not self.source_invoice_id:
+            raise ValidationError({"source_invoice": "Invoice-issued events require a source invoice."})
         if self.kind == self.KIND_REVERSAL and not self.reverses_event_id:
             raise ValidationError({"reverses_event": "A reversal must reference the event it reverses."})
         if self.kind != self.KIND_REVERSAL and self.reverses_event_id:
@@ -6034,8 +6052,10 @@ class ReceivableEvent(models.Model):
             previous = type(self).objects.filter(pk=self.pk).values(
                 "state",
                 "customer_id",
+                "source_invoice_id",
                 "legacy_invoice_payment_id",
                 "accounting_entry_id",
+                "financial_journal_id",
                 "reverses_event_id",
                 "kind",
                 "event_date",
@@ -7062,3 +7082,34 @@ from .models_email import EmailThread, EmailMessage
 from .models_email_outbox import OutboundEmailLog
 from .models_email_config import EmailInboxConfig
 from .models_access import UserAccess
+from .models_financial_core import (
+    BankReconciliation,
+    BankReconciliationMatch,
+    BankStatementLine,
+    CashBankAccount,
+    CurrencyReviewItem,
+    ExpenseCategory,
+    ExpenseRecord,
+    FactoryRunningCostDefault,
+    FinancialAccount,
+    FinancialAuditEvent,
+    FinancialBudget,
+    FinancialDocument,
+    FinanceOperation,
+    FinancialExceptionReview,
+    FinancialPeriod,
+    FinancialAdjustmentRequest,
+    HistoricalExchangeRate,
+    InvoiceFinancialState,
+    JournalEntry,
+    JournalLine,
+    PayableAllocation,
+    PayableEvent,
+    PayrollBatch,
+    PayrollLine,
+    ProductionCostRecord,
+    QuickCostingTimelineSnapshot,
+    RecurringExpenseTemplate,
+    Supplier,
+    SupplierBill,
+)

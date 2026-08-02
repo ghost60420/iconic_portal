@@ -7,6 +7,7 @@ from functools import wraps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import BDStaff, BDStaffMonth
@@ -32,7 +33,7 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.db.utils import OperationalError, ProgrammingError
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -56,6 +57,13 @@ from .services.historical_dates import (
     INVOICE_REPORTING_DATE_ALIAS,
     apply_invoice_reporting_date_filter,
     with_invoice_reporting_date,
+)
+from .services.financial_permissions import (
+    accessible_financial_sides,
+    can_approve_financial_transactions,
+    can_export_financial_data,
+    can_manage_financial_transactions,
+    scope_by_financial_side,
 )
 
 
@@ -249,7 +257,7 @@ def _save_attachments(entry, request, user, field_name="attachments") -> int:
 # EXPORT HELPERS
 # --------------------
 def _entries_queryset_from_request(request, force_side=None):
-    qs = AccountingEntry.objects.all().select_related(
+    qs = scope_by_financial_side(AccountingEntry.objects.all(), request.user).select_related(
         "customer", "opportunity", "production_order", "shipment", "created_by"
     )
 
@@ -503,7 +511,7 @@ def accounting_entry_add_bd(request):
 # --------------------
 @login_required
 def accounting_entry_edit(request, pk):
-    entry = get_object_or_404(AccountingEntry, pk=pk)
+    entry = get_object_or_404(scope_by_financial_side(AccountingEntry.objects.all(), request.user), pk=pk)
     if not can_edit_entry(request.user, entry):
         return HttpResponseForbidden("You do not have permission to edit this entry.")
 
@@ -540,14 +548,8 @@ def accounting_entry_delete(request, pk):
     if request.method != "POST":
         return HttpResponseForbidden("Delete must be POST.")
 
-    entry = get_object_or_404(AccountingEntry, pk=pk)
-    if not can_delete_entry(request.user, entry):
-        return HttpResponseForbidden("You do not have permission to delete this entry.")
-
-    _audit(entry, "DELETE", request.user, before=_entry_snapshot(entry), note="Delete")
-    entry.delete()
-    messages.success(request, "Deleted.")
-    return redirect("accounting_entry_list")
+    get_object_or_404(scope_by_financial_side(AccountingEntry.objects.all(), request.user), pk=pk)
+    return HttpResponseForbidden("Financial history cannot be deleted; use an evidenced adjustment or reversal.")
 
 
 # --------------------
@@ -3644,6 +3646,8 @@ def accounting_entry_list(request):
 # --------------------
 @login_required
 def accounting_list_export_csv(request):
+    if not can_export_financial_data(request.user):
+        raise PermissionDenied("Financial export permission is required.")
     qs = _entries_queryset_from_request(request)
     resp = HttpResponse(content_type="text/csv")
     resp["Content-Disposition"] = 'attachment; filename="accounting_entries.csv"'
@@ -3656,6 +3660,8 @@ def accounting_list_export_csv(request):
 
 @login_required
 def accounting_list_export_xlsx(request):
+    if not can_export_financial_data(request.user):
+        raise PermissionDenied("Financial export permission is required.")
     qs = _entries_queryset_from_request(request)
     return _write_xlsx(qs, "accounting_entries.xlsx")
 
@@ -3665,12 +3671,16 @@ def accounting_list_export_xlsx(request):
 # --------------------
 @login_required
 def accounting_close_month(request):
+    if not can_approve_financial_transactions(request.user):
+        raise PermissionDenied("Financial period approval permission is required.")
     if AccountingMonthLock is None:
         return HttpResponse("Month lock model not found.")
 
     year = _parse_int(request.POST.get("year") or request.GET.get("year"))
     month = _parse_int(request.POST.get("month") or request.GET.get("month"))
     side = (request.POST.get("side") or request.GET.get("side") or "CA").strip().upper()
+    if side not in accessible_financial_sides(request.user):
+        raise Http404("Financial period not found.")
 
     if not year or not month:
         messages.error(request, "Year and month required.")
@@ -3691,12 +3701,16 @@ def accounting_close_month(request):
 
 @login_required
 def accounting_open_month(request):
+    if not can_approve_financial_transactions(request.user):
+        raise PermissionDenied("Financial period approval permission is required.")
     if AccountingMonthLock is None:
         return HttpResponse("Month lock model not found.")
 
     year = _parse_int(request.POST.get("year") or request.GET.get("year"))
     month = _parse_int(request.POST.get("month") or request.GET.get("month"))
     side = (request.POST.get("side") or request.GET.get("side") or "CA").strip().upper()
+    if side not in accessible_financial_sides(request.user):
+        raise Http404("Financial period not found.")
 
     if not year or not month:
         messages.error(request, "Year and month required.")
@@ -3718,7 +3732,9 @@ def accounting_open_month(request):
 # --------------------
 @login_required
 def accounting_files(request):
-    qs = AccountingAttachment.objects.select_related("entry", "uploaded_by").order_by("-uploaded_at", "-id")
+    qs = AccountingAttachment.objects.select_related("entry", "uploaded_by").filter(
+        entry__side__in=accessible_financial_sides(request.user)
+    ).order_by("-uploaded_at", "-id")
     side = (request.GET.get("side") or "").strip().upper()
     if side in ["CA", "BD"]:
         qs = qs.filter(entry__side=side)
@@ -3732,7 +3748,11 @@ def accounting_files(request):
 
 @login_required
 def accounting_audit_trail(request):
-    qs = AccountingEntryAudit.objects.select_related("entry", "changed_by").order_by("-changed_at", "-id")
+    if not can_export_financial_data(request.user):
+        raise PermissionDenied("Financial audit permission is required.")
+    qs = AccountingEntryAudit.objects.select_related("entry", "changed_by").filter(
+        entry__side__in=accessible_financial_sides(request.user)
+    ).order_by("-changed_at", "-id")
 
     action = (request.GET.get("action") or "").strip()
     if action:
@@ -3754,6 +3774,8 @@ def accounting_doc_upload(request):
         form = AccountingDocumentForm(request.POST, request.FILES)
         if form.is_valid():
             obj = form.save(commit=False)
+            if obj.side not in accessible_financial_sides(request.user):
+                raise Http404("Financial document scope not found.")
             obj.uploaded_by = request.user
             obj.save()
             messages.success(request, "File uploaded.")
@@ -3770,7 +3792,7 @@ def accounting_doc_list(request):
     q = (request.GET.get("q") or "").strip()
     side = (request.GET.get("side") or "").strip().upper()
 
-    qs = AccountingDocument.objects.all()
+    qs = AccountingDocument.objects.filter(side__in=accessible_financial_sides(request.user))
 
     if side in ["CA", "BD"]:
         qs = qs.filter(side=side)
@@ -3789,7 +3811,7 @@ def accounting_doc_list(request):
 
 @login_required
 def accounting_entry_attach(request, pk):
-    entry = get_object_or_404(AccountingEntry, pk=pk)
+    entry = get_object_or_404(scope_by_financial_side(AccountingEntry.objects.all(), request.user), pk=pk)
 
     if request.method == "POST":
         form = AccountingEntryAttachForm(request.POST, request.FILES)
@@ -3814,6 +3836,35 @@ def accounting_entry_attach(request, pk):
         form = AccountingEntryAttachForm()
 
     return render(request, "crm/accounting_entry_attach.html", {"entry": entry, "form": form})
+
+
+@login_required
+def accounting_attachment_download(request, pk):
+    attachment = get_object_or_404(
+        AccountingAttachment.objects.select_related("entry").filter(
+            entry__side__in=accessible_financial_sides(request.user)
+        ),
+        pk=pk,
+    )
+    try:
+        handle = attachment.file.open("rb")
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404("Attachment file not found.") from exc
+    filename = (attachment.original_name or attachment.file.name.rsplit("/", 1)[-1]).replace('"', "")
+    return FileResponse(handle, as_attachment=True, filename=filename)
+
+
+@login_required
+def accounting_document_download(request, pk):
+    document = get_object_or_404(
+        AccountingDocument.objects.filter(side__in=accessible_financial_sides(request.user)), pk=pk
+    )
+    try:
+        handle = document.file.open("rb")
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404("Document file not found.") from exc
+    filename = (document.original_name or document.file.name.rsplit("/", 1)[-1]).replace('"', "")
+    return FileResponse(handle, as_attachment=True, filename=filename)
 
 @login_required
 @bd_required

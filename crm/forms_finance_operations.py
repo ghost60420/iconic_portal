@@ -1,0 +1,1014 @@
+from calendar import monthrange
+from datetime import date
+from decimal import Decimal
+
+from django import forms
+from django.db.models import Q
+
+from crm.models import (
+    CashBankAccount,
+    Customer,
+    Department,
+    EmployeeProfile,
+    ExpenseCategory,
+    FactoryRunningCostDefault,
+    FinanceOperation,
+    Invoice,
+    InventoryItem,
+    ProductionOrder,
+    QuickCosting,
+    Supplier,
+    SupplierBill,
+)
+from crm.services.finance_operations import UTILITY_ACCOUNT_KEYS
+from crm.services.financial_currency import MissingExchangeRate, money, resolve_currency_snapshot
+from crm.services.financial_permissions import (
+    accessible_financial_sides,
+    scope_bank_accounts_for_user,
+    scope_invoices_for_user,
+)
+
+
+CURRENCIES = (("CAD", "CAD"), ("USD", "USD"), ("BDT", "BDT"))
+PAYMENT_METHODS = (
+    ("bank", "Bank transfer"),
+    ("cash", "Cash"),
+    ("cheque", "Cheque"),
+    ("card", "Card"),
+    ("mobile", "Mobile payment"),
+    ("other", "Other"),
+)
+
+
+def _json_value(value):
+    if isinstance(value, (date, Decimal)):
+        return str(value)
+    return value
+
+
+def _production_orders_for_sides(sides):
+    side_query = Q(pk__in=[])
+    if "BD" in sides:
+        side_query |= Q(factory_location__iexact="bd")
+    if "CA" in sides:
+        side_query |= ~Q(factory_location__iexact="bd")
+    return ProductionOrder.objects.filter(side_query)
+
+
+class InvoiceBalanceChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, invoice):
+        return f"{invoice.invoice_number} - {invoice.currency} {invoice.balance:,.2f} remaining"
+
+
+class SupplierBillBalanceChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, bill):
+        return (
+            f"{bill.bill_number} - {bill.currency} {bill.total_amount:,.2f} total; "
+            f"{bill.remaining_amount:,.2f} outstanding"
+        )
+
+
+class FinanceOperationForm(forms.Form):
+    transaction_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    side = forms.ChoiceField(choices=(("CA", "Canada"), ("BD", "Bangladesh")))
+    currency = forms.ChoiceField(choices=CURRENCIES)
+    rate_to_cad = forms.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        required=False,
+        help_text="Optional when an approved rate exists for the transaction date.",
+    )
+    rate_to_bdt = forms.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        required=False,
+        help_text="Optional when an approved rate exists for the transaction date.",
+    )
+    reference = forms.CharField(max_length=120)
+    business_purpose = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+    supporting_document = forms.FileField()
+
+    def __init__(self, *args, user=None, workflow=None, **kwargs):
+        self.user = user
+        self.workflow = workflow
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(user)
+        self.fields["side"].choices = [choice for choice in self.fields["side"].choices if choice[0] in sides]
+        if len(sides) == 1:
+            self.fields["side"].initial = next(iter(sides))
+        self.fields["transaction_date"].initial = date.today
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, (forms.Select, forms.SelectMultiple)):
+                field.widget.attrs.setdefault("class", "form-select")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    def _operation(self, *, operation_type=None, total_amount, amount_before_tax=0, tax_amount=0, details=None, **fields):
+        cleaned = self.cleaned_data
+        transaction_date = fields.pop("transaction_date", cleaned["transaction_date"])
+        reference = fields.pop("reference", (cleaned.get("reference") or "").strip())
+        return FinanceOperation(
+            operation_type=operation_type or self.workflow["operation_type"],
+            transaction_date=transaction_date,
+            side=cleaned["side"],
+            currency=cleaned["currency"],
+            amount_before_tax=money(amount_before_tax),
+            tax_amount=money(tax_amount),
+            total_amount=money(total_amount),
+            rate_to_cad=cleaned.get("rate_to_cad") or Decimal("0"),
+            rate_to_bdt=cleaned.get("rate_to_bdt") or Decimal("0"),
+            amount_cad=Decimal("0"),
+            amount_bdt=Decimal("0"),
+            reference=reference,
+            business_purpose=cleaned["business_purpose"].strip(),
+            notes=(cleaned.get("notes") or "").strip(),
+            details={key: _json_value(value) for key, value in (details or {}).items()},
+            **fields,
+        )
+
+    def _accounts(self):
+        return scope_bank_accounts_for_user(
+            CashBankAccount.objects.filter(is_active=True).select_related("gl_account"), self.user
+        ).order_by("side", "name")
+
+
+class CustomerPaymentOperationForm(FinanceOperationForm):
+    customer = forms.ModelChoiceField(queryset=Customer.objects.none())
+    invoice = InvoiceBalanceChoiceField(queryset=Invoice.objects.none())
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_method = forms.ChoiceField(choices=PAYMENT_METHODS)
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
+    allow_customer_credit = forms.BooleanField(
+        required=False, label="Approve excess as unapplied customer credit"
+    )
+    duplicate_override = forms.BooleanField(required=False, label="I reviewed the duplicate reference warning")
+    duplicate_reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        invoices = scope_invoices_for_user(
+            Invoice.objects.filter(financial_state__document_status="ISSUED").select_related("customer"), self.user
+        ).exclude(status="cancelled").order_by("due_date", "id")
+        self.fields["invoice"].queryset = invoices
+        self.fields["customer"].queryset = Customer.objects.filter(invoice__in=invoices).distinct().order_by(
+            "account_brand", "contact_name"
+        )
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        customer = cleaned.get("customer")
+        invoice = cleaned.get("invoice")
+        amount = cleaned.get("amount")
+        if customer and invoice and invoice.customer_id != customer.pk:
+            self.add_error("invoice", "This invoice does not belong to the selected customer.")
+        if invoice and cleaned.get("currency") != invoice.currency:
+            self.add_error("currency", "Payment currency must match the invoice currency.")
+        if invoice and cleaned.get("side") != (invoice.invoice_region or ("BD" if invoice.currency == "BDT" else "CA")):
+            self.add_error("side", "The business side must match the invoice.")
+        if invoice and amount and amount > invoice.balance and not cleaned.get("allow_customer_credit"):
+            self.add_error(
+                "amount",
+                "Amount exceeds the remaining balance. Confirm that the excess is an approved customer credit.",
+            )
+        if invoice and invoice.balance <= 0:
+            self.add_error("invoice", "This invoice has no remaining balance; use Unapplied Customer Credit instead.")
+        account = cleaned.get("payment_account")
+        if account and account.currency != cleaned.get("currency"):
+            self.add_error("payment_account", "Payment account currency must match the payment currency.")
+        duplicate = False
+        reference = (cleaned.get("reference") or "").strip()
+        if customer and reference:
+            duplicate = FinanceOperation.objects.filter(
+                operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+                customer=customer,
+                reference__iexact=reference,
+            ).exclude(state=FinanceOperation.STATE_REJECTED).exists()
+        if duplicate and not cleaned.get("duplicate_override"):
+            self.add_error("duplicate_override", "A matching payment reference already exists. Review it before continuing.")
+        if duplicate and len((cleaned.get("duplicate_reason") or "").strip()) < 5:
+            self.add_error("duplicate_reason", "Explain why this reference is valid before submitting it again.")
+        cleaned["duplicate_detected"] = duplicate
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        operation = self._operation(
+            total_amount=cleaned["amount"],
+            customer=cleaned["customer"],
+            invoice=cleaned["invoice"],
+            to_account=cleaned["payment_account"],
+            payment_method=cleaned["payment_method"],
+            reason=cleaned.get("duplicate_reason", ""),
+            details={
+                "remaining_balance_at_submission": cleaned["invoice"].balance,
+                "allow_customer_credit": cleaned.get("allow_customer_credit", False),
+            },
+        )
+        operation.duplicate_warning = cleaned.get("duplicate_detected", False)
+        operation.duplicate_warning_text = (
+            f"Duplicate reference approved for review: {cleaned.get('duplicate_reason', '')}"
+            if operation.duplicate_warning else ""
+        )
+        return operation
+
+
+class CustomerAdjustmentOperationForm(FinanceOperationForm):
+    KIND_CHOICES = (
+        (FinanceOperation.TYPE_CUSTOMER_REFUND, "Customer refund"),
+        (FinanceOperation.TYPE_CUSTOMER_CREDIT_NOTE, "Credit note"),
+        (FinanceOperation.TYPE_CUSTOMER_CREDIT, "Unapplied customer credit"),
+    )
+    adjustment_kind = forms.ChoiceField(choices=KIND_CHOICES)
+    customer = forms.ModelChoiceField(queryset=Customer.objects.none())
+    invoice = InvoiceBalanceChoiceField(queryset=Invoice.objects.none(), required=False)
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    refund_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    deposit_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, initial_kind=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        invoices = scope_invoices_for_user(
+            Invoice.objects.select_related("customer", "financial_state"), self.user
+        ).exclude(status="cancelled")
+        self.fields["invoice"].queryset = invoices
+        self.fields["customer"].queryset = Customer.objects.all().order_by("account_brand", "contact_name")
+        self.fields["refund_account"].queryset = self._accounts()
+        self.fields["deposit_account"].queryset = self._accounts()
+        if initial_kind:
+            self.fields["adjustment_kind"].initial = initial_kind
+
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get("adjustment_kind")
+        customer = cleaned.get("customer")
+        invoice = cleaned.get("invoice")
+        amount = cleaned.get("amount") or Decimal("0")
+        if invoice and customer and invoice.customer_id != customer.pk:
+            self.add_error("invoice", "This invoice does not belong to the selected customer.")
+        if kind == FinanceOperation.TYPE_CUSTOMER_CREDIT_NOTE and not invoice:
+            self.add_error("invoice", "A credit note must reference an invoice.")
+        if kind == FinanceOperation.TYPE_CUSTOMER_CREDIT_NOTE and invoice and amount > invoice.balance:
+            self.add_error("amount", "A credit note cannot exceed the invoice outstanding balance.")
+        if kind == FinanceOperation.TYPE_CUSTOMER_REFUND and not cleaned.get("refund_account"):
+            self.add_error("refund_account", "Select the account funding the refund.")
+        if kind == FinanceOperation.TYPE_CUSTOMER_CREDIT and not cleaned.get("deposit_account"):
+            self.add_error("deposit_account", "Select the account receiving the customer credit.")
+        expected_currency = invoice.currency if invoice else cleaned.get("currency")
+        if invoice and cleaned.get("currency") != expected_currency:
+            self.add_error("currency", "Currency must match the referenced invoice.")
+        account = cleaned.get("refund_account") or cleaned.get("deposit_account")
+        if account and account.currency != cleaned.get("currency"):
+            self.add_error("currency", "Currency must match the selected account.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        return self._operation(
+            operation_type=cleaned["adjustment_kind"],
+            total_amount=cleaned["amount"],
+            customer=cleaned["customer"],
+            invoice=cleaned.get("invoice"),
+            from_account=cleaned.get("refund_account"),
+            to_account=cleaned.get("deposit_account"),
+            reason=cleaned["reason"],
+        )
+
+
+class SupplierBillOperationForm(FinanceOperationForm):
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    bill_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    due_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    amount_before_tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    total = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    category = forms.ModelChoiceField(queryset=ExpenseCategory.objects.none())
+    department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
+    production_order = forms.ModelChoiceField(queryset=ProductionOrder.objects.none(), required=False)
+    customer = forms.ModelChoiceField(queryset=Customer.objects.all(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
+        self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).select_related("default_account")
+        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
+
+    def clean(self):
+        cleaned = super().clean()
+        before = cleaned.get("amount_before_tax") or Decimal("0")
+        tax = cleaned.get("tax") or Decimal("0")
+        if cleaned.get("total") != before + tax:
+            self.add_error("total", "Total must equal amount before tax plus tax.")
+        if cleaned.get("due_date") and cleaned.get("bill_date") and cleaned["due_date"] < cleaned["bill_date"]:
+            self.add_error("due_date", "Due date cannot precede the bill date.")
+        supplier = cleaned.get("supplier")
+        reference = (cleaned.get("reference") or "").strip()
+        if supplier and reference and (
+            SupplierBill.objects.filter(supplier=supplier, bill_number__iexact=reference).exists()
+            or FinanceOperation.objects.filter(
+                operation_type=FinanceOperation.TYPE_SUPPLIER_BILL,
+                supplier=supplier,
+                reference__iexact=reference,
+            ).exclude(state=FinanceOperation.STATE_REJECTED).exists()
+        ):
+            self.add_error("reference", "This supplier already has a bill with the same number.")
+        if supplier and cleaned.get("side") != supplier.side:
+            self.add_error("side", "Business side must match the supplier.")
+        if supplier and cleaned.get("currency") != supplier.default_currency:
+            self.add_error("currency", "Currency must match the supplier unless its approved default is changed.")
+        order = cleaned.get("production_order")
+        if order:
+            expected_side = "BD" if (order.factory_location or "").lower() == "bd" else "CA"
+            if cleaned.get("side") != expected_side:
+                self.add_error("production_order", "Production order and bill business sides must match.")
+            if cleaned.get("customer") and order.customer_id != cleaned["customer"].pk:
+                self.add_error("customer", "The selected customer does not own this production order.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        category = cleaned["category"]
+        return self._operation(
+            transaction_date=cleaned["bill_date"],
+            total_amount=cleaned["total"],
+            amount_before_tax=cleaned["amount_before_tax"],
+            tax_amount=cleaned["tax"],
+            supplier=cleaned["supplier"],
+            customer=cleaned.get("customer"),
+            expense_category=category,
+            department=cleaned.get("department"),
+            production_order=cleaned.get("production_order"),
+            details={
+                "bill_date": cleaned["bill_date"],
+                "due_date": cleaned["due_date"],
+                "cost_classification": "PRODUCTION" if category.is_production_cost else "OPERATING",
+            },
+        )
+
+
+class SupplierPaymentOperationForm(FinanceOperationForm):
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    supplier_bill = SupplierBillBalanceChoiceField(queryset=SupplierBill.objects.none())
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_method = forms.ChoiceField(choices=PAYMENT_METHODS)
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
+        self.fields["supplier_bill"].queryset = SupplierBill.objects.filter(
+            side__in=sides,
+            approval_status=SupplierBill.APPROVAL_APPROVED,
+        ).exclude(payment_status=SupplierBill.PAYMENT_PAID).select_related("supplier")
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        supplier = cleaned.get("supplier")
+        bill = cleaned.get("supplier_bill")
+        amount = cleaned.get("amount") or Decimal("0")
+        if supplier and bill and bill.supplier_id != supplier.pk:
+            self.add_error("supplier_bill", "This bill does not belong to the selected supplier.")
+        if bill and amount > bill.remaining_amount:
+            self.add_error("amount", "Payment cannot exceed the supplier bill outstanding balance.")
+        if bill and cleaned.get("currency") != bill.currency:
+            self.add_error("currency", "Payment currency must match the supplier bill.")
+        if bill and cleaned.get("side") != bill.side:
+            self.add_error("side", "Payment and supplier bill business sides must match.")
+        account = cleaned.get("payment_account")
+        if account and account.currency != cleaned.get("currency"):
+            self.add_error("payment_account", "Payment account currency must match the bill.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        bill = cleaned["supplier_bill"]
+        return self._operation(
+            total_amount=cleaned["amount"],
+            supplier=cleaned["supplier"],
+            supplier_bill=bill,
+            from_account=cleaned["payment_account"],
+            payment_method=cleaned["payment_method"],
+            details={
+                "bill_total": bill.total_amount,
+                "already_paid": bill.paid_amount,
+                "outstanding_at_submission": bill.remaining_amount,
+            },
+        )
+
+
+class ExpenseOperationForm(FinanceOperationForm):
+    vendor = forms.ModelChoiceField(queryset=Supplier.objects.none(), required=False)
+    vendor_name = forms.CharField(max_length=200, required=False)
+    category = forms.ModelChoiceField(queryset=ExpenseCategory.objects.none())
+    department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
+    amount_before_tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    total = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_status = forms.ChoiceField(choices=(("UNPAID", "Unpaid"), ("PAID", "Paid")))
+    payment_method = forms.ChoiceField(choices=PAYMENT_METHODS, required=False)
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    due_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    recurring = forms.BooleanField(required=False)
+    production_order = forms.ModelChoiceField(queryset=ProductionOrder.objects.none(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["vendor"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
+        self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).select_related("default_account")
+        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        before = cleaned.get("amount_before_tax") or Decimal("0")
+        tax = cleaned.get("tax") or Decimal("0")
+        if cleaned.get("total") != before + tax:
+            self.add_error("total", "Total must equal amount before tax plus tax.")
+        if not cleaned.get("vendor") and not (cleaned.get("vendor_name") or "").strip():
+            self.add_error("vendor_name", "Select a vendor or enter the vendor name.")
+        if cleaned.get("payment_status") == "PAID" and not cleaned.get("payment_account"):
+            self.add_error("payment_account", "Paid expenses require a payment account.")
+        if cleaned.get("payment_status") == "UNPAID" and not cleaned.get("vendor"):
+            self.add_error("vendor", "Unpaid expenses require a configured supplier so Accounts Payable can track them.")
+        if cleaned.get("payment_status") == "UNPAID" and not cleaned.get("due_date"):
+            self.add_error("due_date", "Unpaid expenses require a due date.")
+        vendor = cleaned.get("vendor")
+        if vendor and vendor.side != cleaned.get("side"):
+            self.add_error("vendor", "Vendor and expense business sides must match.")
+        order = cleaned.get("production_order")
+        expected_side = "BD" if order and (order.factory_location or "").lower() == "bd" else "CA"
+        if order and expected_side != cleaned.get("side"):
+            self.add_error("production_order", "Production order and expense business sides must match.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        return self._operation(
+            total_amount=cleaned["total"],
+            amount_before_tax=cleaned["amount_before_tax"],
+            tax_amount=cleaned["tax"],
+            supplier=cleaned.get("vendor"),
+            party_name=cleaned.get("vendor_name", ""),
+            expense_category=cleaned["category"],
+            department=cleaned.get("department"),
+            production_order=cleaned.get("production_order"),
+            from_account=cleaned.get("payment_account"),
+            payment_method=cleaned.get("payment_method", ""),
+            details={
+                "payment_status": cleaned["payment_status"],
+                "due_date": cleaned.get("due_date"),
+                "is_recurring": cleaned.get("recurring", False),
+            },
+        )
+
+
+class UtilityOperationForm(FinanceOperationForm):
+    UTILITY_CHOICES = (
+        ("ELECTRICITY", "Electricity"),
+        ("HYDRO", "Hydro"),
+        ("WATER", "Water"),
+        ("GAS", "Gas"),
+        ("INTERNET", "Internet"),
+        ("TELEPHONE", "Telephone"),
+        ("GENERATOR_FUEL", "Generator fuel"),
+        ("OTHER_UTILITY", "Other utility"),
+    )
+    utility_type = forms.ChoiceField(choices=UTILITY_CHOICES)
+    vendor = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    billing_period_start = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    billing_period_end = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    bill_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    due_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    location = forms.ChoiceField(choices=(("OFFICE", "Office"), ("FACTORY", "Factory")))
+    meter_or_account = forms.CharField(max_length=120, required=False)
+    payment_status = forms.ChoiceField(choices=(("UNPAID", "Unpaid"), ("PAID", "Paid")))
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["vendor"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("billing_period_start")
+        end = cleaned.get("billing_period_end")
+        if start and end and end < start:
+            self.add_error("billing_period_end", "Billing period end cannot precede the start.")
+        if cleaned.get("due_date") and cleaned.get("bill_date") and cleaned["due_date"] < cleaned["bill_date"]:
+            self.add_error("due_date", "Due date cannot precede the bill date.")
+        if cleaned.get("payment_status") == "PAID" and not cleaned.get("payment_account"):
+            self.add_error("payment_account", "Paid utilities require a payment account.")
+        vendor = cleaned.get("vendor")
+        if vendor and vendor.side != cleaned.get("side"):
+            self.add_error("vendor", "Utility vendor and business side must match.")
+        key = UTILITY_ACCOUNT_KEYS.get(cleaned.get("utility_type"))
+        category = ExpenseCategory.objects.filter(default_account__system_key=key, is_active=True).first() if key else None
+        if not category:
+            self.add_error("utility_type", "This utility category is not configured in the Chart of Accounts.")
+        cleaned["expense_category"] = category
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        return self._operation(
+            transaction_date=cleaned["bill_date"],
+            total_amount=cleaned["amount"],
+            amount_before_tax=cleaned["amount"],
+            supplier=cleaned["vendor"],
+            expense_category=cleaned["expense_category"],
+            from_account=cleaned.get("payment_account"),
+            details={
+                "utility_type": cleaned["utility_type"],
+                "billing_period_start": cleaned["billing_period_start"],
+                "billing_period_end": cleaned["billing_period_end"],
+                "bill_date": cleaned["bill_date"],
+                "due_date": cleaned["due_date"],
+                "location": cleaned["location"],
+                "meter_or_account": cleaned.get("meter_or_account", ""),
+                "payment_status": cleaned["payment_status"],
+            },
+        )
+
+
+class PayrollOperationForm(FinanceOperationForm):
+    payroll_month = forms.CharField(widget=forms.TextInput(attrs={"type": "month"}))
+    employee = forms.ModelChoiceField(queryset=EmployeeProfile.objects.none(), required=False)
+    department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
+    payroll_type = forms.ChoiceField(
+        choices=(("BASE", "Base salary"), ("OVERTIME", "Overtime"), ("BONUS", "Bonus"), ("COMMISSION", "Commission"))
+    )
+    gross_amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    deductions = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    employer_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    net_paid = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        employees = EmployeeProfile.objects.filter(
+            status__in=EmployeeProfile.MENTIONABLE_STATUSES, is_archived=False
+        )
+        sides = accessible_financial_sides(self.user)
+        if sides != {"CA", "BD"}:
+            employees = employees.filter(user__access__role__in=sides)
+        self.fields["employee"].queryset = employees.select_related("user", "department_ref")
+        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("employee") and not cleaned.get("department"):
+            self.add_error("department", "Select an employee or department.")
+        if cleaned.get("employee") and cleaned.get("department"):
+            self.add_error("employee", "Select either an employee or a department total, not both.")
+        month = (cleaned.get("payroll_month") or "").strip()
+        try:
+            year, month_number = (int(part) for part in month.split("-"))
+            period_start = date(year, month_number, 1)
+            period_end = date(year, month_number, monthrange(year, month_number)[1])
+        except (TypeError, ValueError):
+            self.add_error("payroll_month", "Enter a valid payroll month.")
+            period_start = period_end = None
+        cleaned["period_start"] = period_start
+        cleaned["period_end"] = period_end
+        gross = cleaned.get("gross_amount") or Decimal("0")
+        deductions = cleaned.get("deductions") or Decimal("0")
+        net = cleaned.get("net_paid") or Decimal("0")
+        if gross != deductions + net:
+            self.add_error("net_paid", "Gross amount must equal deductions plus net paid.")
+        account = cleaned.get("payment_account")
+        if account and account.currency != cleaned.get("currency"):
+            self.add_error("payment_account", "Payroll and payment account currencies must match.")
+        employee = cleaned.get("employee")
+        if employee and employee.user.access.role != cleaned.get("side"):
+            self.add_error("employee", "Employee and payroll business sides must match.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        gross = cleaned["gross_amount"]
+        employer = cleaned["employer_cost"]
+        return self._operation(
+            total_amount=gross + employer,
+            employee=cleaned.get("employee"),
+            department=cleaned.get("department") or getattr(cleaned.get("employee"), "department_ref", None),
+            from_account=cleaned["payment_account"],
+            details={
+                "period_start": cleaned["period_start"],
+                "period_end": cleaned["period_end"],
+                "payroll_type": cleaned["payroll_type"],
+                "gross_amount": gross,
+                "deductions": cleaned["deductions"],
+                "employer_cost": employer,
+                "net_paid": cleaned["net_paid"],
+            },
+        )
+
+
+class ProductionCostOperationForm(FinanceOperationForm):
+    COST_CHOICES = ProductionCostRecordChoices = (
+        ("FABRIC", "Fabric"), ("TRIMS", "Trims"), ("CUTTING", "Cutting"), ("SEWING", "Sewing"),
+        ("PRINTING", "Printing"), ("EMBROIDERY", "Embroidery"), ("WASHING", "Washing"),
+        ("PACKING", "Packing"), ("QUALITY_CONTROL", "Quality control"),
+        ("PRODUCTION_LABOR", "Production labor"), ("SHIPPING", "Shipping"), ("DUTY", "Duty"),
+        ("REWORK", "Rework"), ("WASTE", "Waste"), ("OTHER_DIRECT", "Other direct cost"),
+    )
+    production_order = forms.ModelChoiceField(queryset=ProductionOrder.objects.none())
+    cost_category = forms.ChoiceField(choices=COST_CHOICES)
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    estimated_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    actual_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_status = forms.ChoiceField(choices=(("UNPAID", "Unpaid"), ("PAID", "Paid")))
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    payment_method = forms.ChoiceField(choices=PAYMENT_METHODS, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["production_order"].queryset = _production_orders_for_sides(sides).select_related("customer", "opportunity")
+        self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides)
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        order = cleaned.get("production_order")
+        expected_side = "BD" if order and (order.factory_location or "").lower() == "bd" else "CA"
+        if order and cleaned.get("side") != expected_side:
+            self.add_error("side", "Business side must match the production order factory.")
+        if cleaned.get("payment_status") == "PAID" and not cleaned.get("payment_account"):
+            self.add_error("payment_account", "Paid production costs require a payment account.")
+        supplier = cleaned.get("supplier")
+        if supplier and supplier.side != cleaned.get("side"):
+            self.add_error("supplier", "Supplier and production cost business sides must match.")
+        if supplier and supplier.default_currency != cleaned.get("currency"):
+            self.add_error("currency", "Production cost currency must match the supplier currency.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        order = cleaned["production_order"]
+        return self._operation(
+            total_amount=cleaned["actual_cost"],
+            production_order=order,
+            customer=order.customer,
+            opportunity=order.opportunity,
+            supplier=cleaned["supplier"],
+            from_account=cleaned.get("payment_account"),
+            payment_method=cleaned.get("payment_method", ""),
+            details={
+                "cost_category": cleaned["cost_category"],
+                "estimated_amount": cleaned["estimated_cost"],
+                "actual_amount": cleaned["actual_cost"],
+                "variance": cleaned["actual_cost"] - cleaned["estimated_cost"],
+                "payment_status": cleaned["payment_status"],
+            },
+        )
+
+
+class FactoryDailyCostOperationForm(FinanceOperationForm):
+    quick_costing = forms.ModelChoiceField(queryset=QuickCosting.objects.none())
+    daily_default = forms.ModelChoiceField(queryset=FactoryRunningCostDefault.objects.none())
+    estimated_days = forms.IntegerField(min_value=1)
+    actual_days = forms.IntegerField(min_value=1, required=False)
+    estimated_revenue = forms.DecimalField(max_digits=18, decimal_places=2)
+    actual_revenue = forms.DecimalField(max_digits=18, decimal_places=2, required=False)
+    other_estimated_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    other_actual_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"), required=False)
+    target_margin_percent = forms.DecimalField(max_digits=8, decimal_places=4, required=False)
+    approved_minimum_margin_percent = forms.DecimalField(max_digits=8, decimal_places=4, required=False)
+    delay_reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["supporting_document"].required = False
+        self.fields["reference"].required = False
+        sides = accessible_financial_sides(self.user)
+        quick_costings = QuickCosting.objects.exclude(
+            status__in=QuickCosting.INACTIVE_REPORTING_STATUSES
+        )
+        if sides != {"CA", "BD"}:
+            factory_locations = [side.lower() for side in sides]
+            quick_costings = quick_costings.filter(
+                opportunity__production_orders__factory_location__in=factory_locations
+            )
+        self.fields["quick_costing"].queryset = quick_costings.select_related("opportunity").distinct()
+        self.fields["daily_default"].queryset = FactoryRunningCostDefault.objects.filter(is_active=True, side__in=sides)
+
+    def clean(self):
+        cleaned = super().clean()
+        costing = cleaned.get("quick_costing")
+        default = cleaned.get("daily_default")
+        if costing and default and costing.currency != default.currency:
+            self.add_error("daily_default", "Daily rate and Quick Costing currencies must match.")
+        if default and cleaned.get("currency") != default.currency:
+            self.add_error("currency", "Operation currency must match the saved daily rate.")
+        if default and cleaned.get("side") != default.side:
+            self.add_error("side", "Business side must match the daily rate.")
+        if cleaned.get("actual_days") and cleaned.get("actual_revenue") is None:
+            self.add_error("actual_revenue", "Actual revenue is required when actual days are entered.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        default = cleaned["daily_default"]
+        estimated_cost = money(Decimal(cleaned["estimated_days"]) * default.daily_amount)
+        actual_cost = money(Decimal(cleaned["actual_days"]) * default.daily_amount) if cleaned.get("actual_days") else None
+        operation = self._operation(
+            total_amount=estimated_cost,
+            reference=cleaned["quick_costing"].pk,
+            details={
+                "daily_default_id": default.pk,
+                "pricing_type": cleaned["quick_costing"].effective_pricing_type,
+                "estimated_days": cleaned["estimated_days"],
+                "actual_days": cleaned.get("actual_days"),
+                "daily_factory_cost": default.daily_amount,
+                "estimated_timeline_cost": estimated_cost,
+                "actual_timeline_cost": actual_cost,
+                "estimated_revenue": cleaned["estimated_revenue"],
+                "actual_revenue": cleaned.get("actual_revenue"),
+                "other_estimated_cost": cleaned["other_estimated_cost"],
+                "other_actual_cost": cleaned.get("other_actual_cost"),
+                "target_margin_percent": cleaned.get("target_margin_percent"),
+                "approved_minimum_margin_percent": cleaned.get("approved_minimum_margin_percent"),
+                "delay_reason": cleaned.get("delay_reason", ""),
+            },
+        )
+        operation.source_record = cleaned["quick_costing"]
+        return operation
+
+
+class BankCashOperationForm(FinanceOperationForm):
+    from_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    to_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none(), required=False)
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    destination_amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"), required=False)
+    destination_rate_to_cad = forms.DecimalField(max_digits=20, decimal_places=10, required=False)
+    destination_rate_to_bdt = forms.DecimalField(max_digits=20, decimal_places=10, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        accounts = self._accounts()
+        self.fields["from_account"].queryset = accounts
+        self.fields["to_account"].queryset = accounts
+
+    def clean(self):
+        cleaned = super().clean()
+        operation_type = self.workflow["operation_type"]
+        source = cleaned.get("from_account")
+        destination = cleaned.get("to_account")
+        fee_types = {FinanceOperation.TYPE_BANK_FEE, FinanceOperation.TYPE_PROCESSOR_FEE}
+        if operation_type in fee_types:
+            if not source:
+                self.add_error("from_account", "Select the account charged.")
+        elif not source or not destination:
+            self.add_error("to_account", "This movement requires both from and to accounts.")
+        if source and destination and source.pk == destination.pk:
+            self.add_error("to_account", "From and to accounts must be different.")
+        if source and source.currency != cleaned.get("currency"):
+            self.add_error("currency", "Currency must match the source account.")
+        if source and cleaned.get("side") != source.side:
+            self.add_error("side", "Business side must match the source account.")
+        expected_kinds = {
+            FinanceOperation.TYPE_BANK_DEPOSIT: (None, CashBankAccount.KIND_BANK),
+            FinanceOperation.TYPE_BANK_WITHDRAWAL: (CashBankAccount.KIND_BANK, CashBankAccount.KIND_CASH),
+            FinanceOperation.TYPE_CASH_DEPOSIT: (None, CashBankAccount.KIND_CASH),
+            FinanceOperation.TYPE_CASH_WITHDRAWAL: (CashBankAccount.KIND_CASH, None),
+        }
+        expected_source, expected_destination = expected_kinds.get(operation_type, (None, None))
+        if source and expected_source and source.kind != expected_source:
+            self.add_error("from_account", "The selected source account does not match this workflow.")
+        if destination and expected_destination and destination.kind != expected_destination:
+            self.add_error("to_account", "The selected destination account does not match this workflow.")
+        if destination and source and destination.currency != source.currency:
+            if not cleaned.get("destination_amount"):
+                self.add_error("destination_amount", "Cross-currency transfers require the evidenced destination amount.")
+            else:
+                try:
+                    source_snapshot = resolve_currency_snapshot(
+                        native_amount=cleaned["amount"],
+                        currency=source.currency,
+                        transaction_date=cleaned["transaction_date"],
+                        rate_to_cad=cleaned.get("rate_to_cad"),
+                        rate_to_bdt=cleaned.get("rate_to_bdt"),
+                        create_review=False,
+                    )
+                    destination_snapshot = resolve_currency_snapshot(
+                        native_amount=cleaned["destination_amount"],
+                        currency=destination.currency,
+                        transaction_date=cleaned["transaction_date"],
+                        rate_to_cad=cleaned.get("destination_rate_to_cad"),
+                        rate_to_bdt=cleaned.get("destination_rate_to_bdt"),
+                        create_review=False,
+                    )
+                    if abs(source_snapshot.amount_cad - destination_snapshot.amount_cad) > Decimal("0.01"):
+                        self.add_error(
+                            "destination_amount",
+                            "Source and destination CAD equivalents must reconcile; record any fee separately.",
+                        )
+                except MissingExchangeRate as exc:
+                    self.add_error("destination_rate_to_cad", str(exc))
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        destination = cleaned.get("to_account")
+        return self._operation(
+            total_amount=cleaned["amount"],
+            from_account=cleaned.get("from_account"),
+            to_account=destination,
+            details={
+                "destination_amount": cleaned.get("destination_amount") or cleaned["amount"],
+                "destination_currency": destination.currency if destination else cleaned["currency"],
+                "destination_rate_to_cad": cleaned.get("destination_rate_to_cad"),
+                "destination_rate_to_bdt": cleaned.get("destination_rate_to_bdt"),
+            },
+        )
+
+
+class OwnerLoanOperationForm(FinanceOperationForm):
+    party = forms.CharField(max_length=200)
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["payment_account"].queryset = self._accounts()
+
+    def clean(self):
+        cleaned = super().clean()
+        account = cleaned.get("payment_account")
+        if account and account.currency != cleaned.get("currency"):
+            self.add_error("currency", "Currency must match the selected account.")
+        if account and account.side != cleaned.get("side"):
+            self.add_error("side", "Business side must match the selected account.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        incoming = self.workflow["operation_type"] in {
+            FinanceOperation.TYPE_OWNER_INVESTMENT,
+            FinanceOperation.TYPE_LOAN_RECEIVED,
+            FinanceOperation.TYPE_SHAREHOLDER_ADVANCE,
+        }
+        return self._operation(
+            total_amount=cleaned["amount"],
+            party_name=cleaned["party"],
+            to_account=cleaned["payment_account"] if incoming else None,
+            from_account=None if incoming else cleaned["payment_account"],
+            reason=cleaned["reason"],
+        )
+
+
+class AssetPurchaseOperationForm(FinanceOperationForm):
+    ASSET_CHOICES = (
+        ("SEWING_MACHINE", "Sewing machine"), ("CUTTING_MACHINE", "Cutting machine"),
+        ("COMPUTER", "Computer"), ("VEHICLE", "Vehicle"), ("OFFICE_FURNITURE", "Office furniture"),
+        ("FACTORY_EQUIPMENT", "Factory equipment"), ("OTHER", "Other asset"),
+    )
+    asset_name = forms.CharField(max_length=200)
+    asset_type = forms.ChoiceField(choices=ASSET_CHOICES)
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
+    department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
+    useful_life_years = forms.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0.01"))
+    serial_number = forms.CharField(max_length=120, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        sides = accessible_financial_sides(self.user)
+        self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides)
+        self.fields["payment_account"].queryset = self._accounts()
+        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        supplier = cleaned.get("supplier")
+        account = cleaned.get("payment_account")
+        if supplier and supplier.side != cleaned.get("side"):
+            self.add_error("supplier", "Supplier and asset business sides must match.")
+        if account and (account.side != cleaned.get("side") or account.currency != cleaned.get("currency")):
+            self.add_error("payment_account", "Payment account must match the asset side and currency.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        return self._operation(
+            total_amount=cleaned["amount"],
+            supplier=cleaned["supplier"],
+            from_account=cleaned["payment_account"],
+            department=cleaned.get("department"),
+            details={
+                "asset_name": cleaned["asset_name"],
+                "asset_type": cleaned["asset_type"],
+                "useful_life_years": cleaned["useful_life_years"],
+                "serial_number": cleaned.get("serial_number", ""),
+            },
+        )
+
+
+class InventoryAdjustmentOperationForm(FinanceOperationForm):
+    ADJUSTMENT_CHOICES = (
+        ("OPENING", "Opening inventory"), ("PURCHASE", "Purchase adjustment"), ("WASTE", "Waste"),
+        ("DAMAGE", "Damage"), ("WRITE_OFF", "Write off"), ("COUNT", "Count correction"),
+        ("PRODUCTION_USAGE", "Production usage correction"),
+    )
+    adjustment_type = forms.ChoiceField(choices=ADJUSTMENT_CHOICES)
+    inventory_item = forms.ModelChoiceField(queryset=InventoryItem.objects.none())
+    quantity = forms.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    unit_cost = forms.DecimalField(max_digits=18, decimal_places=4, min_value=Decimal("0.0001"))
+    direction = forms.ChoiceField(choices=(("INCREASE", "Increase"), ("DECREASE", "Decrease")))
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none(), required=False)
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["supplier"].queryset = Supplier.objects.filter(
+            is_active=True, side__in=accessible_financial_sides(self.user)
+        )
+        self.fields["inventory_item"].queryset = InventoryItem.objects.filter(is_active=True).order_by("name")
+
+    def clean(self):
+        cleaned = super().clean()
+        quantity = cleaned.get("quantity") or Decimal("0")
+        adjustment_type = cleaned.get("adjustment_type")
+        if adjustment_type in {"OPENING", "PURCHASE"}:
+            cleaned["direction"] = "INCREASE"
+        if adjustment_type == "PURCHASE" and not cleaned.get("supplier"):
+            self.add_error("supplier", "A purchase adjustment requires a supplier.")
+        supplier = cleaned.get("supplier")
+        if supplier and supplier.side != cleaned.get("side"):
+            self.add_error("supplier", "Supplier and inventory adjustment business sides must match.")
+        item = cleaned.get("inventory_item")
+        if (
+            item
+            and cleaned.get("direction") == "DECREASE"
+            and item.unit_cost is not None
+            and cleaned.get("unit_cost") != item.unit_cost
+        ):
+            self.add_error("unit_cost", "Inventory reductions must use the item's current recorded unit cost.")
+        if item and cleaned.get("direction") == "DECREASE" and quantity > item.quantity:
+            self.add_error("quantity", "Inventory reduction cannot exceed current stock.")
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        total = money(abs(cleaned["quantity"]) * cleaned["unit_cost"])
+        return self._operation(
+            total_amount=total,
+            supplier=cleaned.get("supplier"),
+            reason=cleaned["reason"],
+            details={
+                "adjustment_type": cleaned["adjustment_type"],
+                "inventory_item_id": cleaned["inventory_item"].pk,
+                "inventory_item": cleaned["inventory_item"].name,
+                "quantity": cleaned["quantity"],
+                "unit_cost": cleaned["unit_cost"],
+                "direction": cleaned["direction"],
+            },
+        )
+
+
+FORM_BY_TYPE = {
+    FinanceOperation.TYPE_CUSTOMER_PAYMENT: CustomerPaymentOperationForm,
+    FinanceOperation.TYPE_CUSTOMER_REFUND: CustomerAdjustmentOperationForm,
+    FinanceOperation.TYPE_CUSTOMER_CREDIT_NOTE: CustomerAdjustmentOperationForm,
+    FinanceOperation.TYPE_CUSTOMER_CREDIT: CustomerAdjustmentOperationForm,
+    FinanceOperation.TYPE_SUPPLIER_BILL: SupplierBillOperationForm,
+    FinanceOperation.TYPE_SUPPLIER_PAYMENT: SupplierPaymentOperationForm,
+    FinanceOperation.TYPE_COMPANY_EXPENSE: ExpenseOperationForm,
+    FinanceOperation.TYPE_UTILITY_BILL: UtilityOperationForm,
+    FinanceOperation.TYPE_PAYROLL: PayrollOperationForm,
+    FinanceOperation.TYPE_PRODUCTION_COST: ProductionCostOperationForm,
+    FinanceOperation.TYPE_FACTORY_DAILY_COST: FactoryDailyCostOperationForm,
+    FinanceOperation.TYPE_BANK_DEPOSIT: BankCashOperationForm,
+    FinanceOperation.TYPE_BANK_WITHDRAWAL: BankCashOperationForm,
+    FinanceOperation.TYPE_CASH_DEPOSIT: BankCashOperationForm,
+    FinanceOperation.TYPE_CASH_WITHDRAWAL: BankCashOperationForm,
+    FinanceOperation.TYPE_ACCOUNT_TRANSFER: BankCashOperationForm,
+    FinanceOperation.TYPE_BANK_FEE: BankCashOperationForm,
+    FinanceOperation.TYPE_PROCESSOR_FEE: BankCashOperationForm,
+    FinanceOperation.TYPE_OWNER_INVESTMENT: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_OWNER_WITHDRAWAL: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_LOAN_RECEIVED: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_LOAN_PRINCIPAL: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_LOAN_INTEREST: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_SHAREHOLDER_ADVANCE: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_SHAREHOLDER_REPAYMENT: OwnerLoanOperationForm,
+    FinanceOperation.TYPE_ASSET_PURCHASE: AssetPurchaseOperationForm,
+    FinanceOperation.TYPE_INVENTORY_ADJUSTMENT: InventoryAdjustmentOperationForm,
+}

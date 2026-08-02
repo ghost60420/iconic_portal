@@ -1,0 +1,29 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+<main class="fc-shell">
+  {% include "crm/finance_operations/_styles.html" %}
+  {% include "crm/finance_operations/_nav.html" %}
+  <h2>Today's Financial Activity</h2>
+  <form method="get" class="ops-filter-grid">
+    <div class="fc-field"><label>Date</label><input class="form-control" type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}"></div>
+    <div class="fc-field"><label>Side</label><select class="form-select" name="side"><option value="">All</option><option value="CA" {% if selected_filters.side == 'CA' %}selected{% endif %}>Canada</option><option value="BD" {% if selected_filters.side == 'BD' %}selected{% endif %}>Bangladesh</option></select></div>
+    <div class="fc-field"><label>Department</label><select class="form-select" name="department"><option value="">All</option>{% for department in departments %}<option value="{{ department.pk }}" {% if selected_filters.department == department.pk|stringformat:'s' %}selected{% endif %}>{{ department.name }}</option>{% endfor %}</select></div>
+    <div class="fc-field"><label>Currency</label><select class="form-select" name="currency"><option value="">All</option><option value="CAD" {% if selected_filters.currency == 'CAD' %}selected{% endif %}>CAD</option><option value="USD" {% if selected_filters.currency == 'USD' %}selected{% endif %}>USD</option><option value="BDT" {% if selected_filters.currency == 'BDT' %}selected{% endif %}>BDT</option></select></div>
+    <div class="fc-field"><label>Type</label><select class="form-select" name="operation_type"><option value="">All</option>{% for value,label in operation_types %}<option value="{{ value }}" {% if selected_filters.operation_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="fc-field"><label>User</label><select class="form-select" name="user"><option value="">All</option>{% for user in users %}<option value="{{ user.pk }}" {% if selected_filters.user == user.pk|stringformat:'s' %}selected{% endif %}>{{ user.get_full_name|default:user.username }}</option>{% endfor %}</select></div>
+    <div class="fc-actions"><button class="fc-btn" type="submit"><i data-lucide="filter"></i>Filter</button></div>
+  </form>
+  <section class="fc-band"><h2>Transactions and Posting Status</h2><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Recorded</th><th>Operation</th><th>Type</th><th>Party</th><th>Department</th><th>Side</th><th class="num">Amount</th><th>Status</th><th>Submitted By</th><th>Posting</th></tr></thead><tbody>
+    {% for row in page %}<tr><td>{{ row.created_at|date:"H:i" }}</td><td><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td>{{ row.get_operation_type_display }}</td><td>{{ row.customer|default:row.supplier|default:row.party_name|default:"-" }}</td><td>{{ row.department|default:"-" }}</td><td>{{ row.side }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td><span class="ops-state {{ row.state|lower }}">{{ row.get_state_display }}</span></td><td>{{ row.submitted_by }}</td><td>{% if row.posting_error %}<span class="ops-blocked">Blocked</span>{% elif row.state == 'POSTED' %}Posted{% else %}Not posted{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="10" class="fc-empty">No transaction activity for this date.</td></tr>{% endfor %}
+  </tbody></table></div>{% include "crm/finance_operations/pagination.html" %}</section>
+  <section class="fc-band"><h2>Approval and Posting Decisions</h2><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Time</th><th>Operation</th><th>Action</th><th>User</th><th>Reason</th></tr></thead><tbody>
+    {% for event in audit_page %}<tr><td>{{ event.created_at|date:"H:i" }}</td><td><a class="fc-link" href="{% url 'finance_operation_detail' event.object_id %}">Operation {{ event.object_id }}</a></td><td>{{ event.action }}</td><td>{{ event.actor|default:"System" }}</td><td>{{ event.reason|default:"-" }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="fc-empty">No approval or posting decisions for this date.</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if audit_page.paginator.num_pages > 1 %}<div class="fc-pagination"><span>Page {{ audit_page.number }} of {{ audit_page.paginator.num_pages }}</span><div class="ops-page-links">{% if audit_page.has_previous %}<a class="fc-btn" href="?{% if audit_page_query %}{{ audit_page_query }}&amp;{% endif %}audit_page={{ audit_page.previous_page_number }}">Previous</a>{% endif %}{% if audit_page.has_next %}<a class="fc-btn" href="?{% if audit_page_query %}{{ audit_page_query }}&amp;{% endif %}audit_page={{ audit_page.next_page_number }}">Next</a>{% endif %}</div></div>{% endif %}
+  </section>
+</main>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>
+{% endblock %}

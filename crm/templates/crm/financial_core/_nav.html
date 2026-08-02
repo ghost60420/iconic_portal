@@ -1,0 +1,68 @@
+<style>
+  .fc-shell{max-width:1600px;margin:0 auto;padding:18px 20px 40px;color:#f8fafc;letter-spacing:0}
+  .fc-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+  .fc-title{font-size:22px;font-weight:800;margin:0;letter-spacing:0}
+  .fc-status{display:inline-flex;align-items:center;gap:7px;border:1px solid #92400e;background:#451a03;color:#fde68a;padding:6px 9px;border-radius:6px;font-size:12px;font-weight:800}
+  .fc-status.active{border-color:#166534;background:#052e16;color:#bbf7d0}
+  .fc-nav{display:flex;gap:5px;overflow-x:auto;padding:3px 0 12px;border-bottom:1px solid #30343b;margin-bottom:18px}
+  .fc-nav a{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#cbd5e1;padding:7px 9px;border-radius:5px;font-size:12px;font-weight:700}
+  .fc-nav a:hover{background:#20242a;color:#fff}
+  .fc-nav svg{width:15px;height:15px}
+  .fc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .fc-kpi{display:block;min-width:0;border:1px solid #30343b;background:#111317;padding:13px;border-radius:6px;color:#f8fafc}
+  .fc-kpi:hover{border-color:#4b5563;color:#fff}
+  .fc-kpi-label{font-size:11px;color:#9ca3af;text-transform:uppercase;font-weight:800;letter-spacing:0}
+  .fc-kpi-value{font-size:22px;line-height:1.2;font-weight:800;margin-top:6px;overflow-wrap:anywhere;letter-spacing:0}
+  .fc-band{min-width:0;padding:15px 0;border-top:1px solid #30343b;margin-top:18px}
+  .fc-band h2{font-size:15px;font-weight:800;margin:0 0 12px;letter-spacing:0}
+  .fc-table{width:100%;border-collapse:collapse;font-size:12px}
+  .fc-table th{color:#9ca3af;text-transform:uppercase;font-size:10px;text-align:left;padding:8px;border-bottom:1px solid #3f444d;letter-spacing:0}
+  .fc-table td{padding:9px 8px;border-bottom:1px solid #252930;vertical-align:top}
+  .fc-table .num{text-align:right;font-variant-numeric:tabular-nums}
+  .fc-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .fc-field label{display:block;color:#aeb6c2;font-size:11px;font-weight:800;margin-bottom:5px}
+  .fc-field .form-control,.fc-field .form-select{background:#0b0d10;border-color:#3f444d;color:#f8fafc;border-radius:5px;font-size:12px}
+  .fc-errors{color:#fecaca;font-size:11px;margin-top:4px}
+  .fc-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:12px}
+  .fc-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #4b5563;background:#20242a;color:#f8fafc;border-radius:5px;padding:7px 10px;font-size:12px;font-weight:800}
+  .fc-btn:hover{background:#2d333b;color:#fff}.fc-btn.primary{background:#f59e0b;border-color:#f59e0b;color:#111827}.fc-btn.good{background:#166534;border-color:#16a34a}.fc-btn.danger{background:#7f1d1d;border-color:#dc2626}
+  .fc-alert{border-left:3px solid #f59e0b;background:#261b08;color:#fde68a;padding:9px 11px;margin-bottom:14px;font-size:12px}
+  .fc-alert.bad{border-color:#ef4444;background:#2b0d0d;color:#fecaca}.fc-alert.good{border-color:#22c55e;background:#092515;color:#bbf7d0}
+  .fc-empty{color:#9ca3af;padding:18px 8px;border-top:1px solid #30343b;border-bottom:1px solid #30343b;font-size:12px}
+  .fc-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+  .fc-split>*{min-width:0}
+  .fc-filter-grid{grid-template-columns:repeat(3,minmax(0,180px));margin-bottom:14px}
+  .fc-report-filters{grid-template-columns:repeat(4,minmax(0,180px));margin-bottom:14px}
+  .fc-readonly form[method="post"] button{opacity:.45;cursor:not-allowed;pointer-events:none}
+  @media(max-width:1000px){.fc-grid,.fc-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fc-split{grid-template-columns:minmax(0,1fr)}}
+  @media(max-width:600px){.fc-shell{padding:14px 10px 32px}.fc-grid,.fc-form-grid,.fc-filter-grid,.fc-report-filters{grid-template-columns:1fr}.fc-head{align-items:flex-start;flex-direction:column}.fc-kpi-value{font-size:20px}.fc-table-wrap{max-width:100%;overflow-x:auto}.fc-table{min-width:680px}}
+</style>
+<div class="fc-head">
+  <h1 class="fc-title">Financial Core</h1>
+  <span class="fc-status {% if financial_core_reporting_active %}active{% endif %}">
+    <i data-lucide="{% if financial_core_reporting_active %}shield-check{% else %}triangle-alert{% endif %}"></i>
+    {% if financial_core_reporting_active %}Active source of truth{% else %}Preview - unreconciled{% endif %}
+  </span>
+</div>
+<nav class="fc-nav" aria-label="Financial Core">
+  <a href="{% url 'finance_operations_center' %}"><i data-lucide="circle-dollar-sign"></i>Operations</a>
+  <a href="{% url 'financial_core_dashboard' %}"><i data-lucide="layout-dashboard"></i>Dashboard</a>
+  <a href="{% url 'financial_general_ledger' %}"><i data-lucide="book-open"></i>Ledger</a>
+  <a href="{% url 'financial_trial_balance' %}"><i data-lucide="scale"></i>Trial Balance</a>
+  <a href="{% url 'financial_core_profit_loss' %}"><i data-lucide="chart-no-axes-combined"></i>P&amp;L</a>
+  <a href="{% url 'financial_core_balance_sheet' %}"><i data-lucide="landmark"></i>Balance Sheet</a>
+  <a href="{% url 'financial_core_cash_flow' %}"><i data-lucide="arrow-left-right"></i>Cash Flow</a>
+  <a href="{% url 'financial_core_ar_aging' %}"><i data-lucide="hand-coins"></i>Receivables</a>
+  <a href="{% url 'financial_core_ap_aging' %}"><i data-lucide="receipt-text"></i>Payables</a>
+  <a href="{% url 'financial_expense_center' %}"><i data-lucide="wallet-cards"></i>Expenses</a>
+  <a href="{% url 'financial_supplier_center' %}"><i data-lucide="building-2"></i>Suppliers</a>
+  <a href="{% url 'financial_bank_reconciliations' %}"><i data-lucide="badge-check"></i>Reconcile</a>
+  <a href="{% url 'financial_budget_actual' %}"><i data-lucide="target"></i>Budget</a>
+  <a href="{% url 'financial_recurring_expenses' %}"><i data-lucide="calendar-clock"></i>Recurring</a>
+  <a href="{% url 'financial_currency_center' %}"><i data-lucide="badge-dollar-sign"></i>Currency</a>
+  <a href="{% url 'financial_production_costs' %}"><i data-lucide="factory"></i>Production Costs</a>
+  {% if can_view_payroll_detail %}<a href="{% url 'financial_payroll' %}"><i data-lucide="users"></i>Payroll</a>{% endif %}
+  {% if can_review_exceptions %}<a href="{% url 'financial_exception_center' %}"><i data-lucide="shield-alert"></i>Exceptions</a><a href="{% url 'financial_permission_controls' %}"><i data-lucide="key-round"></i>Access</a>{% endif %}
+  <a href="{% url 'financial_chart' %}"><i data-lucide="list-tree"></i>Accounts</a>
+</nav>
+{% if not financial_core_writes_enabled %}<div class="fc-alert">Production dual-write is off. Core transaction screens are staged for controlled activation.</div>{% endif %}

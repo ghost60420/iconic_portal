@@ -195,7 +195,7 @@
                   <div class="ca-label" style="margin-bottom:6px">Existing files</div>
                   {% for a in entry.attachments.all %}
                     <div class="attach-item">
-                      <a href="{{ a.file.url }}" target="_blank" rel="noopener">
+                      <a href="{% url 'accounting_attachment_download' a.pk %}">
                         {{ a.original_name|default:"File" }}
                       </a>
                       <small>{{ a.uploaded_at|date:"Y-m-d H:i" }}</small>

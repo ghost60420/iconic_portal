@@ -69,6 +69,7 @@ from .services.payment_reconciliation import (
     is_accounting_period_closed,
     record_invoice_payment,
 )
+from .services.financial_permissions import scope_invoices_for_user
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -2534,16 +2535,15 @@ def _pdf_text_lines(pdf, text: str, max_width: int, font_name: str, font_size: i
 
 
 @login_required
-@user_passes_test(superuser_only)
 def invoice_pdf(request, pk):
     inv = get_object_or_404(
-        Invoice.objects.select_related(
+        scope_invoices_for_user(Invoice.objects.select_related(
             "order",
             "customer",
             "quick_costing",
             "quick_costing__opportunity",
             "quick_costing__opportunity__lead",
-        ),
+        ), request.user),
         pk=pk,
     )
 

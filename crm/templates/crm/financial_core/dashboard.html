@@ -1,0 +1,52 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+<main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">
+  {% include "crm/financial_core/_nav.html" %}
+  <form method="get" class="fc-form-grid fc-filter-grid">
+    <div class="fc-field"><label for="fc-start">Start</label><input id="fc-start" class="form-control" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}"></div>
+    <div class="fc-field"><label for="fc-end">End</label><input id="fc-end" class="form-control" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}"></div>
+    <div class="fc-actions"><button class="fc-btn" type="submit"><i data-lucide="refresh-cw"></i>Refresh</button></div>
+  </form>
+  <section class="fc-grid" aria-label="Financial summary">
+    <a class="fc-kpi" href="{% url 'financial_core_profit_loss' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}"><div class="fc-kpi-label">Approved Sales</div><div class="fc-kpi-value">CAD {{ summary.approved_sales_cad|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_general_ledger' %}"><div class="fc-kpi-label">Invoiced Revenue</div><div class="fc-kpi-value">CAD {{ summary.invoiced_revenue|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_customer_receipts' %}"><div class="fc-kpi-label">Payments Received</div><div class="fc-kpi-value">CAD {{ summary.payments_received|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_ar_aging' %}"><div class="fc-kpi-label">Accounts Receivable</div><div class="fc-kpi-value">CAD {{ summary.accounts_receivable|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_ap_aging' %}"><div class="fc-kpi-label">Accounts Payable</div><div class="fc-kpi-value">CAD {{ summary.accounts_payable|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_profit_loss' %}"><div class="fc-kpi-label">Total Costs</div><div class="fc-kpi-value">CAD {{ summary.total_costs|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_profit_loss' %}"><div class="fc-kpi-label">Gross Profit</div><div class="fc-kpi-value">CAD {{ summary.gross_profit|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_profit_loss' %}"><div class="fc-kpi-label">Operating Expenses</div><div class="fc-kpi-value">CAD {{ summary.operating_expenses|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_profit_loss' %}"><div class="fc-kpi-label">Net Profit</div><div class="fc-kpi-value">CAD {{ summary.net_profit|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_cash_flow' %}"><div class="fc-kpi-label">Cash</div><div class="fc-kpi-value">CAD {{ summary.cash|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_bank_reconciliations' %}"><div class="fc-kpi-label">Bank Balance</div><div class="fc-kpi-value">CAD {{ summary.bank_balance|floatformat:2|intcomma }}</div></a>
+    <a class="fc-kpi" href="{% url 'financial_core_ar_aging' %}"><div class="fc-kpi-label">Money Waiting</div><div class="fc-kpi-value">CAD {{ summary.accounts_receivable|floatformat:2|intcomma }}</div></a>
+  </section>
+  <div class="fc-split">
+    <section class="fc-band"><h2>Financial Pipeline</h2><div class="fc-table-wrap"><table class="fc-table"><tbody>
+      <tr><td>Approved sales</td><td class="num">{{ summary.financial_pipeline.approved_sales|floatformat:2|intcomma }}</td></tr>
+      <tr><td>Invoiced</td><td class="num">{{ summary.financial_pipeline.invoiced|floatformat:2|intcomma }}</td></tr>
+      <tr><td>Collected</td><td class="num">{{ summary.financial_pipeline.collected|floatformat:2|intcomma }}</td></tr>
+      <tr><td>Outstanding</td><td class="num">{{ summary.financial_pipeline.outstanding|floatformat:2|intcomma }}</td></tr>
+    </tbody></table></div></section>
+    <section class="fc-band"><h2>Business Health Score</h2><div class="fc-kpi-value">{{ summary.health_score }} / 100</div><div class="fc-table-wrap"><table class="fc-table"><tbody>
+      {% for label,value in summary.health_components.items %}<tr><td>{{ label|title }}</td><td class="num">{{ value }}</td></tr>{% endfor %}
+    </tbody></table></div></section>
+  </div>
+  <div class="fc-split">
+    <section class="fc-band"><h2>Monthly Cash Movement</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Month</th><th class="num">CAD Movement</th></tr></thead><tbody>{% for row in summary.monthly_cash_movement %}<tr><td>{{ row.month|date:"M Y" }}</td><td class="num">{{ row.amount|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="2" class="fc-empty">No posted cash movement.</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="fc-band"><h2>Canada and Bangladesh</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Side</th><th class="num">Revenue</th><th class="num">Costs</th><th class="num">Net Profit</th><th class="num">Cash + Bank</th></tr></thead><tbody>{% for side,row in summary.side_summary.items %}<tr><td>{% if side == 'CA' %}Canada{% else %}Bangladesh{% endif %}</td><td class="num">{{ row.revenue|floatformat:2|intcomma }}</td><td class="num">{{ row.costs|floatformat:2|intcomma }}</td><td class="num">{{ row.net_profit|floatformat:2|intcomma }}</td><td class="num">{{ row.cash_and_bank|floatformat:2|intcomma }}</td></tr>{% endfor %}</tbody></table></div></section>
+  </div>
+  <div class="fc-split">
+    <section class="fc-band"><h2>Top Customers</h2><div class="fc-table-wrap"><table class="fc-table"><tbody>{% for row in summary.top_customers %}<tr><td>{{ row.name }}</td><td class="num">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td class="fc-empty">No posted customer revenue.</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="fc-band"><h2>Top Suppliers</h2><div class="fc-table-wrap"><table class="fc-table"><tbody>{% for row in summary.top_suppliers %}<tr><td>{{ row.name }}</td><td class="num">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td class="fc-empty">No posted supplier cost.</td></tr>{% endfor %}</tbody></table></div></section>
+  </div>
+  <div class="fc-split">
+    <section class="fc-band"><h2>Currency Exposure</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Currency</th><th class="num">Receivable</th><th class="num">Payable</th><th class="num">Net</th></tr></thead><tbody>{% for currency,row in summary.currency_exposure.items %}<tr><td>{{ currency }}</td><td class="num">{{ row.receivable|floatformat:2|intcomma }}</td><td class="num">{{ row.payable|floatformat:2|intcomma }}</td><td class="num">{{ row.net|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No open currency exposure.</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="fc-band"><h2>Today's Action Items</h2><div class="fc-table-wrap"><table class="fc-table"><tbody>
+      <tr><td>Missing currency rates</td><td class="num">{{ summary.action_items.missing_currency_rates }}</td></tr><tr><td>Overdue receivables</td><td class="num">CAD {{ summary.action_items.overdue_receivables_cad|floatformat:2|intcomma }}</td></tr><tr><td>Overdue payables</td><td class="num">CAD {{ summary.action_items.overdue_payables_cad|floatformat:2|intcomma }}</td></tr><tr><td>Pending supplier bills</td><td class="num">{{ summary.action_items.pending_supplier_bills }}</td></tr><tr><td>Pending expenses</td><td class="num">{{ summary.action_items.pending_expenses }}</td></tr>
+    </tbody></table></div></section>
+  </div>
+</main>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>
+{% endblock %}

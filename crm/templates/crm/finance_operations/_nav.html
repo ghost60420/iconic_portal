@@ -1,0 +1,14 @@
+<div class="fc-head">
+  <h1 class="fc-title">Finance Operations Center</h1>
+  <span class="fc-status {% if financial_core_writes_enabled %}active{% endif %}">
+    <i data-lucide="{% if financial_core_writes_enabled %}shield-check{% else %}shield-alert{% endif %}"></i>
+    {% if financial_core_writes_enabled %}Core posting enabled{% else %}Core posting disabled{% endif %}
+  </span>
+</div>
+<nav class="fc-nav" aria-label="Finance Operations">
+  <a href="{% url 'finance_operations_center' %}"><i data-lucide="circle-dollar-sign"></i>Operations</a>
+  <a href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i>Approvals</a>
+  <a href="{% url 'finance_today_activity' %}"><i data-lucide="activity"></i>Today's Activity</a>
+  <a href="{% url 'financial_core_dashboard' %}"><i data-lucide="layout-dashboard"></i>Core Dashboard</a>
+</nav>
+{% if not financial_core_writes_enabled %}<div class="fc-alert">Financial Core posting is disabled. Daily requests and approval decisions are staged without journal posting.</div>{% endif %}

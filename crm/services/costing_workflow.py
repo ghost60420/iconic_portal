@@ -181,6 +181,9 @@ def approve_quick_costing(quick_costing, *, approver):
             previous_value=previous_status,
             new_value=QuickCosting.STATUS_APPROVED,
         )
+        from crm.services.factory_timeline import lock_factory_timeline_for_approval
+
+        lock_factory_timeline_for_approval(quick_costing, actor=approver)
         _supersede_previous_quick_revision(quick_costing, actor=approver)
         return quick_costing, getattr(quick_costing, "production_order", None), False
 

@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
+from django.conf import settings
 
 from crm.models import (
     AccountingEntry,
@@ -216,6 +217,30 @@ def record_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=N
 
     payment.accounting_entry = entry
     payment.save(update_fields=["accounting_entry"])
+    if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
+        from crm.services.receivable_accounting import record_customer_receipt, resolve_legacy_payment_account
+
+        payment_account = resolve_legacy_payment_account(
+            side=payment.side,
+            currency=payment.currency,
+            payment_method=payment.payment_method,
+        )
+        record_customer_receipt(
+            customer=locked.customer,
+            amount=payment.amount,
+            currency=payment.currency,
+            receipt_date=payment.payment_date,
+            payment_account=payment_account,
+            reference=f"LEGACY-{payment.pk}",
+            actor=actor,
+            invoices=(locked,),
+            payment_method=payment.payment_method,
+            rate_to_cad=payment.rate_to_cad,
+            rate_to_bdt=payment.rate_to_bdt,
+            evidence_reference=f"Invoice payment {payment.pk}",
+            legacy_payment=payment,
+            legacy_accounting_entry=entry,
+        )
     write_payment_projection(
         locked,
         paid_amount=_decimal(locked.paid_amount) + _decimal(payment.amount),
@@ -237,6 +262,10 @@ def delete_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=N
         .select_related("accounting_entry", "production_order", "created_by")
         .get(pk=payment.pk, invoice=locked_invoice)
     )
+    if hasattr(locked_payment, "receivable_event") and locked_payment.receivable_event.financial_journal_id:
+        raise UnsupportedReceivableOperation(
+            "Financial Core payments cannot be deleted; create a traced refund or reversal."
+        )
     accounting_entry = locked_payment.accounting_entry
     locked_date = accounting_entry.date if accounting_entry else locked_payment.payment_date
     locked_side = accounting_entry.side if accounting_entry else locked_payment.side

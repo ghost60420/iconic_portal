@@ -53,7 +53,7 @@
               <td>{{ r.vendor }}</td>
               <td>{{ r.amount|default:"" }}</td>
               <td>
-                <a href="{{ r.file.url }}" target="_blank" rel="noopener">
+                <a href="{% url 'accounting_document_download' r.pk %}">
                   Open
                 </a>
               </td>

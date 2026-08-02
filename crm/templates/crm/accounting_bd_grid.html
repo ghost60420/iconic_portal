@@ -631,7 +631,7 @@
                               <div class="fileRow">
                                 <div class="fileName">{{ a.original_name|default:"File" }}</div>
                                 <div class="nowrap">
-                                  <a class="linkGold" href="{{ a.file.url }}" target="_blank" rel="noopener">Open</a>
+                                  <a class="linkGold" href="{% url 'accounting_attachment_download' a.pk %}">Download</a>
                                 </div>
                               </div>
                             {% endfor %}

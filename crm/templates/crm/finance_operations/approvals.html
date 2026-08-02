@@ -1,0 +1,23 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+<main class="fc-shell">
+  {% include "crm/finance_operations/_styles.html" %}
+  {% include "crm/finance_operations/_nav.html" %}
+  <h2>Pending Financial Approvals</h2>
+  <form method="get" class="ops-filter-grid">
+    <div class="fc-field"><label>Side</label><select class="form-select" name="side"><option value="">All</option><option value="CA" {% if selected_filters.side == 'CA' %}selected{% endif %}>Canada</option><option value="BD" {% if selected_filters.side == 'BD' %}selected{% endif %}>Bangladesh</option></select></div>
+    <div class="fc-field"><label>Currency</label><select class="form-select" name="currency"><option value="">All</option><option value="CAD" {% if selected_filters.currency == 'CAD' %}selected{% endif %}>CAD</option><option value="USD" {% if selected_filters.currency == 'USD' %}selected{% endif %}>USD</option><option value="BDT" {% if selected_filters.currency == 'BDT' %}selected{% endif %}>BDT</option></select></div>
+    <div class="fc-field"><label>Type</label><select class="form-select" name="operation_type"><option value="">All</option>{% for value,label in operation_types %}<option value="{{ value }}" {% if selected_filters.operation_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="fc-field"><label>Department</label><select class="form-select" name="department"><option value="">All</option>{% for department in departments %}<option value="{{ department.pk }}" {% if selected_filters.department == department.pk|stringformat:'s' %}selected{% endif %}>{{ department.name }}</option>{% endfor %}</select></div>
+    <div class="fc-field"><label>Risk</label><select class="form-select" name="risk"><option value="">All</option><option value="HIGH" {% if selected_filters.risk == 'HIGH' %}selected{% endif %}>High</option><option value="STANDARD" {% if selected_filters.risk == 'STANDARD' %}selected{% endif %}>Standard</option></select></div>
+    <div class="fc-field"><label>Status</label><select class="form-select" name="state"><option value="">All</option><option value="PENDING" {% if selected_filters.state == 'PENDING' %}selected{% endif %}>Pending</option><option value="EVIDENCE_REQUIRED" {% if selected_filters.state == 'EVIDENCE_REQUIRED' %}selected{% endif %}>Evidence Required</option></select></div>
+    <div class="fc-actions"><button class="fc-btn" type="submit"><i data-lucide="filter"></i>Filter</button></div>
+  </form>
+  <section class="fc-band"><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Operation</th><th>Type</th><th>Date</th><th>Side</th><th>Department</th><th>Submitted By</th><th>Reason</th><th class="num">Amount</th><th>Evidence</th><th>Risk</th><th></th></tr></thead><tbody>
+    {% for row in page %}<tr><td><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td>{{ row.get_operation_type_display }}</td><td>{{ row.transaction_date }}</td><td>{{ row.side }}</td><td>{{ row.department|default:"-" }}</td><td>{{ row.submitted_by }}</td><td>{{ row.reason|default:row.business_purpose|truncatechars:60 }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td>{{ row.document_count|yesno:"Attached,Missing" }}</td><td class="{% if row.risk_level == 'HIGH' %}ops-risk{% endif %}">{{ row.get_risk_level_display }}</td><td><a class="fc-btn" href="{% url 'finance_operation_detail' row.pk %}"><i data-lucide="search"></i>Review</a></td></tr>
+    {% empty %}<tr><td colspan="11" class="fc-empty">No assigned approvals.</td></tr>{% endfor %}
+  </tbody></table></div>{% include "crm/finance_operations/pagination.html" %}</section>
+</main>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>
+{% endblock %}

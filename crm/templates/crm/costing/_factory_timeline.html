@@ -1,0 +1,22 @@
+<section class="quick-detail-card" style="margin-top:14px;">
+  <div class="quick-actions" style="justify-content:space-between;align-items:center;">
+    <h2 class="quick-section-title" style="margin:0;">Production Timeline and Factory Running Cost</h2>
+    <a class="quick-btn" href="{% url 'financial_quick_costing_timeline' quick_costing.pk %}">{% if factory_timeline %}Update Actuals{% else %}Add Timeline{% endif %}</a>
+  </div>
+  {% if factory_timeline %}
+    <div class="quick-summary-grid" style="margin-top:12px;">
+      <div class="quick-summary-row"><span>Pricing Type</span><strong>{{ factory_timeline.get_pricing_type_display }}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Production Days</span><strong>{{ factory_timeline.estimated_production_days }}</strong></div>
+      <div class="quick-summary-row"><span>Actual Production Days</span><strong>{{ factory_timeline.actual_production_days|default:"Not recorded" }}</strong></div>
+      <div class="quick-summary-row"><span>Saved Daily Factory Cost</span><strong>{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost }}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Timeline Cost</span><strong>{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.estimated_timeline_cost }}</strong></div>
+      <div class="quick-summary-row"><span>Actual Timeline Cost</span><strong>{% if factory_timeline.actual_timeline_cost != None %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.actual_timeline_cost }}{% else %}Not recorded{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Timeline Variance</span><strong>{{ factory_timeline.timeline_variance|default:"Not recorded" }}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Profit</span><strong>{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.estimated_profit }}</strong></div>
+      <div class="quick-summary-row"><span>Actual Profit</span><strong>{% if factory_timeline.actual_profit != None %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.actual_profit }}{% else %}Not recorded{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Profit Variance</span><strong>{{ factory_timeline.profit_variance|default:"Not recorded" }}</strong></div>
+      <div class="quick-summary-row"><span>Status</span><strong><span class="quick-type-badge status-{{ factory_timeline.status|lower }}">{{ factory_timeline.status }}</span></strong></div>
+      <div class="quick-summary-row"><span>Rate Snapshot</span><strong>{% if factory_timeline.locked_at %}Locked {{ factory_timeline.locked_at|date:"M j, Y H:i" }}{% else %}Draft{% endif %}</strong></div>
+    </div>
+  {% else %}<p class="quick-disabled-note" style="margin-top:12px;">No factory timeline snapshot recorded.</p>{% endif %}
+</section>

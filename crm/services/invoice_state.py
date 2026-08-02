@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.conf import settings
 
 from crm.models import CRMAuditLog, Invoice
 from crm.services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
@@ -219,6 +220,10 @@ def approve_invoice(invoice: Invoice, *, actor=None) -> tuple[Invoice, bool]:
     )
     _audit_status_change(locked, actor, previous_status, locked.status)
     _sync_invoice_dependents(locked, actor, lifecycle=True)
+    if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
+        from crm.services.receivable_accounting import issue_invoice_to_financial_core
+
+        issue_invoice_to_financial_core(locked, actor=actor)
     return locked, True
 
 
@@ -229,6 +234,10 @@ def void_invoice(invoice: Invoice, *, actor=None, reason: str) -> Invoice:
         raise InvoiceStateError("A reason is required to void an invoice.")
 
     locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+    if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False) and hasattr(locked, "financial_state"):
+        from crm.services.receivable_accounting import void_financial_core_invoice
+
+        void_financial_core_invoice(locked, actor=actor, reason=reason)
     previous_status = locked.status
     locked.status = "cancelled"
     locked.is_archived = True

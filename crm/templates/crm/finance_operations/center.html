@@ -1,0 +1,17 @@
+{% extends "crm/base.html" %}{% load humanize %}{% block content %}
+<main class="fc-shell">{% include "crm/finance_operations/_styles.html" %}{% include "crm/finance_operations/_nav.html" %}
+  {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
+  <section class="ops-stat-grid" aria-label="Finance operations status">
+    <a class="ops-stat" href="{% url 'finance_approval_center' %}"><strong>{{ counts.pending }}</strong><span>Pending Approval</span></a>
+    <a class="ops-stat" href="{% url 'finance_approval_center' %}?state=EVIDENCE_REQUIRED"><strong>{{ counts.evidence }}</strong><span>Evidence Required</span></a>
+    <a class="ops-stat" href="{% url 'finance_today_activity' %}"><strong>{{ counts.today }}</strong><span>Today's Activity</span></a>
+    <a class="ops-stat" href="{% url 'finance_today_activity' %}"><strong>{{ counts.approved }}</strong><span>Approved, Unposted</span></a>
+    <a class="ops-stat" href="{% url 'finance_today_activity' %}"><strong>{{ counts.blocked }}</strong><span>Blocked Postings</span></a>
+  </section>
+  <section class="fc-band"><h2>Daily Actions</h2><div class="ops-action-grid">
+    {% for card in cards %}<a class="ops-action" href="{% url 'finance_operation_create' card.slug %}"><i data-lucide="{{ card.icon }}"></i><div><strong>{{ card.title }}</strong><span>{{ card.group }}</span></div></a>{% empty %}<div class="fc-empty">No entry workflows are assigned to this role.</div>{% endfor %}
+    <a class="ops-action" href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i><div><strong>Review Pending Approvals</strong><span>{{ counts.pending }} waiting</span></div></a>
+    <a class="ops-action" href="{% url 'finance_today_activity' %}"><i data-lucide="activity"></i><div><strong>View Today's Financial Activity</strong><span>{{ today|date:"M j, Y" }}</span></div></a>
+  </div></section>
+  <section class="fc-band"><div class="ops-toolbar"><h2>Recent Activity</h2><a class="fc-btn" href="{% url 'finance_today_activity' %}"><i data-lucide="list-filter"></i>Open Activity</a></div><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Operation</th><th>Type</th><th>Date</th><th>Side</th><th>Party</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in recent %}<tr><td><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td>{{ row.get_operation_type_display }}</td><td>{{ row.transaction_date }}</td><td>{{ row.side }}</td><td>{{ row.customer|default:row.supplier|default:row.party_name|default:"-" }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td><span class="ops-state {{ row.state|lower }}">{{ row.get_state_display }}</span></td></tr>{% empty %}<tr><td colspan="7" class="fc-empty">No finance operations recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+</main><script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>{% endblock %}

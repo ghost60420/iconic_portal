@@ -1396,6 +1396,7 @@ def quick_costing_detail(request, pk):
             "created_by", "salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to", "approved_by",
             "rejected_by", "quoted_by", "production_order", "previous_revision", "superseded_by",
             "revision_root", "recall_requested_by", "recall_rejected_by", "recalled_by",
+            "factory_timeline", "factory_timeline__source_default",
         ),
         pk=pk,
     )
@@ -1479,6 +1480,7 @@ def quick_costing_detail(request, pk):
     reference_images = list(reference_images_for_opportunity(quick_costing.opportunity))
     context = {
         "quick_costing": quick_costing,
+        "factory_timeline": getattr(quick_costing, "factory_timeline", None),
         "calc": calc,
         "invoice": invoice,
         "production_order": getattr(quick_costing, "production_order", None),

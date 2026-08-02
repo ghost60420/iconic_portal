@@ -105,7 +105,7 @@ WSGI_APPLICATION = "iconic_site.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": Path(os.getenv("DJANGO_DB_PATH", BASE_DIR / "db.sqlite3")),
     }
 }
 
@@ -145,6 +145,11 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Financial Core activation is a controlled release step. Schema and preview
+# reports may be deployed while production writes and report cutover stay off.
+FINANCIAL_CORE_WRITES_ENABLED = os.getenv("FINANCIAL_CORE_WRITES_ENABLED", "0") == "1"
+FINANCIAL_CORE_REPORTING_ACTIVE = os.getenv("FINANCIAL_CORE_REPORTING_ACTIVE", "0") == "1"
 
 # ======================
 # Celery / Redis
