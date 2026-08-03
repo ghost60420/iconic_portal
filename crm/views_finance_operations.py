@@ -1,27 +1,44 @@
 from datetime import date
+from pathlib import Path
+import os
+import subprocess
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.migrations.recorder import MigrationRecorder
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import get_template
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
 
-from crm.forms_finance_operations import CustomerAdjustmentOperationForm, FORM_BY_TYPE
+from crm.forms_finance_operations import (
+    CURRENCIES,
+    PAYMENT_METHODS,
+    CustomerAdjustmentOperationForm,
+    FORM_BY_TYPE,
+)
 from crm.forms_financial_core import ExpenseCategoryForm, FinancialEvidenceUploadForm
 from crm.models import (
     Department,
+    CashBankAccount,
+    ExpenseCategory,
     FinanceOperation,
+    FinancialAccount,
+    FinancialAdjustmentRequest,
     FinancialAuditEvent,
     FinancialBudget,
     FinancialDocument,
+    FinancialExceptionReview,
+    Supplier,
 )
 from crm.services.finance_operations import (
     FinanceOperationError,
@@ -42,6 +59,9 @@ from crm.services.financial_permissions import (
     can_review_finance_operation,
     can_submit_finance_operation,
     can_view_bank_details,
+    can_view_finance_approval_center,
+    can_view_finance_readiness,
+    can_view_financial_core,
     can_view_full_posting_preview,
     require_financial_permission,
     scope_finance_operations_for_approval,
@@ -70,6 +90,142 @@ PRIMARY_CENTER_SLUGS = (
     "inventory-adjustment",
 )
 
+FINANCE_MIGRATIONS = (
+    "0192_receivables_ledger_phase3b",
+    "0193_phase3c_invoice_event_source",
+    "0194_financial_core",
+    "0195_receivable_financial_journal",
+    "0196_financial_readiness",
+    "0197_finance_operations_layer",
+)
+
+FINANCE_ROUTE_NAMES = (
+    "finance_operations_center",
+    "finance_approval_center",
+    "finance_today_activity",
+    "finance_live_readiness",
+)
+
+FINANCE_WORKFLOW_SLUGS = (
+    "customer-payment", "customer-refund", "customer-credit", "credit-note",
+    "supplier-bill", "supplier-payment", "expense", "utility", "payroll",
+    "production-cost", "factory-daily-cost", "bank-deposit", "bank-withdrawal",
+    "cash-deposit", "cash-withdrawal", "money-transfer", "bank-fee",
+    "owner-investment", "owner-withdrawal", "loan-received", "loan-principal",
+    "asset-purchase", "inventory-adjustment",
+)
+
+
+def _model_counts(*models):
+    quoted_tables = [connection.ops.quote_name(model._meta.db_table) for model in models]
+    columns = [f"(SELECT COUNT(*) FROM {table})" for table in quoted_tables]
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT {', '.join(columns)}")
+        values = cursor.fetchone()
+    return {model.__name__: value for model, value in zip(models, values)}
+
+
+def _setup_snapshot():
+    counts = _model_counts(FinancialAccount, ExpenseCategory, CashBankAccount, Supplier)
+    return {
+        "financial_accounts": counts["FinancialAccount"],
+        "expense_categories": counts["ExpenseCategory"],
+        "cash_bank_accounts": counts["CashBankAccount"],
+        "suppliers": counts["Supplier"],
+        "payment_methods": len(PAYMENT_METHODS),
+        "currencies": len(CURRENCIES),
+        "business_sides": 2,
+    }
+
+
+def _deployed_commit():
+    configured = (os.getenv("APP_VERSION") or os.getenv("GIT_COMMIT") or "").strip()
+    if configured:
+        return configured
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=2,
+        )
+        return completed.stdout.strip() or "Unavailable"
+    except (OSError, subprocess.SubprocessError):
+        return "Unavailable"
+
+
+def _route_snapshot():
+    rows = []
+    for name in FINANCE_ROUTE_NAMES:
+        try:
+            rows.append({"name": name, "url": reverse(name), "present": True})
+        except NoReverseMatch:
+            rows.append({"name": name, "url": "", "present": False})
+    for slug in FINANCE_WORKFLOW_SLUGS:
+        try:
+            rows.append({
+                "name": f"finance_operation_create:{slug}",
+                "url": reverse("finance_operation_create", args=[slug]),
+                "present": True,
+            })
+        except NoReverseMatch:
+            rows.append({"name": f"finance_operation_create:{slug}", "url": "", "present": False})
+    try:
+        rows.append({
+            "name": "finance_posting_preview",
+            "url": reverse("finance_posting_preview", args=[1]),
+            "present": True,
+        })
+    except NoReverseMatch:
+        rows.append({"name": "finance_posting_preview", "url": "", "present": False})
+    return rows
+
+
+def _menu_links_present():
+    try:
+        source = get_template("crm/base.html").template.source
+    except Exception:
+        return False
+    required = (
+        "finance_operations_center",
+        "finance_approval_center",
+        "finance_today_activity",
+        "finance_live_readiness",
+    )
+    return all(name in source for name in required)
+
+
+def _protected_media_snapshot():
+    nginx_path = Path("/etc/nginx/conf.d/iconiccrm.conf")
+    if not nginx_path.exists():
+        return "unknown", "Nginx configuration is not available in this environment."
+    try:
+        source = nginx_path.read_text(encoding="utf-8")
+    except OSError:
+        return "unknown", "Nginx configuration could not be read."
+    paths = ("/media/financial_core/", "/media/accounting/", "/media/accounting_docs/")
+    protected = all(path in source for path in paths)
+    return (
+        ("good", "All protected financial media locations are configured.")
+        if protected else ("bad", "One or more protected financial media locations are missing.")
+    )
+
+
+def _backup_snapshot():
+    backup_root = Path(settings.BASE_DIR).parent / "backups"
+    backups = sorted(backup_root.glob("finance_operations_predeploy_*"), reverse=True)
+    if not backups:
+        return "unknown", "No Finance Operations deployment backup is visible to this application."
+    latest = backups[0]
+    required = ("db.sqlite3", "media.tar.gz", ".env", "source_snapshot.tar.gz")
+    complete = all((latest / filename).exists() for filename in required)
+    return (
+        ("good", latest.name)
+        if complete else ("bad", f"{latest.name} is missing one or more required files.")
+    )
+
 
 def _query_without(request, *keys):
     query = request.GET.copy()
@@ -85,6 +241,9 @@ def _common(request, **context):
         can_view_full_posting=can_view_full_posting_preview(request.user),
         can_post_operations=can_post_finance_operation(request.user),
         can_view_bank_accounts=can_view_bank_details(request.user),
+        can_view_approvals=can_view_finance_approval_center(request.user),
+        can_view_core_dashboard=can_view_financial_core(request.user),
+        can_view_live_readiness=can_view_finance_readiness(request.user),
     )
     return context
 
@@ -155,10 +314,117 @@ def finance_operations_center(request):
         if can_submit_finance_operation(request.user, (workflow := WORKFLOW_BY_SLUG[slug])["operation_type"])
     ]
     recent = _operation_queryset(request).order_by("-created_at")[:8]
+    setup = _setup_snapshot()
     return render(
         request,
         "crm/finance_operations/center.html",
-        _common(request, cards=cards, counts=counts, recent=recent, today=today),
+        _common(
+            request,
+            cards=cards,
+            counts=counts,
+            recent=recent,
+            today=today,
+            setup=setup,
+            setup_required=not all(
+                setup[key]
+                for key in ("financial_accounts", "expense_categories", "cash_bank_accounts", "suppliers")
+            ),
+            can_manage_setup=can_manage_financial_transactions(request.user),
+        ),
+    )
+
+
+@require_financial_permission("operations")
+def finance_live_readiness(request):
+    if not can_view_finance_readiness(request.user):
+        raise PermissionDenied("Finance Live Readiness is restricted to CEO and Super Admin users.")
+    setup = _setup_snapshot()
+    applied = set(
+        MigrationRecorder.Migration.objects.filter(app="crm", name__in=FINANCE_MIGRATIONS)
+        .values_list("name", flat=True)
+    )
+    routes = _route_snapshot()
+    opening = FinancialAdjustmentRequest.objects.filter(
+        adjustment_type=FinancialAdjustmentRequest.TYPE_OPENING
+    ).aggregate(
+        total=Count("id"),
+        posted=Count("id", filter=Q(state=FinancialAdjustmentRequest.STATE_POSTED)),
+    )
+    protected_status, protected_detail = _protected_media_snapshot()
+    backup_status, backup_detail = _backup_snapshot()
+    exception_count = FinancialExceptionReview.objects.count()
+    menu_ready = _menu_links_present()
+    route_count = sum(row["present"] for row in routes)
+    statuses = [
+        {"label": "Live production commit", "value": _deployed_commit(), "status": "good"},
+        {
+            "label": "Applied finance migrations",
+            "value": f"{len(applied)} of {len(FINANCE_MIGRATIONS)}",
+            "status": "good" if len(applied) == len(FINANCE_MIGRATIONS) else "bad",
+        },
+        {
+            "label": "Finance routes present",
+            "value": f"{route_count} of {len(routes)}",
+            "status": "good" if route_count == len(routes) else "bad",
+        },
+        {
+            "label": "Finance menu links present",
+            "value": "Present" if menu_ready else "Missing",
+            "status": "good" if menu_ready else "bad",
+        },
+        {
+            "label": "Financial accounts",
+            "value": setup["financial_accounts"],
+            "status": "good" if setup["financial_accounts"] else "bad",
+        },
+        {
+            "label": "Expense categories",
+            "value": setup["expense_categories"],
+            "status": "good" if setup["expense_categories"] else "bad",
+        },
+        {
+            "label": "Cash and bank accounts",
+            "value": setup["cash_bank_accounts"],
+            "status": "good" if setup["cash_bank_accounts"] else "bad",
+        },
+        {
+            "label": "Suppliers",
+            "value": setup["suppliers"],
+            "status": "good" if setup["suppliers"] else "bad",
+        },
+        {
+            "label": "Financial Core writes",
+            "value": "OFF" if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False) else "ON",
+            "status": "good" if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False) else "bad",
+        },
+        {
+            "label": "Financial Core reporting",
+            "value": "OFF" if not getattr(settings, "FINANCIAL_CORE_REPORTING_ACTIVE", False) else "ON",
+            "status": "good" if not getattr(settings, "FINANCIAL_CORE_REPORTING_ACTIVE", False) else "bad",
+        },
+        {
+            "label": "Historical exceptions",
+            "value": exception_count,
+            "status": "unknown" if not exception_count else "bad",
+        },
+        {
+            "label": "Opening balances",
+            "value": f"{opening['posted']} posted of {opening['total']}",
+            "status": "good" if opening["total"] and opening["posted"] == opening["total"] else "bad",
+        },
+        {"label": "Protected media", "value": protected_detail, "status": protected_status},
+        {"label": "Deployment backup", "value": backup_detail, "status": backup_status},
+    ]
+    return render(
+        request,
+        "crm/finance_operations/readiness.html",
+        _common(
+            request,
+            statuses=statuses,
+            setup=setup,
+            migrations=[{"name": name, "applied": name in applied} for name in FINANCE_MIGRATIONS],
+            routes=routes,
+        ),
     )
 
 

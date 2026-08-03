@@ -185,6 +185,22 @@ def can_view_finance_operations(user):
     ) and bool(accessible_financial_sides(user))
 
 
+def can_view_finance_readiness(user):
+    return bool(_authenticated(user) and (user.is_superuser or ROLE_CEO in _roles(user)))
+
+
+def can_view_finance_approval_center(user):
+    if not can_view_finance_operations(user):
+        return False
+    roles = _roles(user)
+    return bool(
+        user.is_superuser
+        or ROLE_CEO in roles
+        or ROLE_FINANCE in roles and _has_any_accounting_flag(user)
+        or (bool(roles & {ROLE_DIRECTOR, ROLE_MANAGER}) and _has_any_accounting_flag(user))
+    )
+
+
 def can_submit_finance_operation(user, operation_type):
     if not can_view_finance_operations(user):
         return False

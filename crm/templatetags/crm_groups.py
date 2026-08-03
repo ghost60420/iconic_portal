@@ -135,6 +135,42 @@ def can_access(user, flag_name):
     return bool(getattr(access, flag_name, False))
 
 
+@register.simple_tag
+def finance_operations_menu_access(user):
+    try:
+        from crm.models import FinanceOperation
+        from crm.services.financial_permissions import (
+            can_submit_finance_operation,
+            can_view_finance_approval_center,
+            can_view_finance_operations,
+            can_view_finance_readiness,
+            can_view_financial_core,
+        )
+
+        submit = lambda operation_type: can_submit_finance_operation(user, operation_type)
+        return {
+            "enabled": can_view_finance_operations(user),
+            "approvals": can_view_finance_approval_center(user),
+            "dashboard": can_view_financial_core(user),
+            "readiness": can_view_finance_readiness(user),
+            "customer_payment": submit(FinanceOperation.TYPE_CUSTOMER_PAYMENT),
+            "supplier_bill": submit(FinanceOperation.TYPE_SUPPLIER_BILL),
+            "supplier_payment": submit(FinanceOperation.TYPE_SUPPLIER_PAYMENT),
+            "expense": submit(FinanceOperation.TYPE_COMPANY_EXPENSE),
+            "utility": submit(FinanceOperation.TYPE_UTILITY_BILL),
+            "payroll": submit(FinanceOperation.TYPE_PAYROLL),
+            "production_cost": submit(FinanceOperation.TYPE_PRODUCTION_COST),
+            "factory_daily_cost": submit(FinanceOperation.TYPE_FACTORY_DAILY_COST),
+            "bank": submit(FinanceOperation.TYPE_BANK_DEPOSIT),
+            "owner": submit(FinanceOperation.TYPE_OWNER_INVESTMENT),
+            "loan": submit(FinanceOperation.TYPE_LOAN_RECEIVED),
+            "asset": submit(FinanceOperation.TYPE_ASSET_PURCHASE),
+            "inventory": submit(FinanceOperation.TYPE_INVENTORY_ADJUSTMENT),
+        }
+    except Exception:
+        return {"enabled": False}
+
+
 @register.filter
 def is_current_url(request, url_name):
     try:

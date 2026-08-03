@@ -1,14 +1,16 @@
 <div class="fc-head">
-  <h1 class="fc-title">Finance Operations Center</h1>
-  <span class="fc-status {% if financial_core_writes_enabled %}active{% endif %}">
-    <i data-lucide="{% if financial_core_writes_enabled %}shield-check{% else %}shield-alert{% endif %}"></i>
-    {% if financial_core_writes_enabled %}Core posting enabled{% else %}Core posting disabled{% endif %}
-  </span>
+  <div><h1 class="fc-title">Finance Operations</h1><span class="ops-live-label">Live for workflow testing</span></div>
 </div>
+<section class="ops-live-status" aria-label="Finance activation status">
+  <div class="good"><small>Finance Operations</small><strong>LIVE FOR WORKFLOW TESTING</strong></div>
+  <div class="{% if financial_core_writes_enabled %}bad{% else %}off{% endif %}"><small>Financial Core Posting</small><strong>{% if financial_core_writes_enabled %}ON{% else %}OFF{% endif %}</strong></div>
+  <div class="{% if financial_core_reporting_active %}bad{% else %}off{% endif %}"><small>Financial Core Reporting</small><strong>{% if financial_core_reporting_active %}ON{% else %}OFF{% endif %}</strong></div>
+</section>
 <nav class="fc-nav" aria-label="Finance Operations">
   <a href="{% url 'finance_operations_center' %}"><i data-lucide="circle-dollar-sign"></i>Operations</a>
-  <a href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i>Approvals</a>
+  {% if can_view_approvals %}<a href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i>Approvals</a>{% endif %}
   <a href="{% url 'finance_today_activity' %}"><i data-lucide="activity"></i>Today's Activity</a>
-  <a href="{% url 'financial_core_dashboard' %}"><i data-lucide="layout-dashboard"></i>Core Dashboard</a>
+  {% if can_view_core_dashboard %}<a href="{% url 'financial_core_dashboard' %}"><i data-lucide="layout-dashboard"></i>Core Dashboard</a>{% endif %}
+  {% if can_view_live_readiness %}<a href="{% url 'finance_live_readiness' %}"><i data-lucide="clipboard-check"></i>Live Readiness</a>{% endif %}
 </nav>
-{% if not financial_core_writes_enabled %}<div class="fc-alert">Financial Core posting is disabled. Daily requests and approval decisions are staged without journal posting.</div>{% endif %}
+{% if not financial_core_writes_enabled %}<div class="fc-alert">Transactions can be entered and reviewed, but they will not post to the new General Ledger until final activation.</div>{% endif %}

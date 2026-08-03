@@ -1,0 +1,21 @@
+{% extends "crm/base.html" %}{% block content %}
+<main class="fc-shell">{% include "crm/finance_operations/_styles.html" %}{% include "crm/finance_operations/_nav.html" %}
+  <section class="fc-band"><h2>Finance Live Readiness</h2><div class="ops-readiness-list">
+    {% for row in statuses %}<div class="ops-readiness-row {{ row.status }}"><i aria-hidden="true"></i><small>{{ row.label }}</small><strong>{{ row.value }}</strong></div>{% endfor %}
+  </div></section>
+  <section class="fc-band"><h2>Configuration Inventory</h2><div class="ops-setup-list">
+    <div class="ops-setup-item"><strong>Financial Accounts</strong><span{% if setup.financial_accounts %} class="available"{% endif %}>{{ setup.financial_accounts }}</span></div>
+    <div class="ops-setup-item"><strong>Expense Categories</strong><span{% if setup.expense_categories %} class="available"{% endif %}>{{ setup.expense_categories }}</span></div>
+    <div class="ops-setup-item"><strong>Cash and Bank Accounts</strong><span{% if setup.cash_bank_accounts %} class="available"{% endif %}>{{ setup.cash_bank_accounts }}</span></div>
+    <div class="ops-setup-item"><strong>Suppliers</strong><span{% if setup.suppliers %} class="available"{% endif %}>{{ setup.suppliers }}</span></div>
+    <div class="ops-setup-item"><strong>Payment Methods</strong><span class="available">{{ setup.payment_methods }} workflow values</span></div>
+    <div class="ops-setup-item"><strong>Currencies</strong><span class="available">{{ setup.currencies }} supported</span></div>
+    <div class="ops-setup-item"><strong>Business Sides</strong><span class="available">{{ setup.business_sides }} supported</span></div>
+  </div></section>
+  <section class="fc-band"><h2>Applied Finance Migrations</h2><div class="ops-route-grid">
+    {% for migration in migrations %}<div class="ops-route"><code>{{ migration.name }}</code><span{% if not migration.applied %} class="bad"{% endif %}>{% if migration.applied %}APPLIED{% else %}MISSING{% endif %}</span></div>{% endfor %}
+  </div></section>
+  <section class="fc-band"><h2>Finance Routes</h2><div class="ops-route-grid">
+    {% for route in routes %}<div class="ops-route"><code>{{ route.url|default:route.name }}</code><span{% if not route.present %} class="bad"{% endif %}>{% if route.present %}PRESENT{% else %}MISSING{% endif %}</span></div>{% endfor %}
+  </div></section>
+</main><script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>{% endblock %}

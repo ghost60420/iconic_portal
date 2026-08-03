@@ -359,6 +359,7 @@ urlpatterns = [
     # Additive daily Finance Operations layer. Requests and approvals remain separate
     # from Core posting while FINANCIAL_CORE_WRITES_ENABLED is off.
     path("accounting/operations/", fin_ops.finance_operations_center, name="finance_operations_center"),
+    path("accounting/operations/readiness/", fin_ops.finance_live_readiness, name="finance_live_readiness"),
     path("accounting/operations/new/<slug:workflow_slug>/", fin_ops.finance_operation_create, name="finance_operation_create"),
     path("accounting/operations/approvals/", fin_ops.finance_approval_center, name="finance_approval_center"),
     path("accounting/operations/activity/", fin_ops.finance_today_activity, name="finance_today_activity"),
