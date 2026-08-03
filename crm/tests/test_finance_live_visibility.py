@@ -126,3 +126,8 @@ class FinanceLiveVisibilityTests(TestCase):
     def test_commit_readout_works_with_restricted_service_path(self):
         with patch.dict(os.environ, {"PATH": ""}):
             self.assertNotEqual(_deployed_commit(), "Unavailable")
+
+    def test_readiness_lists_the_registered_credit_note_route(self):
+        response = self.response_for(self.ceo, "finance_live_readiness")
+        self.assertContains(response, "/accounting/operations/new/customer-credit-note/")
+        self.assertNotContains(response, "/accounting/operations/new/credit-note/")

@@ -107,7 +107,7 @@ FINANCE_ROUTE_NAMES = (
 )
 
 FINANCE_WORKFLOW_SLUGS = (
-    "customer-payment", "customer-refund", "customer-credit", "credit-note",
+    "customer-payment", "customer-refund", "customer-credit", "customer-credit-note",
     "supplier-bill", "supplier-payment", "expense", "utility", "payroll",
     "production-cost", "factory-daily-cost", "bank-deposit", "bank-withdrawal",
     "cash-deposit", "cash-withdrawal", "money-transfer", "bank-fee",
@@ -168,12 +168,13 @@ def _route_snapshot():
             rows.append({"name": name, "url": "", "present": False})
     for slug in FINANCE_WORKFLOW_SLUGS:
         try:
+            workflow_definition(slug)
             rows.append({
                 "name": f"finance_operation_create:{slug}",
                 "url": reverse("finance_operation_create", args=[slug]),
                 "present": True,
             })
-        except NoReverseMatch:
+        except (FinanceOperationError, NoReverseMatch):
             rows.append({"name": f"finance_operation_create:{slug}", "url": "", "present": False})
     try:
         rows.append({
