@@ -142,18 +142,21 @@ def _deployed_commit():
     configured = (os.getenv("APP_VERSION") or os.getenv("GIT_COMMIT") or "").strip()
     if configured:
         return configured
-    try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "--short=12", "HEAD"],
-            cwd=settings.BASE_DIR,
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=2,
-        )
-        return completed.stdout.strip() or "Unavailable"
-    except (OSError, subprocess.SubprocessError):
-        return "Unavailable"
+    for executable in ("/usr/bin/git", "/usr/local/bin/git", "git"):
+        try:
+            completed = subprocess.run(
+                [executable, "rev-parse", "--short=12", "HEAD"],
+                cwd=settings.BASE_DIR,
+                capture_output=True,
+                check=True,
+                text=True,
+                timeout=2,
+            )
+            if completed.stdout.strip():
+                return completed.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return "Unavailable"
 
 
 def _route_snapshot():
