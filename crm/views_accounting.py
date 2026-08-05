@@ -3732,18 +3732,56 @@ def accounting_open_month(request):
 # --------------------
 @login_required
 def accounting_files(request):
-    qs = AccountingAttachment.objects.select_related("entry", "uploaded_by").filter(
-        entry__side__in=accessible_financial_sides(request.user)
-    ).order_by("-uploaded_at", "-id")
+    qs = AccountingAttachment.objects.select_related(
+        "entry",
+        "entry__production_order",
+        "uploaded_by",
+    ).filter(entry__side__in=accessible_financial_sides(request.user)).order_by(
+        "-uploaded_at",
+        "-id",
+    )
+
+    year = _parse_int(request.GET.get("year"))
+    month = _parse_int(request.GET.get("month"))
+    q = (request.GET.get("q") or "").strip()
+
+    if year:
+        qs = qs.filter(entry__date__year=year)
+    if month and 1 <= month <= 12:
+        qs = qs.filter(entry__date__month=month)
+
     side = (request.GET.get("side") or "").strip().upper()
     if side in ["CA", "BD"]:
         qs = qs.filter(entry__side=side)
+
+    if q:
+        qs = qs.filter(
+            Q(original_name__icontains=q)
+            | Q(note__icontains=q)
+            | Q(entry__description__icontains=q)
+            | Q(entry__internal_note__icontains=q)
+            | Q(entry__transfer_ref__icontains=q)
+            | Q(entry__main_type__icontains=q)
+            | Q(entry__sub_type__icontains=q)
+            | Q(entry__production_order__order_code__icontains=q)
+            | Q(entry__production_order__title__icontains=q)
+        )
 
     entry_id = _parse_int(request.GET.get("entry_id"))
     if entry_id:
         qs = qs.filter(entry_id=entry_id)
 
-    return render(request, "crm/accounting_files.html", {"files": qs})
+    return render(
+        request,
+        "crm/accounting_files.html",
+        {
+            "files": qs,
+            "filter_year": year or "",
+            "filter_month": month if month and 1 <= month <= 12 else "",
+            "filter_side": side if side in ["CA", "BD"] else "ALL",
+            "filter_q": q,
+        },
+    )
 
 
 @login_required

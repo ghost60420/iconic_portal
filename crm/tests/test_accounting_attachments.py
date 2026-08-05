@@ -195,3 +195,58 @@ class AccountingAttachmentUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "files-page-proof.pdf")
         self.assertContains(response, reverse("accounting_attachment_download", args=[attachment.pk]))
+
+    def test_accounting_files_applies_visible_filters(self):
+        matching_entry = AccountingEntry.objects.create(
+            date=date(2024, 2, 10),
+            side="BD",
+            direction="OUT",
+            status="PAID",
+            main_type="EXPENSE",
+            sub_type="MATERIAL",
+            currency="BDT",
+            amount_original=Decimal("1000.00"),
+            rate_to_cad=Decimal("83.333333"),
+            rate_to_bdt=Decimal("1.000000"),
+            description="Needle purchase",
+            created_by=self.user,
+        )
+        other_entry = AccountingEntry.objects.create(
+            date=date(2025, 3, 10),
+            side="CA",
+            direction="OUT",
+            status="PAID",
+            main_type="EXPENSE",
+            sub_type="OFFICE",
+            currency="CAD",
+            amount_original=Decimal("20.00"),
+            rate_to_cad=Decimal("1.000000"),
+            rate_to_bdt=Decimal("83.333333"),
+            description="Printer paper",
+            created_by=self.user,
+        )
+        AccountingAttachment.objects.create(
+            entry=matching_entry,
+            file=upload_file("needle-proof.pdf", b"%PDF-1.4", "application/pdf"),
+            original_name="needle-proof.pdf",
+            uploaded_by=self.user,
+        )
+        AccountingAttachment.objects.create(
+            entry=other_entry,
+            file=upload_file("paper-proof.pdf", b"%PDF-1.4", "application/pdf"),
+            original_name="paper-proof.pdf",
+            uploaded_by=self.user,
+        )
+
+        response = self.client.get(
+            reverse("accounting_files"),
+            {"year": "2024", "month": "2", "side": "BD", "q": "needle"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "needle-proof.pdf")
+        self.assertNotContains(response, "paper-proof.pdf")
+        self.assertEqual(response.context["filter_year"], 2024)
+        self.assertEqual(response.context["filter_month"], 2)
+        self.assertEqual(response.context["filter_side"], "BD")
+        self.assertEqual(response.context["filter_q"], "needle")
