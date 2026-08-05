@@ -1,6 +1,8 @@
 # iconic_site/settings.py
 import os
 import json
+import hashlib
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -12,12 +14,54 @@ load_dotenv(BASE_DIR / ".env")
 # ======================
 
 DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
-if not SECRET_KEY:
+_raw_secret_key = os.getenv("DJANGO_SECRET_KEY", "")
+if not _raw_secret_key:
     if DEBUG:
-        SECRET_KEY = "change_this_in_env"
+        _raw_secret_key = "change_this_in_env"
     else:
         raise RuntimeError("DJANGO_SECRET_KEY is missing. Set it in .env")
+if not DEBUG and (
+    _raw_secret_key.startswith("django-insecure-")
+    or _raw_secret_key == "change_this_in_env"
+    or len(_raw_secret_key) < 32
+    or len(set(_raw_secret_key)) < 5
+):
+    raise RuntimeError("DJANGO_SECRET_KEY is not suitable for production.")
+if len(_raw_secret_key) < 50:
+    SECRET_KEY = hashlib.sha512(f"iconic-crm-v1:{_raw_secret_key}".encode("utf-8")).hexdigest()
+else:
+    SECRET_KEY = _raw_secret_key
+
+
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return bool(default)
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+RUNNING_TESTS = "test" in sys.argv
+PRODUCTION_SECURITY_ENABLED = _env_bool(
+    "DJANGO_PRODUCTION_SECURITY",
+    default=not DEBUG and not RUNNING_TESTS,
+)
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", PRODUCTION_SECURITY_ENABLED)
+SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", PRODUCTION_SECURITY_ENABLED)
+CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", PRODUCTION_SECURITY_ENABLED)
+SECURE_HSTS_SECONDS = int(
+    os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if PRODUCTION_SECURITY_ENABLED else "0")
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    PRODUCTION_SECURITY_ENABLED,
+)
+SECURE_HSTS_PRELOAD = _env_bool("DJANGO_SECURE_HSTS_PRELOAD", PRODUCTION_SECURITY_ENABLED)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # ======================
 # Hosts

@@ -167,3 +167,31 @@ class AccountingAttachmentUploadTests(TestCase):
         self.assertEqual(entry.attachments.count(), 1)
         self.assertEqual(entry.attachments.get().original_name, "edit-proof.png")
         self.assertTrue(AccountingEntryAudit.objects.filter(entry=entry, action="UPDATE").exists())
+
+    def test_accounting_files_renders_direct_attachment_rows(self):
+        entry = AccountingEntry.objects.create(
+            date=date.today(),
+            side="BD",
+            direction="OUT",
+            status="PAID",
+            main_type="EXPENSE",
+            sub_type="MATERIAL",
+            currency="BDT",
+            amount_original=Decimal("1000.00"),
+            rate_to_cad=Decimal("83.333333"),
+            rate_to_bdt=Decimal("1.000000"),
+            description="Files page regression",
+            created_by=self.user,
+        )
+        attachment = AccountingAttachment.objects.create(
+            entry=entry,
+            file=upload_file("files-page-proof.pdf", b"%PDF-1.4", "application/pdf"),
+            original_name="files-page-proof.pdf",
+            uploaded_by=self.user,
+        )
+
+        response = self.client.get(reverse("accounting_files"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "files-page-proof.pdf")
+        self.assertContains(response, reverse("accounting_attachment_download", args=[attachment.pk]))
