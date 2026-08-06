@@ -92,11 +92,15 @@ class FinanceLiveVisibilityTests(TestCase):
         self.assertContains(production, "Bangladesh Factory Daily Costs")
         self.assertNotContains(production, "Bangladesh Payroll")
         self.assertNotContains(production, "Bangladesh Bank and Cash")
+        self.assertNotContains(production, "Bangladesh Dashboard")
+        self.assertNotContains(production, "Bangladesh Reports")
         self.assertNotContains(production, "Canada Finance")
 
         hr = self.response_for(self.hr)
         self.assertContains(hr, "Bangladesh Payroll")
         self.assertNotContains(hr, "Bangladesh Production Costs")
+        self.assertNotContains(hr, "Bangladesh Dashboard")
+        self.assertNotContains(hr, "Bangladesh Reports")
         self.assertNotContains(hr, "Canada Finance")
 
         sales = self.response_for(self.sales)

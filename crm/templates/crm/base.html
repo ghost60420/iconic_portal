@@ -686,7 +686,7 @@
                 <div class="crm-nested-submenu">
                   <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Bangladesh Finance</span><span class="crm-submenu-caret">›</span></button>
                   <div class="crm-submenu-panel" role="menu">
-                    {% if can_acc_bd %}<a class="crm-dd-item" href="{% url 'accounting_bd_dashboard' %}">Bangladesh Dashboard</a>{% endif %}
+                    {% if finance_ops_menu.company_reports and can_acc_bd %}<a class="crm-dd-item" href="{% url 'accounting_bd_dashboard' %}">Bangladesh Dashboard</a>{% endif %}
                     {% if finance_ops_menu.enabled %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=BD">Bangladesh Daily Transactions</a>{% endif %}
                     {% if finance_ops_menu.customer_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'customer-payment' %}?side=BD">Bangladesh Customer Payments</a>{% endif %}
                     {% if finance_ops_menu.supplier_bill %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-bill' %}?side=BD">Bangladesh Supplier Bills</a>{% endif %}
@@ -699,7 +699,7 @@
                     {% if finance_ops_menu.factory_daily_cost %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'factory-daily-cost' %}?side=BD">Bangladesh Factory Daily Costs</a>{% endif %}
                     {% if finance_ops_menu.bank %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=BD#bank-cash">Bangladesh Bank and Cash</a>{% endif %}
                     {% if can_internal and production_profit_url %}<a class="crm-dd-item" href="{{ production_profit_url }}?side=BD">Bangladesh Production Profit</a>{% endif %}
-                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ finance_ledger_url }}?side=BD">Bangladesh Reports</a>{% elif can_acc_bd and acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">Bangladesh Reports</a>{% endif %}
+                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ finance_ledger_url }}?side=BD">Bangladesh Reports</a>{% endif %}
                   </div>
                 </div>
               {% endif %}
