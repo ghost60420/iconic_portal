@@ -328,6 +328,15 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(bd_bill.fields["currency"].initial, "BDT")
         self.assertQuerySetEqual(bd_bill.fields["supplier"].queryset, [bd_supplier])
 
+        bd_factory_response = client.get(
+            f"{reverse('finance_operation_create', args=['factory-daily-cost'])}?side=BD"
+        )
+        self.assertEqual(bd_factory_response.status_code, 200)
+        self.assertQuerySetEqual(
+            bd_factory_response.context["form"].fields["quick_costing"].queryset,
+            [self.quick_costing],
+        )
+
         ca_payment = client.get(
             f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA"
         ).context["form"]

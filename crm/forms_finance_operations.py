@@ -755,10 +755,18 @@ class FactoryDailyCostOperationForm(FinanceOperationForm):
             status__in=QuickCosting.INACTIVE_REPORTING_STATUSES
         )
         if sides != {"CA", "BD"}:
-            factory_locations = [side.lower() for side in sides]
-            quick_costings = quick_costings.filter(
-                opportunity__production_orders__factory_location__in=factory_locations
-            )
+            side_query = Q(pk__in=[])
+            if "BD" in sides:
+                side_query |= Q(production_order__factory_location__iexact="bd") | Q(
+                    production_order__isnull=True,
+                    currency="BDT",
+                )
+            if "CA" in sides:
+                side_query |= Q(production_order__factory_location__iexact="ca") | Q(
+                    production_order__isnull=True,
+                    currency__in=("CAD", "USD"),
+                )
+            quick_costings = quick_costings.filter(side_query)
         self.fields["quick_costing"].queryset = quick_costings.select_related("opportunity").distinct()
         self.fields["daily_default"].queryset = FactoryRunningCostDefault.objects.filter(is_active=True, side__in=sides)
 
