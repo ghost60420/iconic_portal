@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
 from django.contrib.staticfiles import finders
 from django.db import transaction
 from django.db.models import F, Q, Sum
@@ -69,7 +70,7 @@ from .services.payment_reconciliation import (
     is_accounting_period_closed,
     record_invoice_payment,
 )
-from .services.financial_permissions import can_view_financial_core, scope_invoices_for_user
+from .services.financial_permissions import accessible_financial_sides, can_view_financial_core, scope_invoices_for_user
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -1776,6 +1777,9 @@ def invoice_list(request):
     paid_filter = (request.GET.get("paid") or "").strip()
     historical_filter = (request.GET.get("historical") or "").strip().lower()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    side = (request.GET.get("side") or "").strip().upper()
+    if side and (side not in {"CA", "BD"} or side not in accessible_financial_sides(request.user)):
+        raise PermissionDenied("You do not have access to this business side.")
     can_archive = can_archive_invoice(request.user)
     if archive_filter not in {"active", "archived", "all"}:
         archive_filter = "active"
@@ -1785,6 +1789,10 @@ def invoice_list(request):
     date_to = parse_date((request.GET.get("date_to") or "").strip())
 
     invoices = _invoice_archive_scope(Invoice.objects.select_related("order", "customer"), archive_filter)
+    if side == "CA":
+        invoices = invoices.filter(Q(invoice_region="CA") | Q(invoice_region="", currency__in=("CAD", "USD")))
+    elif side == "BD":
+        invoices = invoices.filter(Q(invoice_region="BD") | Q(invoice_region="", currency="BDT"))
 
     if q:
         invoices = invoices.filter(
@@ -1846,6 +1854,18 @@ def invoice_list(request):
     if archive_filter != "all":
         payment_summary_qs = payment_summary_qs.filter(invoice__is_archived=archive_filter == "archived")
     invoice_summary_qs = _invoice_archive_scope(Invoice.objects.all(), archive_filter)
+    if side == "CA":
+        invoice_side_filter = Q(invoice_region="CA") | Q(invoice_region="", currency__in=("CAD", "USD"))
+        payment_summary_qs = payment_summary_qs.filter(
+            Q(invoice__invoice_region="CA") | Q(invoice__invoice_region="", invoice__currency__in=("CAD", "USD"))
+        )
+        invoice_summary_qs = invoice_summary_qs.filter(invoice_side_filter)
+    elif side == "BD":
+        invoice_side_filter = Q(invoice_region="BD") | Q(invoice_region="", currency="BDT")
+        payment_summary_qs = payment_summary_qs.filter(
+            Q(invoice__invoice_region="BD") | Q(invoice__invoice_region="", invoice__currency="BDT")
+        )
+        invoice_summary_qs = invoice_summary_qs.filter(invoice_side_filter)
     monthly_received = (
         payment_summary_qs.filter(payment_date__year=today.year, payment_date__month=today.month)
         .aggregate(total=Sum("amount"))["total"]
@@ -1878,6 +1898,7 @@ def invoice_list(request):
             "paid": paid_filter,
             "historical_filter": historical_filter,
             "archive_filter": archive_filter,
+            "side": side,
             "can_archive_invoices": can_archive,
             "date_from": date_from,
             "date_to": date_to,
@@ -1961,6 +1982,26 @@ def _invoice_list_by_currency(request, currency_code: str):
     )
 
 
+def _lock_invoice_form_side(form, side):
+    if not side:
+        return
+    if "invoice_market" in form.fields:
+        form.fields["invoice_market"].disabled = True
+    if "order" in form.fields:
+        form.fields["order"].queryset = ProductionOrder.objects.filter(
+            factory_location__iexact=side.lower()
+        ).order_by("-created_at")
+    if "customer" in form.fields:
+        customer_query = (
+            Q(market__iexact="BD")
+            if side == "BD"
+            else ~Q(market__iexact="BD")
+        ) | Q(production_orders__factory_location__iexact=side.lower())
+        form.fields["customer"].queryset = Customer.objects.filter(customer_query).distinct().order_by(
+            "account_brand", "contact_name"
+        )
+
+
 @login_required
 @user_passes_test(superuser_only)
 def invoice_list_ca(request):
@@ -1976,6 +2017,11 @@ def invoice_list_bd(request):
 @login_required
 def invoice_add(request):
     # optional prefill from order
+    locked_side = (request.GET.get("side") or "").strip().upper()
+    if locked_side and (
+        locked_side not in {"CA", "BD"} or locked_side not in accessible_financial_sides(request.user)
+    ):
+        raise PermissionDenied("You do not have access to this business side.")
     order_id = request.GET.get("order_id")
     opportunity_id = request.GET.get("opportunity_id") or request.POST.get("source_opportunity_id")
     quotation_id = request.GET.get("quotation_id") or request.POST.get("source_quotation_id")
@@ -1985,6 +2031,11 @@ def invoice_add(request):
 
     deposit_defaults = _invoice_default_deposit_values()
     initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk", defaults=deposit_defaults)}
+    if locked_side:
+        initial.update(
+            currency="BDT" if locked_side == "BD" else "CAD",
+            invoice_market="bangladesh" if locked_side == "BD" else "north_america",
+        )
     quotation_prefill = _build_quotation_invoice_prefill(
         quotation_id,
         request.user,
@@ -2025,14 +2076,22 @@ def invoice_add(request):
                 f"Invoice {existing_invoice.invoice_number} already exists for this quotation. A duplicate was not created.",
             )
             return redirect("invoice_view", pk=existing_invoice.pk)
+        invoice_data = request.POST.copy()
+        if locked_side:
+            invoice_data["invoice_market"] = "bangladesh" if locked_side == "BD" else "north_america"
         form = InvoiceForm(
-            request.POST,
+            invoice_data,
+            initial=initial,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
+        _lock_invoice_form_side(form, locked_side)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
+                if locked_side:
+                    inv.invoice_market = "bangladesh" if locked_side == "BD" else "north_america"
+                    inv.invoice_region = locked_side
                 source_opportunity = opportunity_prefill["context"]["opportunity"] if opportunity_prefill else None
                 source_costing = quotation_prefill["costing"] if quotation_prefill else None
 
@@ -2089,6 +2148,7 @@ def invoice_add(request):
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
+        _lock_invoice_form_side(form, locked_side)
 
     opportunity_prefill_context = (
         quotation_prefill["context"]
@@ -2096,6 +2156,7 @@ def invoice_add(request):
         else (opportunity_prefill["context"] if opportunity_prefill else None)
     )
     _scope_opportunity_invoice_form_choices(form, opportunity_prefill_context)
+    _lock_invoice_form_side(form, locked_side)
     context = {
         "form": form,
         "mode": "add",
@@ -2103,6 +2164,7 @@ def invoice_add(request):
         "can_manage_invoices": user_can_manage_invoices,
         "can_edit_historical_dates": can_edit_historical_dates_flag,
         "opportunity_prefill": opportunity_prefill_context,
+        "locked_financial_side": locked_side,
         **_invoice_form_extra_context(deposit_defaults),
     }
     return render(
@@ -2115,59 +2177,7 @@ def invoice_add(request):
 @login_required
 @user_passes_test(superuser_only)
 def invoice_add_ca(request):
-    # wrapper to force CAD
-    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
-    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
-    if request.method == "POST":
-        form = InvoiceForm(
-            request.POST,
-            can_edit_internal_costs=can_edit_internal_costs,
-            can_edit_historical_dates=can_edit_historical_dates_flag,
-        )
-        if form.is_valid():
-            with transaction.atomic():
-                inv = form.save(commit=False)
-                if not inv.currency:
-                    inv.currency = "CAD"
-                if not inv.issue_date:
-                    inv.issue_date = timezone.now().date()
-                if not (inv.invoice_number or "").strip():
-                    inv.invoice_number = _next_invoice_number()
-                if inv.order_id and not inv.customer_id:
-                    try:
-                        inv.customer_id = inv.order.customer_id
-                    except Exception:
-                        pass
-                inv.invoice_market = "north_america"
-                inv.invoice_region = "CA"
-                _sync_invoice_market_region(inv)
-                _calc_totals(inv)
-                create_draft_invoice(inv, actor=request.user)
-                form.save_m2m()
-            messages.success(request, "Invoice created.")
-            return redirect("invoice_view", pk=inv.pk)
-    else:
-        form = InvoiceForm(
-            initial={
-                "currency": "CAD",
-                "invoice_market": "north_america",
-                "invoice_region": "CA",
-                "deposit_percentage": _default_deposit_for("north_america", "bulk"),
-            },
-            can_edit_internal_costs=can_edit_internal_costs,
-            can_edit_historical_dates=can_edit_historical_dates_flag,
-        )
-    return render(
-        request,
-        "crm/invoice/invoice_form.html",
-        {
-            "form": form,
-            "mode": "add",
-            "can_manage_invoice_costing": can_edit_internal_costs,
-            "can_edit_historical_dates": can_edit_historical_dates_flag,
-            **_invoice_form_extra_context(),
-        },
-    )
+    return redirect(f"{reverse('invoice_add')}?side=CA")
 
 
 @login_required

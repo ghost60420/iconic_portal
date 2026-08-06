@@ -55,6 +55,41 @@ def _production_orders_for_sides(sides):
     return ProductionOrder.objects.filter(side_query)
 
 
+def _invoice_side_query(sides):
+    query = Q(pk__in=[])
+    if "CA" in sides:
+        query |= Q(invoice_region="CA") | Q(invoice_region="", currency__in=("CAD", "USD"))
+    if "BD" in sides:
+        query |= Q(invoice_region="BD") | Q(invoice_region="", currency="BDT")
+    return query
+
+
+def _customers_for_sides(sides):
+    query = Q(pk__in=[])
+    if "CA" in sides:
+        query |= (
+            ~Q(market__iexact="BD")
+            | Q(invoice__invoice_region="CA")
+            | Q(invoice__invoice_region="", invoice__currency__in=("CAD", "USD"))
+            | Q(production_orders__factory_location__iexact="ca")
+        )
+    if "BD" in sides:
+        query |= (
+            Q(market__iexact="BD")
+            | Q(invoice__invoice_region="BD")
+            | Q(invoice__invoice_region="", invoice__currency="BDT")
+            | Q(production_orders__factory_location__iexact="bd")
+        )
+    return Customer.objects.filter(query).distinct()
+
+
+def _departments_for_sides(sides):
+    return Department.objects.filter(
+        is_active=True,
+        employees__user__access__role__in=sides,
+    ).distinct()
+
+
 class InvoiceBalanceChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, invoice):
         return f"{invoice.invoice_number} - {invoice.currency} {invoice.balance:,.2f} remaining"
@@ -89,15 +124,27 @@ class FinanceOperationForm(forms.Form):
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
     supporting_document = forms.FileField()
 
-    def __init__(self, *args, user=None, workflow=None, **kwargs):
+    def __init__(self, *args, user=None, workflow=None, locked_side="", **kwargs):
         self.user = user
         self.workflow = workflow
+        self.locked_side = (locked_side or "").upper().strip()
         super().__init__(*args, **kwargs)
         sides = accessible_financial_sides(user)
+        if self.locked_side and self.locked_side not in sides:
+            raise forms.ValidationError("You do not have access to this business side.")
+        self.allowed_sides = {self.locked_side} if self.locked_side else sides
         self.fields["side"].choices = [choice for choice in self.fields["side"].choices if choice[0] in sides]
-        if len(sides) == 1:
+        if self.locked_side:
+            self.fields["side"].initial = self.locked_side
+            self.fields["side"].widget = forms.HiddenInput()
+            self.fields["currency"].initial = "BDT" if self.locked_side == "BD" else "CAD"
+        elif len(sides) == 1:
             self.fields["side"].initial = next(iter(sides))
         self.fields["transaction_date"].initial = date.today
+        self.fields["transaction_date"].label = "Date"
+        self.fields["reference"].label = "Reference"
+        self.fields["business_purpose"].label = "Purpose"
+        self.fields["supporting_document"].label = "Receipt"
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
@@ -105,6 +152,12 @@ class FinanceOperationForm(forms.Form):
                 field.widget.attrs.setdefault("class", "form-select")
             else:
                 field.widget.attrs.setdefault("class", "form-control")
+
+    def clean_side(self):
+        side = self.cleaned_data["side"]
+        if self.locked_side and side != self.locked_side:
+            raise forms.ValidationError("The business side is locked for this transaction.")
+        return side
 
     def _operation(self, *, operation_type=None, total_amount, amount_before_tax=0, tax_amount=0, details=None, **fields):
         cleaned = self.cleaned_data
@@ -132,7 +185,7 @@ class FinanceOperationForm(forms.Form):
     def _accounts(self):
         return scope_bank_accounts_for_user(
             CashBankAccount.objects.filter(is_active=True).select_related("gl_account"), self.user
-        ).order_by("side", "name")
+        ).filter(side__in=self.allowed_sides).order_by("side", "name")
 
 
 class CustomerPaymentOperationForm(FinanceOperationForm):
@@ -151,7 +204,7 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
         super().__init__(*args, **kwargs)
         invoices = scope_invoices_for_user(
             Invoice.objects.filter(financial_state__document_status="ISSUED").select_related("customer"), self.user
-        ).exclude(status="cancelled").order_by("due_date", "id")
+        ).filter(_invoice_side_query(self.allowed_sides)).exclude(status="cancelled").order_by("due_date", "id")
         self.fields["invoice"].queryset = invoices
         self.fields["customer"].queryset = Customer.objects.filter(invoice__in=invoices).distinct().order_by(
             "account_brand", "contact_name"
@@ -234,9 +287,11 @@ class CustomerAdjustmentOperationForm(FinanceOperationForm):
         super().__init__(*args, **kwargs)
         invoices = scope_invoices_for_user(
             Invoice.objects.select_related("customer", "financial_state"), self.user
-        ).exclude(status="cancelled")
+        ).filter(_invoice_side_query(self.allowed_sides)).exclude(status="cancelled")
         self.fields["invoice"].queryset = invoices
-        self.fields["customer"].queryset = Customer.objects.all().order_by("account_brand", "contact_name")
+        self.fields["customer"].queryset = _customers_for_sides(self.allowed_sides).order_by(
+            "account_brand", "contact_name"
+        )
         self.fields["refund_account"].queryset = self._accounts()
         self.fields["deposit_account"].queryset = self._accounts()
         if initial_kind:
@@ -293,11 +348,12 @@ class SupplierBillOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
         self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).select_related("default_account")
-        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["department"].queryset = _departments_for_sides(sides)
         self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
+        self.fields["customer"].queryset = _customers_for_sides(sides).order_by("account_brand", "contact_name")
 
     def clean(self):
         cleaned = super().clean()
@@ -361,7 +417,7 @@ class SupplierPaymentOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
         self.fields["supplier_bill"].queryset = SupplierBill.objects.filter(
             side__in=sides,
@@ -421,10 +477,10 @@ class ExpenseOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["vendor"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
         self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).select_related("default_account")
-        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["department"].queryset = _departments_for_sides(sides)
         self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
         self.fields["payment_account"].queryset = self._accounts()
 
@@ -497,7 +553,7 @@ class UtilityOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["vendor"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
         self.fields["payment_account"].queryset = self._accounts()
 
@@ -561,11 +617,10 @@ class PayrollOperationForm(FinanceOperationForm):
         employees = EmployeeProfile.objects.filter(
             status__in=EmployeeProfile.MENTIONABLE_STATUSES, is_archived=False
         )
-        sides = accessible_financial_sides(self.user)
-        if sides != {"CA", "BD"}:
-            employees = employees.filter(user__access__role__in=sides)
+        sides = self.allowed_sides
+        employees = employees.filter(user__access__role__in=sides)
         self.fields["employee"].queryset = employees.select_related("user", "department_ref")
-        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["department"].queryset = _departments_for_sides(sides)
         self.fields["payment_account"].queryset = self._accounts()
 
     def clean(self):
@@ -637,7 +692,7 @@ class ProductionCostOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["production_order"].queryset = _production_orders_for_sides(sides).select_related("customer", "opportunity")
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides)
         self.fields["payment_account"].queryset = self._accounts()
@@ -695,7 +750,7 @@ class FactoryDailyCostOperationForm(FinanceOperationForm):
         super().__init__(*args, **kwargs)
         self.fields["supporting_document"].required = False
         self.fields["reference"].required = False
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         quick_costings = QuickCosting.objects.exclude(
             status__in=QuickCosting.INACTIVE_REPORTING_STATUSES
         )
@@ -890,10 +945,10 @@ class AssetPurchaseOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sides = accessible_financial_sides(self.user)
+        sides = self.allowed_sides
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True, side__in=sides)
         self.fields["payment_account"].queryset = self._accounts()
-        self.fields["department"].queryset = Department.objects.filter(is_active=True)
+        self.fields["department"].queryset = _departments_for_sides(sides)
 
     def clean(self):
         cleaned = super().clean()
@@ -938,7 +993,7 @@ class InventoryAdjustmentOperationForm(FinanceOperationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["supplier"].queryset = Supplier.objects.filter(
-            is_active=True, side__in=accessible_financial_sides(self.user)
+            is_active=True, side__in=self.allowed_sides
         )
         self.fields["inventory_item"].queryset = InventoryItem.objects.filter(is_active=True).order_by("name")
 

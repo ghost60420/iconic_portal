@@ -4,12 +4,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
@@ -43,6 +44,7 @@ from crm.services.finance_operations import (
     submit_operation,
     workflow_definition,
 )
+from crm.services.operations_permissions import ROLE_CEO, ROLE_FINANCE, operations_role_names
 from crm.services.financial_permissions import (
     accessible_financial_sides,
     can_access_finance_operation,
@@ -71,7 +73,10 @@ PRIMARY_CENTER_SLUGS = (
     "factory-daily-cost",
     "bank-deposit",
     "bank-withdrawal",
+    "cash-deposit",
+    "cash-withdrawal",
     "money-transfer",
+    "bank-fee",
     "owner-investment",
     "owner-withdrawal",
     "loan-received",
@@ -79,6 +84,36 @@ PRIMARY_CENTER_SLUGS = (
     "asset-purchase",
     "inventory-adjustment",
 )
+
+COUNTRY_CENTER_SLUGS = {
+    "CA": (
+        "customer-payment", "supplier-bill", "supplier-payment", "expense", "utility", "payroll",
+        "bank-deposit", "bank-withdrawal", "cash-deposit", "cash-withdrawal", "money-transfer", "bank-fee",
+        "asset-purchase", "loan-received", "owner-investment",
+    ),
+    "BD": (
+        "customer-payment", "supplier-bill", "supplier-payment", "expense", "utility", "payroll",
+        "production-cost", "factory-daily-cost", "bank-deposit", "bank-withdrawal", "cash-deposit",
+        "cash-withdrawal", "money-transfer", "bank-fee", "asset-purchase", "inventory-adjustment",
+    ),
+}
+
+
+def _requested_side(request):
+    sides = accessible_financial_sides(request.user)
+    requested = (request.GET.get("side") or "").upper().strip()
+    if requested:
+        if requested not in {"CA", "BD"} or requested not in sides:
+            raise PermissionDenied("You do not have access to this business side.")
+        return requested
+    if len(sides) == 1:
+        return next(iter(sides))
+    return ""
+
+
+def _can_use_finance_advanced(user):
+    return bool(user.is_superuser or operations_role_names(user) & {ROLE_CEO, ROLE_FINANCE})
+
 
 def _setup_snapshot():
     account_table = connection.ops.quote_name(FinancialAccount._meta.db_table)
@@ -178,7 +213,10 @@ def _attach_document(operation, uploaded_file, *, actor, description):
 
 @require_financial_permission("operations")
 def finance_operations_center(request):
+    locked_side = _requested_side(request)
     scoped = scope_finance_operations_for_user(FinanceOperation.objects.all(), request.user)
+    if locked_side:
+        scoped = scoped.filter(side=locked_side)
     today = timezone.localdate()
     counts = scoped.aggregate(
         pending=Count("id", filter=Q(state=FinanceOperation.STATE_PENDING)),
@@ -187,11 +225,15 @@ def finance_operations_center(request):
         today=Count("id", filter=Q(transaction_date=today)),
         blocked=Count("id", filter=~Q(posting_error="")),
     )
+    card_slugs = COUNTRY_CENTER_SLUGS.get(locked_side, PRIMARY_CENTER_SLUGS)
     cards = [
-        workflow for slug in PRIMARY_CENTER_SLUGS
+        workflow for slug in card_slugs
         if can_submit_finance_operation(request.user, (workflow := WORKFLOW_BY_SLUG[slug])["operation_type"])
     ]
-    recent = _operation_queryset(request).order_by("-created_at")[:8]
+    recent = _operation_queryset(request)
+    if locked_side:
+        recent = recent.filter(side=locked_side)
+    recent = recent.order_by("-created_at")[:8]
     setup = _setup_snapshot()
     return render(
         request,
@@ -208,33 +250,46 @@ def finance_operations_center(request):
                 for key in ("financial_accounts", "expense_categories", "cash_bank_accounts", "suppliers")
             ),
             can_manage_setup=can_manage_financial_transactions(request.user),
+            locked_side=locked_side,
+            country_name={"CA": "Canada", "BD": "Bangladesh"}.get(locked_side, ""),
         ),
     )
 
 
-def _form_for_request(request, workflow, *, bind=True):
+def _form_for_request(request, workflow, *, bind=True, locked_side=""):
     form_class = FORM_BY_TYPE[workflow["operation_type"]]
+    data = None
+    if bind and request.method == "POST":
+        data = request.POST.copy()
+        if locked_side:
+            data["side"] = locked_side
     kwargs = {
-        "data": request.POST or None if bind else None,
+        "data": data,
         "files": request.FILES or None if bind else None,
         "user": request.user,
         "workflow": workflow,
+        "locked_side": locked_side,
     }
     if form_class is CustomerAdjustmentOperationForm:
         kwargs["initial_kind"] = workflow["operation_type"]
     return form_class(**kwargs)
 
 
-def _utility_context(request, form):
+def _utility_context(request, form, *, locked_side=""):
     utility_type = form.data.get("utility_type") if form.is_bound else None
     if not utility_type:
         return {"utility_history": [], "utility_budgets": []}
     history = scope_finance_operations_for_user(FinanceOperation.objects.all(), request.user).filter(
         operation_type=FinanceOperation.TYPE_UTILITY_BILL,
         details__utility_type=utility_type,
-    ).exclude(state=FinanceOperation.STATE_REJECTED).order_by("-transaction_date")[:12]
+    ).exclude(state=FinanceOperation.STATE_REJECTED)
+    if locked_side:
+        history = history.filter(side=locked_side)
+    history = history.order_by("-transaction_date")[:12]
     account_key = UTILITY_ACCOUNT_KEYS.get(utility_type)
-    budget_sides = Q(side__in=accessible_financial_sides(request.user)) | Q(side="")
+    budget_sides = Q(side=locked_side) | Q(side="") if locked_side else (
+        Q(side__in=accessible_financial_sides(request.user)) | Q(side="")
+    )
     budgets = FinancialBudget.objects.filter(
         budget_sides, account__system_key=account_key
     ).select_related("account").order_by(
@@ -252,6 +307,7 @@ def finance_operation_create(request, workflow_slug):
         raise Http404(str(exc)) from exc
     if not can_submit_finance_operation(request.user, workflow["operation_type"]):
         raise Http404("Finance workflow not found.")
+    locked_side = _requested_side(request)
     can_manage_categories = (
         workflow["operation_type"] == FinanceOperation.TYPE_COMPANY_EXPENSE
         and can_manage_financial_transactions(request.user)
@@ -268,12 +324,16 @@ def finance_operation_create(request, workflow_slug):
         category.change_reason = "Created from Finance Operations Center"
         category.save()
         messages.success(request, f"Expense category {category.name} created.")
-        return redirect("finance_operation_create", workflow_slug=workflow_slug)
-    form = _form_for_request(request, workflow, bind=not category_post)
+        target = reverse("finance_operation_create", kwargs={"workflow_slug": workflow_slug})
+        return redirect(f"{target}?side={locked_side}" if locked_side else target)
+    form = _form_for_request(request, workflow, bind=not category_post, locked_side=locked_side)
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
-                operation = submit_operation(form.build_operation(), actor=request.user)
+                operation = form.build_operation()
+                if locked_side and operation.side != locked_side:
+                    raise ValidationError("The business side is locked for this transaction.")
+                operation = submit_operation(operation, actor=request.user)
                 _attach_document(
                     operation,
                     form.cleaned_data.get("supporting_document"),
@@ -284,14 +344,29 @@ def finance_operation_create(request, workflow_slug):
             return redirect("finance_operation_detail", pk=operation.pk)
         except (FinanceOperationError, ValidationError, ValueError) as exc:
             form.add_error(None, str(exc))
-    recent = _operation_queryset(request).filter(operation_type=workflow["operation_type"]).order_by("-created_at")[:10]
-    context = _utility_context(request, form) if workflow["operation_type"] == FinanceOperation.TYPE_UTILITY_BILL else {}
+    recent = _operation_queryset(request).filter(operation_type=workflow["operation_type"])
+    if locked_side:
+        recent = recent.filter(side=locked_side)
+    recent = recent.order_by("-created_at")[:10]
+    context = (
+        _utility_context(request, form, locked_side=locked_side)
+        if workflow["operation_type"] == FinanceOperation.TYPE_UTILITY_BILL else {}
+    )
     context.update(
         workflow=workflow,
         form=form,
         recent=recent,
         category_form=category_form,
         can_manage_categories=can_manage_categories,
+        locked_side=locked_side,
+        country_name={"CA": "Canada", "BD": "Bangladesh"}.get(locked_side, ""),
+        other_side="BD" if locked_side == "CA" else "CA",
+        can_switch_side=bool(
+            locked_side
+            and accessible_financial_sides(request.user) == {"CA", "BD"}
+            and _can_use_finance_advanced(request.user)
+        ),
+        can_view_form_advanced=_can_use_finance_advanced(request.user),
     )
     return render(request, "crm/finance_operations/form.html", _common(request, **context))
 

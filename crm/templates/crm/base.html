@@ -402,6 +402,8 @@
       top:0;
       left:calc(100% + 10px);
       min-width:230px;
+      max-height:calc(100vh - 32px);
+      overflow-y:auto;
       padding:10px;
       border-radius:14px;
       background:linear-gradient(145deg, #111827, #020617);
@@ -516,6 +518,7 @@
       }
       .crm-nested-submenu.is-open .crm-submenu-panel{
         max-height:420px;
+        overflow-y:auto;
         pointer-events:auto;
       }
       .crm-nested-submenu:hover .crm-submenu-caret{
@@ -589,6 +592,9 @@
     {% url 'email_sync_dashboard' as email_sync_url %}
     {% url 'wa_api_inbox' as whatsapp_url %}
     {% url 'payment_audit_log' as payment_audit_url %}
+    {% url 'executive_financial_dashboard' as executive_finance_url %}
+    {% url 'kpi_scorecard_dashboard' as finance_kpi_url %}
+    {% url 'bd_staff_list' as bd_staff_url %}
     {% url 'financial_core_dashboard' as finance_dashboard_url %}
     {% url 'financial_general_ledger' as finance_ledger_url %}
     {% url 'financial_trial_balance' as finance_trial_balance_url %}
@@ -658,99 +664,62 @@
             </a>
             <div class="crm-dropdown-menu" role="menu" data-finance-menu="production">
               <div class="crm-dd-title">Finance</div>
-              {% if finance_ops_menu.enabled and current_url != 'quick_costing_client_quotation' %}
-                <a class="crm-dd-item" href="{% url 'finance_operations_center' %}">Finance Operations Center</a>
-                {% if finance_ops_menu.customer_payment or finance_ops_menu.supplier_bill or finance_ops_menu.supplier_payment or finance_ops_menu.expense or finance_ops_menu.utility or finance_ops_menu.payroll or finance_ops_menu.production_cost or finance_ops_menu.factory_daily_cost %}
-                  <div class="crm-nested-submenu">
-                    <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Daily Operations</span><span class="crm-submenu-caret">›</span></button>
-                    <div class="crm-submenu-panel" role="menu">
-                      {% if finance_ops_menu.customer_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'customer-payment' %}">Customer Payments</a>{% endif %}
-                      {% if finance_ops_menu.supplier_bill %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-bill' %}">Supplier Bills</a>{% endif %}
-                      {% if finance_ops_menu.supplier_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-payment' %}">Supplier Payments</a>{% endif %}
-                      {% if finance_ops_menu.expense %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'expense' %}">Expenses</a>{% endif %}
-                      {% if finance_ops_menu.utility %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'utility' %}">Utilities</a>{% endif %}
-                      {% if finance_ops_menu.payroll %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'payroll' %}">Payroll</a>{% endif %}
-                      {% if finance_ops_menu.production_cost %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'production-cost' %}">Production Costs</a>{% endif %}
-                      {% if finance_ops_menu.factory_daily_cost %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'factory-daily-cost' %}">Factory Daily Costs</a>{% endif %}
-                    </div>
-                  </div>
-                {% endif %}
-                {% if finance_ops_menu.bank %}
-                  <div class="crm-nested-submenu">
-                    <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Bank and Cash</span><span class="crm-submenu-caret">›</span></button>
-                    <div class="crm-submenu-panel" role="menu">
-                      <a class="crm-dd-item" href="{% url 'finance_operation_create' 'bank-deposit' %}">Deposits</a>
-                      <a class="crm-dd-item" href="{% url 'finance_operation_create' 'bank-withdrawal' %}">Withdrawals</a>
-                      <a class="crm-dd-item" href="{% url 'finance_operation_create' 'money-transfer' %}">Transfers</a>
-                      <a class="crm-dd-item" href="{% url 'finance_operation_create' 'bank-fee' %}">Fees</a>
-                    </div>
-                  </div>
-                {% endif %}
+              {% if finance_ops_menu.canada and current_url != 'quick_costing_client_quotation' %}
                 <div class="crm-nested-submenu">
-                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Management</span><span class="crm-submenu-caret">›</span></button>
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Canada Finance</span><span class="crm-submenu-caret">›</span></button>
                   <div class="crm-submenu-panel" role="menu">
-                    {% if finance_ops_menu.approvals %}<a class="crm-dd-item" href="{% url 'finance_approval_center' %}">Approval Center</a>{% endif %}
-                    <a class="crm-dd-item" href="{% url 'finance_today_activity' %}">Today's Activity</a>
-                  </div>
-                </div>
-                {% if finance_ops_menu.owner or finance_ops_menu.loan or finance_ops_menu.asset or finance_ops_menu.inventory %}
-                  <div class="crm-nested-submenu">
-                    <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Other Transactions</span><span class="crm-submenu-caret">›</span></button>
-                    <div class="crm-submenu-panel" role="menu">
-                      {% if finance_ops_menu.owner %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'owner-investment' %}">Owner Transactions</a>{% endif %}
-                      {% if finance_ops_menu.loan %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'loan-received' %}">Loans</a>{% endif %}
-                      {% if finance_ops_menu.asset %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'asset-purchase' %}">Assets</a>{% endif %}
-                      {% if finance_ops_menu.inventory %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'inventory-adjustment' %}">Inventory Adjustments</a>{% endif %}
-                    </div>
-                  </div>
-                {% endif %}
-              {% endif %}
-              {% if can_acc_ca or can_acc_bd %}
-                {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
-                {% if finance_ledger_url %}<a class="crm-dd-item" href="{{ finance_ledger_url }}">Accounts</a>{% endif %}
-                {% if finance_dashboard_url %}<a class="crm-dd-item" href="{{ finance_dashboard_url }}">Finance Dashboard</a>{% endif %}
-                {% if payment_audit_url %}<a class="crm-dd-item" href="{{ payment_audit_url }}">Payment Audit</a>{% endif %}
-              {% endif %}
-              {% if can_acc_bd %}
-                <div class="crm-nested-submenu">
-                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Bangladesh Accounting</span><span class="crm-submenu-caret">›</span></button>
-                  <div class="crm-submenu-panel" role="menu">
-                    {% if acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">BD Daily</a>{% endif %}
-                    {% if acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">BD Historical Entries</a>{% endif %}
-                    {% if finance_dashboard_url %}<a class="crm-dd-item" href="{{ finance_dashboard_url }}?side=BD">BD Dashboard</a>{% endif %}
+                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ finance_dashboard_url }}?side=CA">Canada Dashboard</a>{% endif %}
+                    {% if finance_ops_menu.enabled %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=CA">Canada Daily Transactions</a>{% endif %}
+                    {% if can_acc_ca and invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}?side=CA">Canada Invoices</a>{% endif %}
+                    {% if finance_ops_menu.customer_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'customer-payment' %}?side=CA">Canada Customer Payments</a>{% endif %}
+                    {% if finance_ops_menu.supplier_bill %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-bill' %}?side=CA">Canada Supplier Bills</a>{% endif %}
+                    {% if finance_ops_menu.supplier_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-payment' %}?side=CA">Canada Supplier Payments</a>{% endif %}
+                    {% if finance_ops_menu.expense %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'expense' %}?side=CA">Canada Expenses</a>{% endif %}
+                    {% if finance_ops_menu.utility %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'utility' %}?side=CA">Canada Utilities</a>{% endif %}
+                    {% if finance_ops_menu.payroll %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'payroll' %}?side=CA">Canada Payroll</a>{% endif %}
+                    {% if finance_ops_menu.bank %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=CA#bank-cash">Canada Bank and Cash</a>{% endif %}
+                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ finance_ledger_url }}?side=CA">Canada Reports</a>{% endif %}
                   </div>
                 </div>
               {% endif %}
-              {% if can_acc_ca %}
+              {% if finance_ops_menu.bangladesh and current_url != 'quick_costing_client_quotation' %}
                 <div class="crm-nested-submenu">
-                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Canada Accounting</span><span class="crm-submenu-caret">›</span></button>
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Bangladesh Finance</span><span class="crm-submenu-caret">›</span></button>
                   <div class="crm-submenu-panel" role="menu">
-                    {% if finance_dashboard_url %}<a class="crm-dd-item" href="{{ finance_dashboard_url }}?side=CA">CA Dashboard</a>{% endif %}
-                    {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">CA Historical Ledger</a>{% endif %}
-                    {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}?side=CA">CA Historical Entries</a>{% endif %}
+                    {% if can_acc_bd %}<a class="crm-dd-item" href="{% url 'accounting_bd_dashboard' %}">Bangladesh Dashboard</a>{% endif %}
+                    {% if finance_ops_menu.enabled %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=BD">Bangladesh Daily Transactions</a>{% endif %}
+                    {% if finance_ops_menu.customer_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'customer-payment' %}?side=BD">Bangladesh Customer Payments</a>{% endif %}
+                    {% if finance_ops_menu.supplier_bill %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-bill' %}?side=BD">Bangladesh Supplier Bills</a>{% endif %}
+                    {% if finance_ops_menu.supplier_payment %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'supplier-payment' %}?side=BD">Bangladesh Supplier Payments</a>{% endif %}
+                    {% if finance_ops_menu.expense %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'expense' %}?side=BD">Bangladesh Expenses</a>{% endif %}
+                    {% if finance_ops_menu.utility %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'utility' %}?side=BD">Bangladesh Utilities</a>{% endif %}
+                    {% if finance_ops_menu.payroll %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'payroll' %}?side=BD">Bangladesh Payroll</a>{% endif %}
+                    {% if finance_ops_menu.staff and can_acc_bd and bd_staff_url %}<a class="crm-dd-item" href="{{ bd_staff_url }}">Bangladesh Staff</a>{% endif %}
+                    {% if finance_ops_menu.production_cost %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'production-cost' %}?side=BD">Bangladesh Production Costs</a>{% endif %}
+                    {% if finance_ops_menu.factory_daily_cost %}<a class="crm-dd-item" href="{% url 'finance_operation_create' 'factory-daily-cost' %}?side=BD">Bangladesh Factory Daily Costs</a>{% endif %}
+                    {% if finance_ops_menu.bank %}<a class="crm-dd-item" href="{% url 'finance_operations_center' %}?side=BD#bank-cash">Bangladesh Bank and Cash</a>{% endif %}
+                    {% if can_internal and production_profit_url %}<a class="crm-dd-item" href="{{ production_profit_url }}?side=BD">Bangladesh Production Profit</a>{% endif %}
+                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ finance_ledger_url }}?side=BD">Bangladesh Reports</a>{% elif can_acc_bd and acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">Bangladesh Reports</a>{% endif %}
                   </div>
                 </div>
               {% endif %}
-              {% if can_acc_ca or can_acc_bd %}
+              {% if finance_ops_menu.company_reports or can_costing and can_internal %}
                 <div class="crm-nested-submenu">
-                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>KPI</span><span class="crm-submenu-caret">›</span></button>
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Company Finance</span><span class="crm-submenu-caret">›</span></button>
                   <div class="crm-submenu-panel" role="menu">
-                    {% if finance_trial_balance_url %}<a class="crm-dd-item" href="{{ finance_trial_balance_url }}">Trial Balance</a>{% endif %}
-                    {% if finance_profit_loss_url %}<a class="crm-dd-item" href="{{ finance_profit_loss_url }}">Profit &amp; Loss</a>{% endif %}
-                    {% if finance_balance_sheet_url %}<a class="crm-dd-item" href="{{ finance_balance_sheet_url }}">Balance Sheet</a>{% endif %}
-                    {% if finance_cash_flow_url %}<a class="crm-dd-item" href="{{ finance_cash_flow_url }}">Cash Flow</a>{% endif %}
-                    {% if finance_ar_url %}<a class="crm-dd-item" href="{{ finance_ar_url }}">Accounts Receivable</a>{% endif %}
-                    {% if finance_ap_url %}<a class="crm-dd-item" href="{{ finance_ap_url }}">Accounts Payable</a>{% endif %}
-                    {% if can_internal and production_profit_url %}<a class="crm-dd-item" href="{{ production_profit_url }}">Production Profit</a>{% endif %}
-                  </div>
-                </div>
-              {% endif %}
-              {% if can_costing and can_internal and cost_url %}
-                <div class="crm-nested-submenu">
-                  <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Commercial</span><span class="crm-submenu-caret">›</span></button>
-                  <div class="crm-submenu-panel" role="menu">
-                    <a class="crm-dd-item" href="{{ cost_dashboard_url }}">Commercial Costing</a>
-                    <a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>
+                    {% if finance_ops_menu.company_reports %}<a class="crm-dd-item" href="{{ executive_finance_url }}">Executive Finance Dashboard</a>
+                    <a class="crm-dd-item" href="{% url 'financial_chart' %}">Accounts</a>
+                    <a class="crm-dd-item" href="{{ finance_ar_url }}">Accounts Receivable</a>
+                    <a class="crm-dd-item" href="{{ finance_ap_url }}">Accounts Payable</a>
+                    {% if can_acc_ca or can_acc_bd %}<a class="crm-dd-item" href="{{ payment_audit_url }}">Payment Audit</a>{% endif %}
+                    <a class="crm-dd-item" href="{{ finance_profit_loss_url }}">Profit and Loss</a>
+                    <a class="crm-dd-item" href="{{ finance_balance_sheet_url }}">Balance Sheet</a>
+                    <a class="crm-dd-item" href="{{ finance_cash_flow_url }}">Cash Flow</a>
+                    <a class="crm-dd-item" href="{{ finance_trial_balance_url }}">Trial Balance</a>
+                    <a class="crm-dd-item" href="{{ finance_ledger_url }}">General Ledger</a>
+                    {% if can_acc_ca or can_acc_bd %}<a class="crm-dd-item" href="{{ finance_kpi_url }}">KPI</a>{% endif %}{% endif %}
+                    {% if can_costing and can_internal and cost_dashboard_url %}<a class="crm-dd-item" href="{{ cost_dashboard_url }}">Commercial Costing</a>{% endif %}
+                    {% if can_costing and can_internal and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>{% endif %}
                   </div>
                 </div>
               {% endif %}

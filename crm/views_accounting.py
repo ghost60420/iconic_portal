@@ -405,50 +405,7 @@ def accounting_entry_add(request):
 @login_required
 @ca_required
 def accounting_entry_add_ca(request):
-    LOCK_SIDE = "CA"
-    LOCK_DIRECTION = "IN"
-    LOCK_CURRENCY = "CAD"
-
-    if request.method == "POST":
-        form = AccountingEntryForm(request.POST, request.FILES)
-        if form.is_valid():
-            obj = form.save(commit=False)
-            obj.side = LOCK_SIDE
-            obj.direction = LOCK_DIRECTION
-            obj.currency = LOCK_CURRENCY
-            rate_row = _get_rate_row()
-            cad_to_bdt = rate_row.cad_to_bdt if rate_row else Decimal("0")
-            if not obj.rate_to_cad or obj.rate_to_cad <= 0:
-                obj.rate_to_cad = Decimal("1")
-            if cad_to_bdt and cad_to_bdt > 0 and (not obj.rate_to_bdt or obj.rate_to_bdt <= 0):
-                obj.rate_to_bdt = cad_to_bdt
-            obj.created_by = request.user
-            obj.save()
-            form.save_m2m()
-
-            _save_attachments(obj, request, request.user, "attachments")
-            _audit(obj, "CREATE", request.user, after=_entry_snapshot(obj), note="CA add")
-
-            messages.success(request, "Canada entry added.")
-            return redirect("accounting_entry_list")
-
-        messages.error(request, "Please fix the errors below.")
-    else:
-        form = AccountingEntryForm(
-            initial={"side": LOCK_SIDE, "direction": LOCK_DIRECTION, "currency": LOCK_CURRENCY}
-        )
-
-    return render(
-        request,
-        "crm/accounting_entry_add_ca.html",
-        {
-            "form": form,
-            "lock_side": LOCK_SIDE,
-            "lock_direction": LOCK_DIRECTION,
-            "lock_currency": LOCK_CURRENCY,
-            "lock_mode": "CA_IN_CAD",
-        },
-    )
+    return redirect(f"{reverse('finance_operations_center')}?side=CA")
 
 
 # --------------------
@@ -457,55 +414,7 @@ def accounting_entry_add_ca(request):
 @login_required
 @bd_required
 def accounting_entry_add_bd(request):
-    LOCK_SIDE = "BD"
-    LOCK_CURRENCY = "BDT"
-
-    if request.method == "POST":
-        form = AccountingEntryForm(
-            request.POST,
-            request.FILES,
-            lock_side=LOCK_SIDE,
-            lock_currency=LOCK_CURRENCY,
-            bd_mode=True,
-        )
-        if form.is_valid():
-            obj = form.save(commit=False)
-
-            obj.side = LOCK_SIDE
-            obj.currency = LOCK_CURRENCY
-
-            if not obj.direction:
-                obj.direction = (request.POST.get("direction") or "").strip()
-
-            rate_row = _get_rate_row()
-            cad_to_bdt = rate_row.cad_to_bdt if rate_row else Decimal("0")
-            obj.rate_to_bdt = Decimal("1")
-            if cad_to_bdt and cad_to_bdt > 0:
-                obj.rate_to_cad = cad_to_bdt
-            obj.created_by = request.user
-            obj.save()
-            form.save_m2m()
-
-            _save_attachments(obj, request, request.user, "attachments")
-            _audit(obj, "CREATE", request.user, after=_entry_snapshot(obj), note="BD add")
-
-            messages.success(request, "Bangladesh entry added.")
-            return redirect("accounting_bd_grid")
-
-        messages.error(request, "Please fix the errors below.")
-    else:
-        form = AccountingEntryForm(
-            initial={"side": LOCK_SIDE, "currency": LOCK_CURRENCY, "direction": "OUT"},
-            lock_side=LOCK_SIDE,
-            lock_currency=LOCK_CURRENCY,
-            bd_mode=True,
-        )
-
-    return render(
-        request,
-        "crm/accounting_entry_add_bd.html",
-        {"form": form, "lock_side": LOCK_SIDE, "lock_currency": LOCK_CURRENCY, "lock_mode": "BD_ADD"},
-    )
+    return redirect(f"{reverse('finance_operations_center')}?side=BD")
 
 
 # --------------------

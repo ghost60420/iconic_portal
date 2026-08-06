@@ -26,8 +26,8 @@
       <a class="fc-btn" href="{% url 'financial_supplier_center' %}">Suppliers</a>
     </div>{% else %}<p class="fc-note">Authorized Finance administrators must complete this setup.</p>{% endif %}
   </section>{% endif %}
-  <section class="fc-band"><h2>Daily Actions</h2><div class="ops-action-grid">
-    {% for card in cards %}<a class="ops-action" href="{% url 'finance_operation_create' card.slug %}"><i data-lucide="{{ card.icon }}"></i><div><strong>{{ card.title }}</strong><span>{{ card.group }}</span></div></a>{% empty %}<div class="fc-empty">No entry workflows are assigned to this role.</div>{% endfor %}
+  <section class="fc-band" id="bank-cash"><h2>Daily Actions</h2><div class="ops-action-grid">
+    {% for card in cards %}<a class="ops-action" href="{% url 'finance_operation_create' card.slug %}{% if locked_side %}?side={{ locked_side }}{% endif %}"><i data-lucide="{{ card.icon }}"></i><div><strong>{{ card.title }}</strong><span>{{ card.group }}</span></div></a>{% empty %}<div class="fc-empty">No entry workflows are assigned to this role.</div>{% endfor %}
     {% if can_view_approvals %}<a class="ops-action" href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i><div><strong>Review Pending Approvals</strong><span>{{ counts.pending }} waiting</span></div></a>{% endif %}
     <a class="ops-action" href="{% url 'finance_today_activity' %}"><i data-lucide="activity"></i><div><strong>View Today's Financial Activity</strong><span>{{ today|date:"M j, Y" }}</span></div></a>
   </div></section>

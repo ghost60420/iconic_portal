@@ -140,13 +140,17 @@ def finance_operations_menu_access(user):
     try:
         from crm.models import FinanceOperation
         from crm.services.financial_permissions import (
+            accessible_financial_sides,
             can_submit_finance_operation,
             can_view_finance_approval_center,
             can_view_finance_operations,
             can_view_financial_core,
         )
+        from crm.services.operations_permissions import operations_role_names
 
         submit = lambda operation_type: can_submit_finance_operation(user, operation_type)
+        sides = accessible_financial_sides(user)
+        roles = operations_role_names(user)
         return {
             "enabled": can_view_finance_operations(user),
             "approvals": can_view_finance_approval_center(user),
@@ -164,6 +168,11 @@ def finance_operations_menu_access(user):
             "loan": submit(FinanceOperation.TYPE_LOAN_RECEIVED),
             "asset": submit(FinanceOperation.TYPE_ASSET_PURCHASE),
             "inventory": submit(FinanceOperation.TYPE_INVENTORY_ADJUSTMENT),
+            "canada": "CA" in sides,
+            "bangladesh": "BD" in sides,
+            "company_reports": can_view_financial_core(user),
+            "staff": bool(user.is_superuser or roles & {"CEO", "Finance", "Accounts", "HR"}),
+            "sales_tools": bool(user.is_superuser or roles & {"CEO", "Finance", "Accounts", "Sales", "Sales Manager"}),
         }
     except Exception:
         return {"enabled": False}

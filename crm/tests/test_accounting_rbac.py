@@ -45,7 +45,11 @@ class AccountingRBACTests(TestCase):
         user = self.create_user_with_access("bd-accounting", can_accounting_bd=True)
         self.client.force_login(user)
 
-        self.assertEqual(self.client.get(reverse("accounting_entry_add_bd")).status_code, 200)
+        self.assertRedirects(
+            self.client.get(reverse("accounting_entry_add_bd")),
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
         self.assertEqual(self.client.get(reverse("accounting_bd_dashboard")).status_code, 200)
         self.assertEqual(self.client.get(reverse("accounting_entry_list")).status_code, 200)
         self.assertEqual(self.client.get(reverse("accounting_reports")).status_code, 302)
@@ -62,7 +66,11 @@ class AccountingRBACTests(TestCase):
         )
         self.client.force_login(admin)
 
-        self.assertEqual(self.client.get(reverse("accounting_entry_add_bd")).status_code, 200)
+        self.assertRedirects(
+            self.client.get(reverse("accounting_entry_add_bd")),
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
         self.assertRedirects(
             self.client.get(reverse("accounting_bd_dashboard")),
             f"{reverse('financial_core_dashboard')}?side=BD",

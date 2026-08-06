@@ -1,3 +1,3 @@
 <div class="fc-head">
-  <div><h1 class="fc-title">Finance Operations Center</h1><span class="ops-live-label">Production</span></div>
+  <div><h1 class="fc-title">{% if country_name %}{{ country_name }} Daily Transactions{% else %}Finance Operations Center{% endif %}</h1><span class="ops-live-label">Production{% if country_name %} · {{ country_name }} locked{% endif %}</span></div>
 </div>

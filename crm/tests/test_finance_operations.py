@@ -259,6 +259,130 @@ class FinanceOperationsTests(TestCase):
                 self.assertContains(response, title)
         self.assertEqual(JournalEntry.objects.filter(source_key__startswith="FINANCE-OPERATION:").count(), 0)
 
+    def test_country_centers_use_the_shared_workflows_with_locked_links(self):
+        client = Client()
+        client.force_login(self.submitter)
+        canada = client.get(f"{reverse('finance_operations_center')}?side=CA")
+        self.assertEqual(canada.status_code, 200)
+        self.assertContains(canada, "Canada Daily Transactions")
+        self.assertEqual(len(canada.context["cards"]), 15)
+        self.assertContains(
+            canada,
+            f"{reverse('finance_operation_create', args=['utility'])}?side=CA",
+        )
+        self.assertNotContains(canada, "Record Production Cost")
+        self.assertNotContains(canada, "Record Inventory Adjustment")
+
+        bangladesh = client.get(f"{reverse('finance_operations_center')}?side=BD")
+        self.assertEqual(bangladesh.status_code, 200)
+        self.assertContains(bangladesh, "Bangladesh Daily Transactions")
+        self.assertContains(bangladesh, "Add Production Cost")
+        self.assertContains(bangladesh, "Add Factory Daily Cost")
+        self.assertContains(bangladesh, "Record Inventory Adjustment")
+
+    def test_country_forms_filter_suppliers_accounts_invoices_and_default_currency(self):
+        bd_supplier = Supplier.objects.create(
+            code="OPS-BD-SUP",
+            name="Bangladesh Operations Supplier",
+            side="BD",
+            default_currency="BDT",
+            created_by=self.submitter,
+        )
+        ca_invoice = self.invoice("OPS-CA-FILTER")
+        bd_customer = Customer.objects.create(
+            customer_code="OPS-BD-CUST", account_brand="Bangladesh Customer", market="BD"
+        )
+        bd_invoice = Invoice.objects.create(
+            customer=bd_customer,
+            invoice_number="OPS-BD-FILTER",
+            issue_date=date(2026, 2, 1),
+            invoice_date=date(2026, 2, 1),
+            due_date=date(2026, 3, 1),
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            subtotal=Decimal("100"),
+            total_amount=Decimal("100"),
+            status="sent",
+            invoice_status="APPROVED",
+            approved_by=self.approver,
+            approved_at=timezone.now(),
+        )
+        issue_invoice_to_financial_core(
+            bd_invoice,
+            actor=self.approver,
+            rate_to_cad=Decimal("100"),
+            rate_to_bdt=Decimal("1"),
+        )
+        client = Client()
+        client.force_login(self.submitter)
+
+        ca_utility = client.get(f"{reverse('finance_operation_create', args=['utility'])}?side=CA").context["form"]
+        self.assertEqual(ca_utility.locked_side, "CA")
+        self.assertEqual(ca_utility.fields["side"].widget.input_type, "hidden")
+        self.assertEqual(ca_utility.fields["currency"].initial, "CAD")
+        self.assertQuerySetEqual(ca_utility.fields["vendor"].queryset, [self.supplier])
+        self.assertQuerySetEqual(ca_utility.fields["payment_account"].queryset, [self.bank, self.cash])
+
+        bd_bill = client.get(f"{reverse('finance_operation_create', args=['supplier-bill'])}?side=BD").context["form"]
+        self.assertEqual(bd_bill.fields["currency"].initial, "BDT")
+        self.assertQuerySetEqual(bd_bill.fields["supplier"].queryset, [bd_supplier])
+
+        ca_payment = client.get(
+            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA"
+        ).context["form"]
+        self.assertQuerySetEqual(ca_payment.fields["invoice"].queryset, [ca_invoice])
+        bd_payment = client.get(
+            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=BD"
+        ).context["form"]
+        self.assertQuerySetEqual(bd_payment.fields["invoice"].queryset, [bd_invoice])
+
+    def test_country_query_overwrites_tampered_side_before_submission(self):
+        client = Client()
+        client.force_login(self.submitter)
+        response = client.post(
+            f"{reverse('finance_operation_create', args=['utility'])}?side=CA",
+            {
+                "transaction_date": "2026-02-10",
+                "side": "BD",
+                "currency": "CAD",
+                "rate_to_cad": "1",
+                "rate_to_bdt": "100",
+                "reference": "LOCKED-UTILITY",
+                "business_purpose": "Canada office electricity",
+                "supporting_document": SimpleUploadedFile("utility.txt", b"approved bill"),
+                "utility_type": "HYDRO",
+                "vendor": self.supplier.pk,
+                "billing_period_start": "2026-01-01",
+                "billing_period_end": "2026-01-31",
+                "bill_date": "2026-02-01",
+                "due_date": "2026-02-20",
+                "amount": "100.00",
+                "location": "OFFICE",
+                "payment_status": "UNPAID",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        operation = FinanceOperation.objects.get(reference="LOCKED-UTILITY")
+        self.assertEqual(operation.side, "CA")
+        self.assertEqual(operation.currency, "CAD")
+
+    def test_legacy_entry_routes_redirect_without_creating_legacy_records(self):
+        from crm.models import AccountingEntry
+
+        client = Client()
+        client.force_login(self.submitter)
+        before = AccountingEntry.objects.count()
+        for route, side in (("accounting_entry_add_ca", "CA"), ("accounting_entry_add_bd", "BD")):
+            with self.subTest(route=route):
+                response = client.post(reverse(route), {"amount_original": "999"})
+                self.assertRedirects(
+                    response,
+                    f"{reverse('finance_operations_center')}?side={side}",
+                    fetch_redirect_response=False,
+                )
+        self.assertEqual(AccountingEntry.objects.count(), before)
+
     def test_customer_payment_form_warns_for_duplicate_and_overpayment(self):
         invoice = self.invoice("OPS-FORM-INV")
         existing = self.operation(
@@ -624,6 +748,8 @@ class FinanceOperationsTests(TestCase):
 
     def test_role_permissions_and_operation_url_tampering(self):
         finance = self.user("ops-finance", "Finance")
+        finance_both = self.user("ops-finance-both", "Finance", ca=True, bd=True)
+        accounts_both = self.user("ops-accounts-both", "Accounts", ca=True, bd=True)
         production = self.user("ops-production", "Production", ca=False, bd=True, side="BD")
         hr = self.user("ops-hr", "HR", ca=False, bd=True, side="BD")
         sales = self.user("ops-sales", "Sales", ca=False, bd=False, side="CA")
@@ -640,6 +766,24 @@ class FinanceOperationsTests(TestCase):
         client = Client()
         client.force_login(production)
         self.assertEqual(client.get(reverse("finance_operation_detail", args=[ca_operation.pk])).status_code, 404)
+        self.assertEqual(client.get(f"{reverse('finance_operations_center')}?side=CA").status_code, 403)
+        bd_form = client.get(reverse("finance_operation_create", args=["production-cost"])).context["form"]
+        self.assertEqual(bd_form.locked_side, "BD")
+        self.assertEqual(bd_form.fields["side"].widget.input_type, "hidden")
+        client.force_login(accounts_both)
+        accounts_form = client.get(
+            f"{reverse('finance_operation_create', args=['utility'])}?side=CA"
+        )
+        self.assertFalse(accounts_form.context["can_switch_side"])
+        self.assertFalse(accounts_form.context["can_view_form_advanced"])
+        self.assertNotContains(accounts_form, "Switch country with warning")
+        client.force_login(finance_both)
+        finance_form = client.get(
+            f"{reverse('finance_operation_create', args=['utility'])}?side=CA"
+        )
+        self.assertTrue(finance_form.context["can_switch_side"])
+        self.assertTrue(finance_form.context["can_view_form_advanced"])
+        self.assertContains(finance_form, "Switch country with warning")
         client.force_login(normal)
         self.assertEqual(client.get(reverse("finance_operations_center")).status_code, 403)
 
@@ -678,6 +822,10 @@ class FinanceOperationsTests(TestCase):
             response = client.get(reverse("finance_operations_center"))
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(center_queries), 8)
+        with CaptureQueriesContext(connection) as country_center_queries:
+            response = client.get(f"{reverse('finance_operations_center')}?side=BD")
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(country_center_queries), 8)
 
     def test_scoped_queryset_does_not_expose_private_payroll_to_sales(self):
         sales = self.user("ops-payroll-sales", "Sales", ca=False, bd=False, side="CA")

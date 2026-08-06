@@ -46,21 +46,24 @@ class FinanceLiveVisibilityTests(TestCase):
         response = self.response_for(self.ceo)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-finance-menu="production"')
-        self.assertContains(response, "Finance Operations Center")
-        self.assertContains(response, "Daily Operations")
-        self.assertContains(response, "Bank and Cash")
-        self.assertContains(response, "Management")
-        self.assertContains(response, "Other Transactions")
-        self.assertContains(response, "Invoices")
+        self.assertContains(response, "Canada Finance")
+        self.assertContains(response, "Bangladesh Finance")
+        self.assertContains(response, "Company Finance")
+        self.assertContains(response, "Canada Daily Transactions")
+        self.assertContains(response, "Bangladesh Daily Transactions")
+        self.assertContains(response, "Canada Invoices")
         self.assertContains(response, "Accounts")
-        self.assertContains(response, "Finance Dashboard", count=1)
+        self.assertContains(response, "Executive Finance Dashboard")
         self.assertContains(response, "Payment Audit")
-        self.assertContains(response, "Bangladesh Accounting")
-        self.assertContains(response, "BD Dashboard")
-        self.assertContains(response, "Canada Accounting")
-        self.assertContains(response, "CA Dashboard")
+        self.assertContains(response, "Bangladesh Dashboard")
+        self.assertContains(response, "Canada Dashboard")
         self.assertContains(response, "KPI")
-        self.assertContains(response, "Commercial")
+        self.assertContains(response, "Commercial Costing")
+        self.assertNotContains(response, "Daily Operations")
+        self.assertNotContains(response, ">Management<")
+        self.assertNotContains(response, "Other Transactions")
+        self.assertNotContains(response, "Bangladesh Accounting")
+        self.assertNotContains(response, "Canada Accounting")
         self.assertNotContains(response, "Finance Live Readiness")
         self.assertNotContains(response, "Core Dashboard")
 
@@ -85,20 +88,22 @@ class FinanceLiveVisibilityTests(TestCase):
 
     def test_role_scoped_navigation_does_not_offer_restricted_workflows(self):
         production = self.response_for(self.production)
-        self.assertContains(production, "Production Costs")
-        self.assertContains(production, "Factory Daily Costs")
-        self.assertNotContains(production, ">Payroll<")
-        self.assertNotContains(production, "Bank and Cash")
+        self.assertContains(production, "Bangladesh Production Costs")
+        self.assertContains(production, "Bangladesh Factory Daily Costs")
+        self.assertNotContains(production, "Bangladesh Payroll")
+        self.assertNotContains(production, "Bangladesh Bank and Cash")
+        self.assertNotContains(production, "Canada Finance")
 
         hr = self.response_for(self.hr)
-        self.assertContains(hr, ">Payroll<")
-        self.assertNotContains(hr, "Production Costs")
-        self.assertNotContains(hr, "Owner Transactions")
+        self.assertContains(hr, "Bangladesh Payroll")
+        self.assertNotContains(hr, "Bangladesh Production Costs")
+        self.assertNotContains(hr, "Canada Finance")
 
         sales = self.response_for(self.sales)
-        self.assertContains(sales, "Finance Operations Center")
-        self.assertNotContains(sales, "Daily Operations")
-        self.assertNotContains(sales, "Bank and Cash")
+        self.assertContains(sales, "Canada Finance")
+        self.assertContains(sales, "Canada Daily Transactions")
+        self.assertNotContains(sales, "Bangladesh Finance")
+        self.assertNotContains(sales, "Canada Bank and Cash")
 
     def test_permission_roles_can_open_center_and_staff_cannot(self):
         allowed = (
@@ -120,3 +125,18 @@ class FinanceLiveVisibilityTests(TestCase):
         ):
             with self.subTest(route=route):
                 self.assertEqual(client.get(reverse(route)).status_code, 200)
+
+    def test_duplicate_canada_invoice_route_redirects_to_the_locked_main_form(self):
+        client = Client()
+        client.force_login(self.super_admin)
+        response = client.get(reverse("invoice_add_ca"))
+        self.assertRedirects(
+            response,
+            f"{reverse('invoice_add')}?side=CA",
+            fetch_redirect_response=False,
+        )
+        form_response = client.get(f"{reverse('invoice_add')}?side=CA")
+        self.assertEqual(form_response.status_code, 200)
+        form = form_response.context["form"]
+        self.assertTrue(form.fields["invoice_market"].disabled)
+        self.assertEqual(form.initial["currency"], "CAD")

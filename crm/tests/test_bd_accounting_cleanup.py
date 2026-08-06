@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from crm.models import AccountingAttachment, AccountingEntry, ExchangeRate
+from crm.models import AccountingEntry, ExchangeRate
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp(prefix="iconic-bd-accounting-test-media-")
@@ -95,7 +95,8 @@ class BangladeshAccountingCleanupTests(TestCase):
         self.assertEqual(AccountingEntry.objects.count(), before_count)
         self.assertFalse(AccountingEntry.objects.filter(description="Should not save from daily").exists())
 
-    def test_add_bd_entry_saves_locked_bd_bdt_entry_with_dropdown_values(self):
+    def test_legacy_bd_entry_redirects_without_creating_record(self):
+        before = AccountingEntry.objects.count()
         response = self.client.post(
             reverse("accounting_entry_add_bd"),
             data=self.bd_payload(
@@ -106,28 +107,23 @@ class BangladeshAccountingCleanupTests(TestCase):
             ),
         )
 
-        self.assertEqual(response.status_code, 302)
-        entry = AccountingEntry.objects.get(description="Locked BD entry")
-        self.assertEqual(entry.side, "BD")
-        self.assertEqual(entry.currency, "BDT")
-        self.assertEqual(entry.direction, "IN")
-        self.assertEqual(entry.status, "PARTIAL")
-        self.assertEqual(entry.main_type, "Customer Payment")
-        self.assertEqual(entry.amount_original, Decimal("1500.00"))
-        self.assertEqual(entry.rate_to_bdt, Decimal("1"))
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(AccountingEntry.objects.count(), before)
 
-    def test_add_bd_entry_renders_requested_flow_status_and_main_type_dropdowns(self):
+    def test_legacy_bd_entry_get_redirects_to_daily_transactions(self):
         response = self.client.get(reverse("accounting_entry_add_bd"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<option value="IN">IN</option>', html=True)
-        self.assertContains(response, '<option value="OUT" selected>OUT</option>', html=True)
-        for status in ["Paid", "Unpaid", "Pending", "Partial", "Cancelled"]:
-            self.assertContains(response, status)
-        for main_type in ["Office Rent", "Utility Bill", "Sewing Cost", "Customer Payment", "Other Expense"]:
-            self.assertContains(response, main_type)
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
 
-    def test_bd_entry_attachment_upload_still_works(self):
+    def test_legacy_bd_entry_attachment_upload_cannot_create_record(self):
         response = self.client.post(
             reverse("accounting_entry_add_bd"),
             data={
@@ -136,11 +132,12 @@ class BangladeshAccountingCleanupTests(TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 302)
-        entry = AccountingEntry.objects.get(description="BD attachment upload")
-        attachment = AccountingAttachment.objects.get(entry=entry)
-        self.assertEqual(attachment.original_name, "bd-receipt.pdf")
-        self.assertEqual(attachment.uploaded_by, self.user)
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(AccountingEntry.objects.filter(description="BD attachment upload").exists())
 
     def test_bd_grid_filters_new_and_existing_main_type_values(self):
         self.create_bd_entry(main_type="Office Rent", description="Office rent row")
@@ -154,10 +151,11 @@ class BangladeshAccountingCleanupTests(TestCase):
         self.assertNotContains(response, "Fabric row")
         self.assertContains(response, "LEGACY_TYPED_VALUE")
 
-    def test_canada_accounting_create_page_keeps_existing_main_type_controls(self):
+    def test_legacy_canada_entry_get_redirects_to_daily_transactions(self):
         response = self.client.get(reverse("accounting_entry_add_ca"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Add Canada accounting entry")
-        self.assertContains(response, '<option value="INCOME"></option>', html=True)
-        self.assertNotContains(response, "Office Rent")
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=CA",
+            fetch_redirect_response=False,
+        )

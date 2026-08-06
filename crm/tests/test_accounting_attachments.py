@@ -86,7 +86,9 @@ class AccountingAttachmentUploadTests(TestCase):
             "internal_note": "Regression test note",
         }
 
-    def test_bd_entry_single_pdf_upload_saves_entry_attachment_and_audit(self):
+    def test_legacy_bd_entry_single_upload_redirects_without_writing(self):
+        before_entries = AccountingEntry.objects.count()
+        before_attachments = AccountingAttachment.objects.count()
         response = self.client.post(
             reverse("accounting_entry_add_bd"),
             data={
@@ -95,17 +97,15 @@ class AccountingAttachmentUploadTests(TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 302)
-        entry = AccountingEntry.objects.get(description="Single PDF upload")
-        attachment = AccountingAttachment.objects.get(entry=entry)
-        self.assertEqual(attachment.original_name, "receipt.pdf")
-        self.assertEqual(attachment.uploaded_by, self.user)
-        self.assertTrue(attachment.file.name)
-        with attachment.file.open("rb") as saved:
-            self.assertEqual(saved.read(), b"%PDF-1.4")
-        self.assertTrue(AccountingEntryAudit.objects.filter(entry=entry, action="CREATE").exists())
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(AccountingEntry.objects.count(), before_entries)
+        self.assertEqual(AccountingAttachment.objects.count(), before_attachments)
 
-    def test_bd_entry_multiple_pdf_jpg_png_upload_saves_all_files(self):
+    def test_legacy_bd_entry_multiple_uploads_redirect_without_writing(self):
         files = [
             upload_file("receipt.pdf", b"%PDF-1.4", "application/pdf"),
             upload_file("style.jpg", b"jpg-data", "image/jpeg"),
@@ -117,25 +117,25 @@ class AccountingAttachmentUploadTests(TestCase):
             data={**self.accounting_payload("Multiple file upload"), "attachments": files},
         )
 
-        self.assertEqual(response.status_code, 302)
-        entry = AccountingEntry.objects.get(description="Multiple file upload")
-        self.assertEqual(entry.amount_original, Decimal("1500.00"))
-        self.assertEqual(
-            list(entry.attachments.order_by("original_name").values_list("original_name", flat=True)),
-            ["proof.png", "receipt.pdf", "style.jpg"],
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
         )
-        self.assertTrue(AccountingEntryAudit.objects.filter(entry=entry, action="CREATE").exists())
+        self.assertFalse(AccountingEntry.objects.filter(description="Multiple file upload").exists())
 
-    def test_bd_entry_empty_upload_still_saves_entry_without_attachments(self):
+    def test_legacy_bd_entry_empty_upload_redirects_without_writing(self):
         response = self.client.post(
             reverse("accounting_entry_add_bd"),
             data=self.accounting_payload("Empty upload"),
         )
 
-        self.assertEqual(response.status_code, 302)
-        entry = AccountingEntry.objects.get(description="Empty upload")
-        self.assertEqual(entry.attachments.count(), 0)
-        self.assertTrue(AccountingEntryAudit.objects.filter(entry=entry, action="CREATE").exists())
+        self.assertRedirects(
+            response,
+            f"{reverse('finance_operations_center')}?side=BD",
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(AccountingEntry.objects.filter(description="Empty upload").exists())
 
     def test_edit_entry_can_add_attachment_and_update_audit(self):
         entry = AccountingEntry.objects.create(
