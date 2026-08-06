@@ -24,12 +24,14 @@ from crm.forms_finance_operations import (
     CURRENCIES,
     PAYMENT_METHODS,
     CustomerAdjustmentOperationForm,
+    FinanceSetupImportForm,
     FORM_BY_TYPE,
 )
 from crm.forms_financial_core import ExpenseCategoryForm, FinancialEvidenceUploadForm
 from crm.models import (
-    Department,
     CashBankAccount,
+    Customer,
+    Department,
     ExpenseCategory,
     FinanceOperation,
     FinancialAccount,
@@ -38,6 +40,9 @@ from crm.models import (
     FinancialBudget,
     FinancialDocument,
     FinancialExceptionReview,
+    FinancialPeriod,
+    HistoricalExchangeRate,
+    InvoiceSettings,
     Supplier,
 )
 from crm.services.finance_operations import (
@@ -50,6 +55,12 @@ from crm.services.finance_operations import (
     review_operation,
     submit_operation,
     workflow_definition,
+)
+from crm.services.finance_setup_import import (
+    FinanceSetupImportError,
+    REQUIRED_FIELDS,
+    SUPPORTED_RECORD_TYPES,
+    import_finance_setup_csv,
 )
 from crm.services.financial_permissions import (
     accessible_financial_sides,
@@ -97,6 +108,7 @@ FINANCE_MIGRATIONS = (
     "0195_receivable_financial_journal",
     "0196_financial_readiness",
     "0197_finance_operations_layer",
+    "0198_approved_financial_relationship_repairs",
 )
 
 FINANCE_ROUTE_NAMES = (
@@ -116,26 +128,136 @@ FINANCE_WORKFLOW_SLUGS = (
 )
 
 
-def _model_counts(*models):
-    quoted_tables = [connection.ops.quote_name(model._meta.db_table) for model in models]
-    columns = [f"(SELECT COUNT(*) FROM {table})" for table in quoted_tables]
-    with connection.cursor() as cursor:
-        cursor.execute(f"SELECT {', '.join(columns)}")
-        values = cursor.fetchone()
-    return {model.__name__: value for model, value in zip(models, values)}
-
-
 def _setup_snapshot():
-    counts = _model_counts(FinancialAccount, ExpenseCategory, CashBankAccount, Supplier)
+    tables = {
+        "account": connection.ops.quote_name(FinancialAccount._meta.db_table),
+        "category": connection.ops.quote_name(ExpenseCategory._meta.db_table),
+        "cash_bank": connection.ops.quote_name(CashBankAccount._meta.db_table),
+        "supplier": connection.ops.quote_name(Supplier._meta.db_table),
+        "customer": connection.ops.quote_name(Customer._meta.db_table),
+        "rate": connection.ops.quote_name(HistoricalExchangeRate._meta.db_table),
+        "period": connection.ops.quote_name(FinancialPeriod._meta.db_table),
+        "tax": connection.ops.quote_name(InvoiceSettings._meta.db_table),
+        "opening": connection.ops.quote_name(FinancialAdjustmentRequest._meta.db_table),
+        "exception": connection.ops.quote_name(FinancialExceptionReview._meta.db_table),
+    }
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT
+              (SELECT COUNT(*) FROM {tables['account']}),
+              (SELECT COUNT(*) FROM {tables['category']} WHERE is_active = TRUE),
+              (SELECT COUNT(*) FROM {tables['cash_bank']} WHERE is_active = TRUE),
+              (SELECT COUNT(*) FROM {tables['cash_bank']} WHERE is_active = TRUE AND kind = 'BANK'),
+              (SELECT COUNT(*) FROM {tables['cash_bank']} WHERE is_active = TRUE AND kind = 'CASH'),
+              (SELECT COUNT(*) FROM {tables['supplier']} WHERE is_active = TRUE),
+              (SELECT COUNT(*) FROM {tables['customer']} WHERE is_active = TRUE AND is_archived = FALSE),
+              (SELECT COUNT(*) FROM {tables['customer']}
+                WHERE is_active = TRUE AND is_archived = FALSE
+                  AND (TRIM(COALESCE(customer_code, '')) = ''
+                    OR (TRIM(COALESCE(account_brand, '')) = ''
+                      AND TRIM(COALESCE(contact_name, '')) = ''))),
+              (SELECT COUNT(*) FROM {tables['rate']} WHERE is_approved = TRUE),
+              (SELECT COUNT(*) FROM {tables['period']} WHERE state = 'OPEN'),
+              (SELECT COUNT(*) FROM {tables['tax']}
+                WHERE is_active = TRUE AND TRIM(COALESCE(default_tax_note, '')) <> ''),
+              (SELECT COUNT(*) FROM {tables['opening']} WHERE adjustment_type = 'OPENING'),
+              (SELECT COUNT(*) FROM {tables['opening']}
+                WHERE adjustment_type = 'OPENING' AND state = 'POSTED'),
+              (SELECT COUNT(*) FROM {tables['exception']}),
+              (SELECT COUNT(*) FROM {tables['exception']}
+                WHERE review_status NOT IN ('RESOLVED', 'REJECTED'))
+            """
+        )
+        values = cursor.fetchone()
     return {
-        "financial_accounts": counts["FinancialAccount"],
-        "expense_categories": counts["ExpenseCategory"],
-        "cash_bank_accounts": counts["CashBankAccount"],
-        "suppliers": counts["Supplier"],
+        "financial_accounts": values[0],
+        "expense_categories": values[1],
+        "cash_bank_accounts": values[2],
+        "bank_accounts": values[3],
+        "cash_accounts": values[4],
+        "suppliers": values[5],
+        "customers": values[6],
+        "customers_needing_review": values[7],
+        "approved_exchange_rates": values[8],
+        "open_periods": values[9],
+        "tax_settings": values[10],
+        "opening_balances": values[11],
+        "posted_opening_balances": values[12],
+        "exception_reviews": values[13],
+        "unresolved_exceptions": values[14],
         "payment_methods": len(PAYMENT_METHODS),
         "currencies": len(CURRENCIES),
         "business_sides": 2,
     }
+
+
+def _setup_checklist(setup):
+    opening_ready = (
+        setup["opening_balances"] > 0
+        and setup["posted_opening_balances"] == setup["opening_balances"]
+    )
+    return (
+        {
+            "label": "Chart of Accounts",
+            "value": f"{setup['financial_accounts']} configured",
+            "ready": setup["financial_accounts"] > 0,
+        },
+        {
+            "label": "Bank Accounts",
+            "value": f"{setup['bank_accounts']} active",
+            "ready": setup["bank_accounts"] > 0,
+        },
+        {
+            "label": "Cash Accounts",
+            "value": f"{setup['cash_accounts']} active",
+            "ready": setup["cash_accounts"] > 0,
+        },
+        {
+            "label": "Suppliers",
+            "value": f"{setup['suppliers']} active",
+            "ready": setup["suppliers"] > 0,
+        },
+        {
+            "label": "Customers verification",
+            "value": (
+                f"{setup['customers']} active; {setup['customers_needing_review']} need review"
+            ),
+            "ready": setup["customers"] > 0 and setup["customers_needing_review"] == 0,
+        },
+        {
+            "label": "Expense Categories",
+            "value": f"{setup['expense_categories']} active",
+            "ready": setup["expense_categories"] > 0,
+        },
+        {
+            "label": "Payment Methods",
+            "value": f"{setup['payment_methods']} controlled values",
+            "ready": setup["payment_methods"] > 0,
+        },
+        {
+            "label": "Exchange Rates",
+            "value": f"{setup['approved_exchange_rates']} approved",
+            "ready": setup["approved_exchange_rates"] > 0,
+        },
+        {
+            "label": "Accounting Periods",
+            "value": f"{setup['open_periods']} open",
+            "ready": setup["open_periods"] > 0,
+        },
+        {
+            "label": "Tax Settings",
+            "value": f"{setup['tax_settings']} active",
+            "ready": setup["tax_settings"] > 0,
+        },
+        {
+            "label": "Opening Balances",
+            "value": (
+                f"{setup['posted_opening_balances']} posted of {setup['opening_balances']} approved"
+            ),
+            "ready": opening_ready,
+        },
+    )
 
 
 def _deployed_commit():
@@ -338,25 +460,39 @@ def finance_operations_center(request):
     )
 
 
+@require_http_methods(["GET", "POST"])
 @require_financial_permission("operations")
 def finance_live_readiness(request):
     if not can_view_finance_readiness(request.user):
         raise PermissionDenied("Finance Live Readiness is restricted to CEO and Super Admin users.")
     setup = _setup_snapshot()
+    checklist = _setup_checklist(setup)
+    import_form = FinanceSetupImportForm(request.POST or None, request.FILES or None)
+    import_result = None
+    if request.method == "POST" and import_form.is_valid():
+        try:
+            import_result = import_finance_setup_csv(
+                uploaded_file=import_form.cleaned_data["data_file"],
+                actor=request.user,
+                approval_reference=import_form.cleaned_data["approval_reference"],
+                apply=import_form.cleaned_data["mode"] == FinanceSetupImportForm.MODE_APPLY,
+            )
+        except FinanceSetupImportError as exc:
+            import_form.add_error("data_file", str(exc))
+        else:
+            if import_result["mode"] == "applied":
+                messages.success(
+                    request,
+                    f"Applied {sum(import_result['created'].values())} approved master record(s).",
+                )
+                return redirect("finance_live_readiness")
     applied = set(
         MigrationRecorder.Migration.objects.filter(app="crm", name__in=FINANCE_MIGRATIONS)
         .values_list("name", flat=True)
     )
     routes = _route_snapshot()
-    opening = FinancialAdjustmentRequest.objects.filter(
-        adjustment_type=FinancialAdjustmentRequest.TYPE_OPENING
-    ).aggregate(
-        total=Count("id"),
-        posted=Count("id", filter=Q(state=FinancialAdjustmentRequest.STATE_POSTED)),
-    )
     protected_status, protected_detail = _protected_media_snapshot()
     backup_status, backup_detail = _backup_snapshot()
-    exception_count = FinancialExceptionReview.objects.count()
     menu_ready = _menu_links_present()
     route_count = sum(row["present"] for row in routes)
     statuses = [
@@ -408,13 +544,24 @@ def finance_live_readiness(request):
         },
         {
             "label": "Historical exceptions",
-            "value": exception_count,
-            "status": "unknown" if not exception_count else "bad",
+            "value": (
+                f"{setup['unresolved_exceptions']} unresolved of "
+                f"{setup['exception_reviews']} loaded"
+            ),
+            "status": "bad" if setup["unresolved_exceptions"] or not setup["exception_reviews"] else "good",
         },
         {
             "label": "Opening balances",
-            "value": f"{opening['posted']} posted of {opening['total']}",
-            "status": "good" if opening["total"] and opening["posted"] == opening["total"] else "bad",
+            "value": (
+                f"{setup['posted_opening_balances']} posted of "
+                f"{setup['opening_balances']} approved"
+            ),
+            "status": (
+                "good"
+                if setup["opening_balances"]
+                and setup["posted_opening_balances"] == setup["opening_balances"]
+                else "bad"
+            ),
         },
         {"label": "Protected media", "value": protected_detail, "status": protected_status},
         {"label": "Deployment backup", "value": backup_detail, "status": backup_status},
@@ -426,6 +573,12 @@ def finance_live_readiness(request):
             request,
             statuses=statuses,
             setup=setup,
+            setup_checklist=checklist,
+            setup_complete=all(item["ready"] for item in checklist),
+            import_form=import_form,
+            import_result=import_result,
+            supported_record_types=SUPPORTED_RECORD_TYPES,
+            setup_import_fields=REQUIRED_FIELDS.items(),
             migrations=[{"name": name, "applied": name in applied} for name in FINANCE_MIGRATIONS],
             routes=routes,
         ),

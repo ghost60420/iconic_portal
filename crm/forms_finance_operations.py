@@ -40,6 +40,55 @@ PAYMENT_METHODS = (
 )
 
 
+class FinanceSetupImportForm(forms.Form):
+    MODE_PREVIEW = "preview"
+    MODE_APPLY = "apply"
+    CONFIRMATION_PHRASE = "IMPORT APPROVED FINANCE MASTER DATA"
+
+    data_file = forms.FileField(
+        label="Approved master-data CSV",
+        help_text="Maximum 2 MB and 2,000 records. Preview does not save records.",
+    )
+    approval_reference = forms.CharField(
+        max_length=160,
+        min_length=5,
+        help_text="Finance or CEO approval reference for this exact file.",
+    )
+    mode = forms.ChoiceField(
+        choices=((MODE_PREVIEW, "Preview only"), (MODE_APPLY, "Apply approved records")),
+        initial=MODE_PREVIEW,
+    )
+    confirmation = forms.CharField(
+        required=False,
+        help_text=f"Required for apply: {CONFIRMATION_PHRASE}",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    def clean_data_file(self):
+        data_file = self.cleaned_data["data_file"]
+        if not data_file.name.lower().endswith(".csv"):
+            raise forms.ValidationError("Upload a UTF-8 CSV file.")
+        if data_file.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("The setup import file cannot exceed 2 MB.")
+        return data_file
+
+    def clean(self):
+        cleaned = super().clean()
+        if (
+            cleaned.get("mode") == self.MODE_APPLY
+            and (cleaned.get("confirmation") or "").strip() != self.CONFIRMATION_PHRASE
+        ):
+            self.add_error("confirmation", f"Enter exactly: {self.CONFIRMATION_PHRASE}")
+        return cleaned
+
+
 def _json_value(value):
     if isinstance(value, (date, Decimal)):
         return str(value)
