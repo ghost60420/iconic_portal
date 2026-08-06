@@ -2,7 +2,7 @@
 {% load humanize crm_extras %}
 {% block content %}
 {% include "crm/partials/financial_density_assets.html" %}
-{% if can_archive_invoices %}<nav class="crm-archive-switch" aria-label="Invoice archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a><a href="?archive=all">All</a></nav>{% endif %}
+{% if can_archive_invoices %}<nav class="crm-archive-switch" aria-label="Invoice archive"><a href="?archive=active{% if side %}&amp;side={{ side }}{% endif %}">Active</a><a href="?archive=archived{% if side %}&amp;side={{ side }}{% endif %}">Archived</a><a href="?archive=all{% if side %}&amp;side={{ side }}{% endif %}">All</a></nav>{% endif %}
 
 <style>
   :root{
@@ -240,7 +240,7 @@
 
       <div class="topbar">
         <button type="button" class="pill" onclick="window.print()">Print</button>
-        <a href="{% url 'invoice_add' %}" class="pill gold">Add invoice</a>
+        <a href="{% url 'invoice_add' %}{% if side %}?side={{ side }}{% endif %}" class="pill gold">Add invoice</a>
       </div>
     </div>
 
@@ -289,6 +289,7 @@
     <div class="cardx">
 
       <form class="filters" method="get">
+        {% if side %}<input type="hidden" name="side" value="{{ side }}">{% endif %}
         <input class="ctrl" id="q" name="q" type="text" placeholder="Search invoice, customer, order" value="{{ q }}" autocomplete="off">
         <select class="ctrl sm" id="statusFilter" name="status">
           <option value="">All status</option>
@@ -326,7 +327,7 @@
         <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Revenue date from" title="Revenue date from">
         <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Revenue date to" title="Revenue date to">
         <button class="pill gold" type="submit">Apply</button>
-        <a class="pill" href="{% url 'invoice_list' %}">Reset</a>
+        <a class="pill" href="{% url 'invoice_list' %}{% if side %}?side={{ side }}{% endif %}">Reset</a>
       </form>
 
       <div class="invoice-table-wrap">

@@ -144,3 +144,12 @@ class FinanceLiveVisibilityTests(TestCase):
         form = form_response.context["form"]
         self.assertTrue(form.fields["invoice_market"].disabled)
         self.assertEqual(form.initial["currency"], "CAD")
+
+    def test_canada_invoice_list_preserves_country_lock_in_page_controls(self):
+        client = Client()
+        client.force_login(self.super_admin)
+        response = client.get(f"{reverse('invoice_list')}?side=CA")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'{reverse("invoice_add")}?side=CA')
+        self.assertContains(response, '<input type="hidden" name="side" value="CA">', html=True)
+        self.assertContains(response, f'{reverse("invoice_list")}?side=CA')
