@@ -185,10 +185,6 @@ def can_view_finance_operations(user):
     ) and bool(accessible_financial_sides(user))
 
 
-def can_view_finance_readiness(user):
-    return bool(_authenticated(user) and (user.is_superuser or ROLE_CEO in _roles(user)))
-
-
 def can_view_finance_approval_center(user):
     if not can_view_finance_operations(user):
         return False

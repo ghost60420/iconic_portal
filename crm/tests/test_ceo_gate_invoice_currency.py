@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -25,6 +25,7 @@ from crm.services.order_lifecycle import build_lifecycle_profit_breakdown
 from crm.services.costing_workflow import create_invoice_from_costing
 
 
+@override_settings(FINANCIAL_CORE_WRITES_ENABLED=False)
 class ApprovalGateRegressionTests(TestCase):
     def setUp(self):
         user_model = get_user_model()

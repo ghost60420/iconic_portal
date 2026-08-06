@@ -2,7 +2,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from crm.forms import InvoiceForm
@@ -31,6 +31,7 @@ from crm.services.payment_reconciliation import (
 )
 
 
+@override_settings(FINANCIAL_CORE_WRITES_ENABLED=False)
 class FinancialFoundationPhase3AWriteTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(

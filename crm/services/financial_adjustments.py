@@ -114,7 +114,7 @@ def decide_adjustment_request(request, *, actor, approve, notes):
 @transaction.atomic
 def post_approved_adjustment(request, *, actor):
     if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
-        raise FinancialAdjustmentError("Financial Core posting is disabled pending controlled activation.")
+        raise FinancialAdjustmentError("Finance posting is disabled.")
     if not can_approve_financial_adjustment(actor):
         raise FinancialAdjustmentError("You do not have permission to post financial adjustments.")
     locked = FinancialAdjustmentRequest.objects.select_for_update().select_related(

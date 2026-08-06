@@ -264,7 +264,7 @@ def delete_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=N
     )
     if hasattr(locked_payment, "receivable_event") and locked_payment.receivable_event.financial_journal_id:
         raise UnsupportedReceivableOperation(
-            "Financial Core payments cannot be deleted; create a traced refund or reversal."
+            "Posted Finance payments cannot be deleted; create a traced refund or reversal."
         )
     accounting_entry = locked_payment.accounting_entry
     locked_date = accounting_entry.date if accounting_entry else locked_payment.payment_date

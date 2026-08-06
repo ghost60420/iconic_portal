@@ -12,7 +12,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import BDStaff, BDStaffMonth
 from .forms import BDStaffForm, BDStaffMonthForm
-from collections import defaultdict
 from decimal import Decimal
 from uuid import uuid4
 from decimal import Decimal
@@ -37,6 +36,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidd
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.urls import reverse
 
 from .models import (
     AccountingEntry,
@@ -63,6 +63,8 @@ from .services.financial_permissions import (
     can_approve_financial_transactions,
     can_export_financial_data,
     can_manage_financial_transactions,
+    can_view_financial_core,
+    can_view_finance_operations,
     scope_by_financial_side,
 )
 
@@ -557,6 +559,8 @@ def accounting_entry_delete(request, pk):
 # --------------------
 @login_required
 def accounting_home(request):
+    if can_view_finance_operations(request.user):
+        return redirect("finance_operations_center")
     if is_ca_user(request.user):
         return redirect("accounting_ca_master")
     if is_bd_user(request.user):
@@ -749,6 +753,8 @@ def _ap_row(entry, today):
 
 @login_required
 def accounts_payable_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_ap_aging")
     today = timezone.localdate()
     filters = {
         "date_from": _parse_ap_date(request.GET.get("date_from")),
@@ -1080,6 +1086,8 @@ def _pl_side_comparison(rows):
 
 @login_required
 def profit_loss_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_profit_loss")
     filters = {
         "date_from": _parse_pl_date(request.GET.get("date_from")),
         "date_to": _parse_pl_date(request.GET.get("date_to")),
@@ -1306,6 +1314,8 @@ def _exec_health_score(total_revenue, total_received, total_receivables, total_p
 
 @login_required
 def executive_financial_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_dashboard")
     today = timezone.localdate()
     can_include_archived = can_archive_invoices(request.user)
     filters = {
@@ -1702,6 +1712,8 @@ def _bs_monthly_rows(entries, cad_to_bdt):
 
 @login_required
 def balance_sheet_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_balance_sheet")
     can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     filters = {
@@ -1969,6 +1981,8 @@ def _cf_monthly_rows(entries, cad_to_bdt):
 
 @login_required
 def cash_flow_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_cash_flow")
     can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     forecast_end = today + timedelta(days=30)
@@ -2643,6 +2657,8 @@ def _kpi_monthly_trends(rows):
 
 @login_required
 def kpi_scorecard_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_dashboard")
     can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     date_from, date_to = _kpi_date_range(request, today)
@@ -3907,6 +3923,8 @@ def accounting_document_download(request, pk):
 @login_required
 @bd_required
 def accounting_bd_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect(f"{reverse('financial_core_dashboard')}?side=BD")
     year_raw = (request.GET.get("year") or "").strip()
     month_raw = (request.GET.get("month") or "").strip()
 
@@ -3942,16 +3960,6 @@ def accounting_bd_dashboard(request):
             "net_bdt": net_bdt,
         },
     )
-
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Q
-from django.db.models.functions import Coalesce
-from django.shortcuts import redirect, render
-from django.utils import timezone
-
-from .models import AccountingEntry
-
 
 @login_required
 @bd_required
@@ -4052,64 +4060,6 @@ def accounting_bd_grid(request):
             "monthly_target_bdt": Decimal("0"),
         },
     )
-
-
-@login_required
-@bd_required
-def accounting_bd_dashboard(request):
-    year_raw = (request.GET.get("year") or "").strip()
-    month_raw = (request.GET.get("month") or "").strip()
-
-    qs = AccountingEntry.objects.filter(side="BD")
-
-    if year_raw.isdigit():
-        qs = qs.filter(date__year=int(year_raw))
-
-    if month_raw.isdigit():
-        m = int(month_raw)
-        if 1 <= m <= 12:
-            qs = qs.filter(date__month=m)
-
-    total_in_bdt = qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    total_out_bdt = qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    net_bdt = total_in_bdt - total_out_bdt
-
-    return render(
-        request,
-        "crm/accounting_bd_dashboard.html",
-        {
-            "filter_year": year_raw,
-            "filter_month": month_raw,
-            "entries": qs.order_by("-date", "-id")[:200],
-            "total_in_bdt": total_in_bdt,
-            "total_out_bdt": total_out_bdt,
-            "net_bdt": net_bdt,
-        },
-    )
-
-
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.shortcuts import render
-from django.utils import timezone
-
-from .models import AccountingEntry, ProductionOrder
-
-
-def _parse_int(v):
-    try:
-        return int(str(v).strip())
-    except Exception:
-        return None
-
 
 @login_required
 def production_profit_report(request):
@@ -4285,19 +4235,6 @@ def _production_revenue_pdf(report):
     response["Content-Disposition"] = 'attachment; filename="revenue_breakdown.pdf"'
     return response
 
-from collections import defaultdict
-from decimal import Decimal
-
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.http import JsonResponse
-from django.shortcuts import render
-from django.utils import timezone
-
-from .models import AccountingEntry
-
-
 AI_RULES = [
     ("COGS", "Fabric", ["fabric", "knit", "dye", "yarn"]),
     ("COGS", "Trims", ["label", "tag", "button", "zip", "thread"]),
@@ -4311,14 +4248,6 @@ AI_RULES = [
     ("TRANSFER", "Send to BD", ["send to bd", "transfer"]),
     ("TRANSFER", "Receive from CA", ["receive from ca"]),
 ]
-
-
-def _parse_int(v):
-    try:
-        return int(str(v).strip())
-    except Exception:
-        return None
-
 
 def ai_suggest_main_sub(description: str):
     text = (description or "").lower().strip()
@@ -4353,64 +4282,6 @@ def ai_suggest_main_sub(description: str):
 
 
 @login_required
-def accounting_ai_audit(request):
-    today = timezone.localdate()
-
-    y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
-    m = _parse_int(request.GET.get("month") or "") or None
-    side = (request.GET.get("side") or "ALL").strip()
-
-    qs = AccountingEntry.objects.all().order_by("-date", "-id")
-    qs = qs.filter(date__year=y)
-
-    if m:
-        qs = qs.filter(date__month=m)
-
-    if side in ["CA", "BD"]:
-        qs = qs.filter(side=side)
-
-    qs = qs[:600]
-
-    issues = []
-    by_type = defaultdict(list)
-
-    for e in qs:
-        if not e.date:
-            issues.append({"code": "missing_date", "title": "Missing date", "entry": e})
-            by_type["missing_date"].append(e)
-
-        if not (e.amount_original and e.amount_original > 0):
-            issues.append({"code": "bad_amount", "title": "Amount missing", "entry": e})
-            by_type["bad_amount"].append(e)
-
-        sug = ai_suggest_main_sub(e.description or "")
-        if sug and ((e.main_type or "") != sug["main_type"]):
-            issues.append(
-                {"code": "ai_suggestion", "title": "Possible better category", "entry": e, "sug": sug}
-            )
-            by_type["ai_suggestion"].append(e)
-
-    top_types = []
-    for code, rows in by_type.items():
-        top_types.append({"code": code, "title": code, "count": len(rows)})
-    top_types.sort(key=lambda x: x["count"], reverse=True)
-
-    return render(
-        request,
-        "crm/accounting_ai_audit.html",
-        {
-            "filter_year": str(y),
-            "filter_month": str(m or ""),
-            "filter_side": side,
-            "issues": issues[:200],
-            "top_types": top_types,
-            "total_issues": len(issues),
-            "total_entries_checked": len(qs),
-        },
-    )
-
-
-@login_required
 def accounting_ai_suggest(request):
     desc = (request.GET.get("description") or "").strip()
     suggestion = ai_suggest_main_sub(desc)
@@ -4425,15 +4296,6 @@ def accounting_ai_suggest(request):
             "confidence": suggestion["confidence"],
         }
     )
-
-import csv
-from decimal import Decimal
-
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-
-from .models import AccountingEntry
-
 
 @login_required
 def accounting_bd_grid_export_csv(request):

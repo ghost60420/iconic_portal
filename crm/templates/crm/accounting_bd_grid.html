@@ -244,7 +244,6 @@
         <a href="{% url 'bd_staff_list' %}" class="pill">Staff</a>
         <a href="{% url 'bd_staff_month_list' %}" class="pill">Payroll</a>
 
-        <a href="{% url 'accounting_ai_audit' %}" class="pill pill-gold">AI audit</a>
 
         {% if request.user|in_group:"CA" or request.user.is_superuser %}
           <a href="{% url 'accounting_entry_add_bd' %}" class="pill pill-gold">Add entry</a>

@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -259,6 +259,7 @@ class NativeCurrencyDashboardTests(TestCase):
         self.assertFalse(rows.filter(is_archived=True).exists())
 
 
+@override_settings(FINANCIAL_CORE_REPORTING_ACTIVE=False)
 class ReceivablesAndPaymentSourceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(

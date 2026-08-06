@@ -1,18 +1,14 @@
-import os
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import Client, TestCase, override_settings
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 
 from crm.models import JournalEntry
-from crm.views_finance_operations import _deployed_commit
 
 
 @override_settings(
-    FINANCIAL_CORE_WRITES_ENABLED=False,
-    FINANCIAL_CORE_REPORTING_ACTIVE=False,
+    FINANCIAL_CORE_WRITES_ENABLED=True,
+    FINANCIAL_CORE_REPORTING_ACTIVE=True,
 )
 class FinanceLiveVisibilityTests(TestCase):
     @classmethod
@@ -49,40 +45,43 @@ class FinanceLiveVisibilityTests(TestCase):
     def test_ceo_menu_exposes_scoped_finance_operations_groups(self):
         response = self.response_for(self.ceo)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-finance-operations-menu="ready"')
+        self.assertContains(response, 'data-finance-menu="production"')
         self.assertContains(response, "Finance Operations Center")
         self.assertContains(response, "Daily Operations")
         self.assertContains(response, "Bank and Cash")
         self.assertContains(response, "Management")
         self.assertContains(response, "Other Transactions")
-        self.assertContains(response, "Finance Live Readiness")
+        self.assertContains(response, "Invoices")
+        self.assertContains(response, "Accounts")
+        self.assertContains(response, "Finance Dashboard", count=1)
+        self.assertContains(response, "Payment Audit")
+        self.assertContains(response, "Bangladesh Accounting")
+        self.assertContains(response, "BD Dashboard")
+        self.assertContains(response, "Canada Accounting")
+        self.assertContains(response, "CA Dashboard")
+        self.assertContains(response, "KPI")
+        self.assertContains(response, "Commercial")
+        self.assertNotContains(response, "Finance Live Readiness")
+        self.assertNotContains(response, "Core Dashboard")
 
-    def test_operations_center_shows_live_flags_and_empty_setup(self):
+    def test_operations_center_allows_empty_historical_balances(self):
         response = self.response_for(self.ceo)
-        self.assertContains(response, "LIVE FOR WORKFLOW TESTING")
-        self.assertContains(response, "Financial Core Posting")
-        self.assertContains(response, "Financial Core Reporting")
-        self.assertContains(response, "FINANCE SETUP REQUIRED")
+        self.assertContains(response, "Production")
+        self.assertContains(response, "MASTER DATA REQUIRED FOR POSTING")
         self.assertContains(response, "0 configured", count=4)
         self.assertContains(response, "6 workflow values")
         self.assertContains(response, "3 supported")
         self.assertContains(
             response,
-            "Transactions can be entered and reviewed, but they will not post to the new General Ledger",
+            "Historical balances may remain zero and can be entered later.",
         )
+        self.assertNotContains(response, "Financial Core Posting")
+        self.assertNotContains(response, "Financial Core Reporting")
         self.assertEqual(JournalEntry.objects.count(), 0)
 
-    def test_readiness_is_restricted_to_ceo_and_super_admin(self):
-        for user in (self.ceo, self.super_admin):
-            with self.subTest(user=user.username):
-                response = self.response_for(user, "finance_live_readiness")
-                self.assertEqual(response.status_code, 200)
-                self.assertContains(response, "Finance Live Readiness")
-                self.assertContains(response, "Finance routes present")
-                self.assertContains(response, "Financial Core writes")
-        for user in (self.finance, self.accounts, self.director, self.manager, self.production, self.sales, self.hr):
-            with self.subTest(user=user.username):
-                self.assertEqual(self.response_for(user, "finance_live_readiness").status_code, 403)
+    def test_obsolete_readiness_route_is_removed(self):
+        with self.assertRaises(NoReverseMatch):
+            reverse("finance_live_readiness")
 
     def test_role_scoped_navigation_does_not_offer_restricted_workflows(self):
         production = self.response_for(self.production)
@@ -118,16 +117,6 @@ class FinanceLiveVisibilityTests(TestCase):
             "finance_operations_center",
             "finance_approval_center",
             "finance_today_activity",
-            "finance_live_readiness",
         ):
             with self.subTest(route=route):
                 self.assertEqual(client.get(reverse(route)).status_code, 200)
-
-    def test_commit_readout_works_with_restricted_service_path(self):
-        with patch.dict(os.environ, {"PATH": ""}):
-            self.assertNotEqual(_deployed_commit(), "Unavailable")
-
-    def test_readiness_lists_the_registered_credit_note_route(self):
-        response = self.response_for(self.ceo, "finance_live_readiness")
-        self.assertContains(response, "/accounting/operations/new/customer-credit-note/")
-        self.assertNotContains(response, "/accounting/operations/new/credit-note/")

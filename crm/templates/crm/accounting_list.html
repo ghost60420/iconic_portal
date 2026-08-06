@@ -210,7 +210,6 @@
         {% endif %}
 
         <a href="{% url 'production_profit_report' %}" class="pill">Production profit</a>
-        <a href="{% url 'accounting_ai_audit' %}" class="pill">AI Audit</a>
         {% with qs=request.GET.urlencode %}
           <a href="{% url 'accounting_audit_trail' %}{% if qs %}?{{ qs }}{% endif %}" class="pill">Audit trail</a>
         {% endwith %}

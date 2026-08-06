@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -10,6 +10,7 @@ from django.utils import timezone
 from crm.models import AccountingEntry, Customer, ExchangeRate, Invoice, InvoicePayment
 
 
+@override_settings(FINANCIAL_CORE_REPORTING_ACTIVE=False)
 class ExecutiveFinanceDashboardEnhancementTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(

@@ -143,7 +143,6 @@ def finance_operations_menu_access(user):
             can_submit_finance_operation,
             can_view_finance_approval_center,
             can_view_finance_operations,
-            can_view_finance_readiness,
             can_view_financial_core,
         )
 
@@ -152,7 +151,6 @@ def finance_operations_menu_access(user):
             "enabled": can_view_finance_operations(user),
             "approvals": can_view_finance_approval_center(user),
             "dashboard": can_view_financial_core(user),
-            "readiness": can_view_finance_readiness(user),
             "customer_payment": submit(FinanceOperation.TYPE_CUSTOMER_PAYMENT),
             "supplier_bill": submit(FinanceOperation.TYPE_SUPPLIER_BILL),
             "supplier_payment": submit(FinanceOperation.TYPE_SUPPLIER_PAYMENT),

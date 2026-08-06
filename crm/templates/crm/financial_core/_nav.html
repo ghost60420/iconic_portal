@@ -38,31 +38,6 @@
   @media(max-width:600px){.fc-shell{padding:14px 10px 32px}.fc-grid,.fc-form-grid,.fc-filter-grid,.fc-report-filters{grid-template-columns:1fr}.fc-head{align-items:flex-start;flex-direction:column}.fc-kpi-value{font-size:20px}.fc-table-wrap{max-width:100%;overflow-x:auto}.fc-table{min-width:680px}}
 </style>
 <div class="fc-head">
-  <h1 class="fc-title">Financial Core</h1>
-  <span class="fc-status {% if financial_core_reporting_active %}active{% endif %}">
-    <i data-lucide="{% if financial_core_reporting_active %}shield-check{% else %}triangle-alert{% endif %}"></i>
-    {% if financial_core_reporting_active %}Active source of truth{% else %}Preview - unreconciled{% endif %}
-  </span>
+  <h1 class="fc-title">Finance Dashboard</h1>
+  <span class="fc-status active"><i data-lucide="shield-check"></i>Production</span>
 </div>
-<nav class="fc-nav" aria-label="Financial Core">
-  <a href="{% url 'finance_operations_center' %}"><i data-lucide="circle-dollar-sign"></i>Operations</a>
-  <a href="{% url 'financial_core_dashboard' %}"><i data-lucide="layout-dashboard"></i>Dashboard</a>
-  <a href="{% url 'financial_general_ledger' %}"><i data-lucide="book-open"></i>Ledger</a>
-  <a href="{% url 'financial_trial_balance' %}"><i data-lucide="scale"></i>Trial Balance</a>
-  <a href="{% url 'financial_core_profit_loss' %}"><i data-lucide="chart-no-axes-combined"></i>P&amp;L</a>
-  <a href="{% url 'financial_core_balance_sheet' %}"><i data-lucide="landmark"></i>Balance Sheet</a>
-  <a href="{% url 'financial_core_cash_flow' %}"><i data-lucide="arrow-left-right"></i>Cash Flow</a>
-  <a href="{% url 'financial_core_ar_aging' %}"><i data-lucide="hand-coins"></i>Receivables</a>
-  <a href="{% url 'financial_core_ap_aging' %}"><i data-lucide="receipt-text"></i>Payables</a>
-  <a href="{% url 'financial_expense_center' %}"><i data-lucide="wallet-cards"></i>Expenses</a>
-  <a href="{% url 'financial_supplier_center' %}"><i data-lucide="building-2"></i>Suppliers</a>
-  <a href="{% url 'financial_bank_reconciliations' %}"><i data-lucide="badge-check"></i>Reconcile</a>
-  <a href="{% url 'financial_budget_actual' %}"><i data-lucide="target"></i>Budget</a>
-  <a href="{% url 'financial_recurring_expenses' %}"><i data-lucide="calendar-clock"></i>Recurring</a>
-  <a href="{% url 'financial_currency_center' %}"><i data-lucide="badge-dollar-sign"></i>Currency</a>
-  <a href="{% url 'financial_production_costs' %}"><i data-lucide="factory"></i>Production Costs</a>
-  {% if can_view_payroll_detail %}<a href="{% url 'financial_payroll' %}"><i data-lucide="users"></i>Payroll</a>{% endif %}
-  {% if can_review_exceptions %}<a href="{% url 'financial_exception_center' %}"><i data-lucide="shield-alert"></i>Exceptions</a><a href="{% url 'financial_permission_controls' %}"><i data-lucide="key-round"></i>Access</a>{% endif %}
-  <a href="{% url 'financial_chart' %}"><i data-lucide="list-tree"></i>Accounts</a>
-</nav>
-{% if not financial_core_writes_enabled %}<div class="fc-alert">Production dual-write is off. Core transaction screens are staged for controlled activation.</div>{% endif %}

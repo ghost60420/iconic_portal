@@ -222,7 +222,7 @@ def _account_key_from_category(operation):
         raise FinanceOperationError("An approved expense category is required.")
     key = operation.expense_category.default_account.system_key
     if not key:
-        raise FinanceOperationError("The selected expense category has no Financial Core account mapping.")
+        raise FinanceOperationError("The selected expense category has no General Ledger account mapping.")
     return key
 
 
@@ -1118,11 +1118,11 @@ def post_operation(operation, *, actor):
     from crm.services.financial_permissions import can_post_finance_operation
 
     if not can_post_finance_operation(poster):
-        raise FinanceOperationError("You do not have permission to post Financial Core operations.")
+        raise FinanceOperationError("You do not have permission to post Finance operations.")
     if operation.state != FinanceOperation.STATE_APPROVED:
         raise FinanceOperationError("Only an independently approved operation can be posted.")
     if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
-        message = "Financial Core writes are disabled. The approved operation remains unposted."
+        message = "Finance posting is disabled. The approved operation remains unposted."
         _record_post_error(operation, poster, message)
         raise FinanceOperationWritesDisabled(message)
     try:

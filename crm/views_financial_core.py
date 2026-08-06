@@ -143,7 +143,7 @@ def require_core_writes(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
         if request.method not in ("GET", "HEAD") and not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
-            messages.error(request, "Financial Core posting is disabled pending controlled activation.")
+            messages.error(request, "Finance posting is disabled.")
             return redirect("financial_core_dashboard")
         return view_func(request, *args, **kwargs)
 
@@ -1128,7 +1128,7 @@ def financial_quick_costing_timeline(request, pk):
     actual_form = FactoryTimelineActualForm(prefix="actual")
     if request.method == "POST":
         if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
-            messages.error(request, "Financial Core posting is disabled pending controlled activation.")
+            messages.error(request, "Finance posting is disabled.")
             return redirect("quick_costing_detail", pk=pk)
         action = request.POST.get("action")
         try:

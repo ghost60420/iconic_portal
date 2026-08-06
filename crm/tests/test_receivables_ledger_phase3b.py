@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from crm.models import (
@@ -26,6 +26,7 @@ from crm.services.receivables_ledger import (
 )
 
 
+@override_settings(FINANCIAL_CORE_WRITES_ENABLED=False)
 class ReceivablesLedgerPhase3BTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

@@ -69,7 +69,7 @@ from .services.payment_reconciliation import (
     is_accounting_period_closed,
     record_invoice_payment,
 )
-from .services.financial_permissions import scope_invoices_for_user
+from .services.financial_permissions import can_view_financial_core, scope_invoices_for_user
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -1565,6 +1565,8 @@ def invoice_settings_preview(request, preview_type):
 @login_required
 @user_passes_test(superuser_only)
 def accounts_receivable_dashboard(request):
+    if settings.FINANCIAL_CORE_REPORTING_ACTIVE and can_view_financial_core(request.user):
+        return redirect("financial_core_ar_aging")
     can_include_archived = can_archive_invoice(request.user)
     filters = {
         "date_from": _parse_ar_date(request.GET.get("date_from")),

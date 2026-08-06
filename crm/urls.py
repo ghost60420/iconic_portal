@@ -356,10 +356,8 @@ urlpatterns = [
     path("accounting/budget-vs-actual/", acc_any(acc.budget_vs_actual_dashboard), name="budget_vs_actual_dashboard"),
     path("accounting/kpi-scorecard/", acc_any(acc.kpi_scorecard_dashboard), name="kpi_scorecard_dashboard"),
     path("accounting/financial-forecast/", acc_any(acc.financial_forecast_dashboard), name="financial_forecast_dashboard"),
-    # Additive daily Finance Operations layer. Requests and approvals remain separate
-    # from Core posting while FINANCIAL_CORE_WRITES_ENABLED is off.
+    # Production Finance Operations entry and approval workflows.
     path("accounting/operations/", fin_ops.finance_operations_center, name="finance_operations_center"),
-    path("accounting/operations/readiness/", fin_ops.finance_live_readiness, name="finance_live_readiness"),
     path("accounting/operations/new/<slug:workflow_slug>/", fin_ops.finance_operation_create, name="finance_operation_create"),
     path("accounting/operations/approvals/", fin_ops.finance_approval_center, name="finance_approval_center"),
     path("accounting/operations/activity/", fin_ops.finance_today_activity, name="finance_today_activity"),
@@ -368,8 +366,7 @@ urlpatterns = [
     path("accounting/operations/<int:pk>/review/<slug:action>/", fin_ops.finance_operation_review, name="finance_operation_review"),
     path("accounting/operations/<int:pk>/posting-preview/", fin_ops.finance_posting_preview, name="finance_posting_preview"),
     path("accounting/operations/<int:pk>/post/", fin_ops.finance_operation_post, name="finance_operation_post"),
-    # Additive Financial Core preview. Existing accounting routes remain the production view
-    # until FINANCIAL_CORE_REPORTING_ACTIVE is approved.
+    # Finance ledger, reporting, master data, and reconciliation views.
     path("accounting/core/", fin.financial_core_dashboard, name="financial_core_dashboard"),
     path("accounting/core/chart/", fin.financial_chart, name="financial_chart"),
     path("accounting/core/general-ledger/", fin.financial_general_ledger, name="financial_general_ledger"),
@@ -423,7 +420,6 @@ urlpatterns = [
     path("accounting/files/<int:pk>/download/", login_required(acc.accounting_attachment_download), name="accounting_attachment_download"),
     path("accounting/documents/<int:pk>/download/", login_required(acc.accounting_document_download), name="accounting_document_download"),
     path("accounting/audit-trail/", acc_any(acc.accounting_audit_trail), name="accounting_audit_trail"),
-    path("accounting/ai-audit/", acc_any(acc.accounting_ai_audit), name="accounting_ai_audit"),
     path("accounting/ai-suggest/", acc_any(acc.accounting_ai_suggest), name="accounting_ai_suggest"),
 
     # BD only exports

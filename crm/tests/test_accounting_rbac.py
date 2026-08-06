@@ -63,7 +63,10 @@ class AccountingRBACTests(TestCase):
         self.client.force_login(admin)
 
         self.assertEqual(self.client.get(reverse("accounting_entry_add_bd")).status_code, 200)
-        self.assertEqual(self.client.get(reverse("accounting_bd_dashboard")).status_code, 200)
+        self.assertRedirects(
+            self.client.get(reverse("accounting_bd_dashboard")),
+            f"{reverse('financial_core_dashboard')}?side=BD",
+        )
 
     def test_non_accounting_users_are_blocked(self):
         users = [

@@ -9,7 +9,7 @@
     <a class="ops-stat" href="{% url 'finance_today_activity' %}"><strong>{{ counts.blocked }}</strong><span>Blocked Postings</span></a>
   </section>
   {% if setup_required %}<section class="fc-band" aria-labelledby="finance-setup-heading">
-    <div class="fc-alert bad"><strong id="finance-setup-heading">FINANCE SETUP REQUIRED</strong><br>The following items must be configured before full workflow testing.</div>
+    <div class="fc-alert bad"><strong id="finance-setup-heading">MASTER DATA REQUIRED FOR POSTING</strong><br>Configure the missing master records before posting transactions. Historical balances may remain zero and can be entered later.</div>
     <div class="ops-setup-list">
       <div class="ops-setup-item"><strong>Financial Accounts</strong><span>{{ setup.financial_accounts }} configured</span></div>
       <div class="ops-setup-item"><strong>Expense Categories</strong><span>{{ setup.expense_categories }} configured</span></div>
@@ -24,7 +24,6 @@
       <a class="fc-btn" href="{% url 'finance_operation_create' 'expense' %}">Expense Categories</a>
       <a class="fc-btn" href="{% url 'financial_currency_center' %}">Cash, Bank and Currencies</a>
       <a class="fc-btn" href="{% url 'financial_supplier_center' %}">Suppliers</a>
-      {% if can_view_live_readiness %}<a class="fc-btn" href="{% url 'financial_permission_controls' %}">Business Side Access</a>{% endif %}
     </div>{% else %}<p class="fc-note">Authorized Finance administrators must complete this setup.</p>{% endif %}
   </section>{% endif %}
   <section class="fc-band"><h2>Daily Actions</h2><div class="ops-action-grid">
@@ -32,6 +31,6 @@
     {% if can_view_approvals %}<a class="ops-action" href="{% url 'finance_approval_center' %}"><i data-lucide="list-checks"></i><div><strong>Review Pending Approvals</strong><span>{{ counts.pending }} waiting</span></div></a>{% endif %}
     <a class="ops-action" href="{% url 'finance_today_activity' %}"><i data-lucide="activity"></i><div><strong>View Today's Financial Activity</strong><span>{{ today|date:"M j, Y" }}</span></div></a>
   </div></section>
-  <section class="fc-band" id="posting-preview"><h2>Posting Preview</h2><div class="ops-no-ledger">Open any Finance Operation to review its read-only accounting preview. No General Ledger entry is created while Financial Core posting is off.</div></section>
+  <section class="fc-band" id="posting-preview"><h2>Posting Preview</h2><div class="ops-no-ledger">Open any Finance Operation to review the accounting preview before approval and General Ledger posting.</div></section>
   <section class="fc-band"><div class="ops-toolbar"><h2>Recent Activity</h2><a class="fc-btn" href="{% url 'finance_today_activity' %}"><i data-lucide="list-filter"></i>Open Activity</a></div><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Operation</th><th>Type</th><th>Date</th><th>Side</th><th>Party</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in recent %}<tr><td><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td>{{ row.get_operation_type_display }}</td><td>{{ row.transaction_date }}</td><td>{{ row.side }}</td><td>{{ row.customer|default:row.supplier|default:row.party_name|default:"-" }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td><span class="ops-state {{ row.state|lower }}">{{ row.get_state_display }}</span></td></tr>{% empty %}<tr><td colspan="7" class="fc-empty">No finance operations recorded.</td></tr>{% endfor %}</tbody></table></div></section>
 </main><script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>{% endblock %}

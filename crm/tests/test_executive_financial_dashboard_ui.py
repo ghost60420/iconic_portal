@@ -2,10 +2,11 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
+@override_settings(FINANCIAL_CORE_REPORTING_ACTIVE=False)
 class ExecutiveFinancialDashboardUITests(TestCase):
     @classmethod
     def setUpTestData(cls):

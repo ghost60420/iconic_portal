@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}{% load humanize %}{% block content %}
 <main class="fc-shell">{% include "crm/financial_core/_nav.html" %}
   <div class="fc-head"><h1 class="fc-title">Historical Exception Review</h1><span class="fc-status"><i data-lucide="lock-keyhole"></i>Restricted review workspace</span></div>
-  <div class="fc-alert">Source transactions are read only. Review decisions and adjustment proposals do not post corrections while Financial Core activation remains off.</div>
+  <div class="fc-alert">Source transactions are read only. Review decisions and adjustment proposals require a separate confirmed posting.</div>
   <section class="fc-grid"><div class="fc-kpi"><div class="fc-kpi-label">Critical</div><div class="fc-kpi-value">{{ totals.critical }}</div></div><div class="fc-kpi"><div class="fc-kpi-label">High</div><div class="fc-kpi-value">{{ totals.high }}</div></div><div class="fc-kpi"><div class="fc-kpi-label">Evidence Required</div><div class="fc-kpi-value">{{ totals.evidence_required }}</div></div><div class="fc-kpi"><div class="fc-kpi-label">Resolved</div><div class="fc-kpi-value">{{ totals.resolved }}</div></div></section>
   <section class="fc-band"><h2>Filters</h2><form method="get" class="fc-form-grid">
     <div class="fc-field"><label>Risk</label><select name="severity" class="form-select"><option value="">All</option><option value="CRITICAL" {% if request.GET.severity == 'CRITICAL' %}selected{% endif %}>Critical</option><option value="HIGH" {% if request.GET.severity == 'HIGH' %}selected{% endif %}>High</option></select></div>

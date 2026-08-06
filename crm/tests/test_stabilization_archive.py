@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from crm.forms import LeadForm
@@ -112,6 +112,7 @@ class EmployeeArchiveStabilizationTests(TestCase):
         self.assertEqual(target.employee_profile.employee_id, employee_id)
 
 
+@override_settings(FINANCIAL_CORE_REPORTING_ACTIVE=False)
 class InvoiceArchiveStabilizationTests(TestCase):
     @classmethod
     def setUpTestData(cls):

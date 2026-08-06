@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db.utils import OperationalError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -95,6 +95,7 @@ class MainDashboardTests(TestCase):
         self.assertIn("invoice_status_labels", chart_data)
 
 
+@override_settings(FINANCIAL_CORE_REPORTING_ACTIVE=False)
 class FinancialDashboardUiTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
