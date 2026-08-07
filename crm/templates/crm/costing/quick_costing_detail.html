@@ -758,6 +758,19 @@
   }
 
   @media (max-width: 640px) {
+    .quick-breakdown-list {
+      width: 100%;
+      min-width: 0;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .quick-breakdown-list > *,
+    .quick-detail-body,
+    .quick-detail-body .quick-summary-grid {
+      min-width: 0;
+      max-width: 100%;
+    }
+
     .quick-detail-page .workflow-activity-track {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
