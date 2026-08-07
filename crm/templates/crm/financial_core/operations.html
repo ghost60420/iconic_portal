@@ -1,5 +1,6 @@
 {% extends "crm/base.html" %}{% load humanize %}{% block content %}
 <main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">{% include "crm/financial_core/_nav.html" %}<div class="fc-head"><h1 class="fc-title">{{ title }}</h1></div>
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key=operation %}
   {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
   {% if operation == 'suppliers' %}
     {% if can_manage_core %}

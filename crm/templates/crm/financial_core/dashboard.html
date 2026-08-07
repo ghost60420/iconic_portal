@@ -3,6 +3,7 @@
 {% block content %}
 <main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">
   {% include "crm/financial_core/_nav.html" %}
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key="FINANCE_DASHBOARD" country_side=side %}
   <form method="get" class="fc-form-grid fc-filter-grid">
     <div class="fc-field"><label for="fc-start">Start</label><input id="fc-start" class="form-control" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}"></div>
     <div class="fc-field"><label for="fc-end">End</label><input id="fc-end" class="form-control" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}"></div>

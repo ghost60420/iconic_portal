@@ -1,6 +1,7 @@
 {% extends "crm/base.html" %}{% load humanize %}{% block content %}
 <main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">{% include "crm/financial_core/_nav.html" %}
   <div class="fc-head"><h1 class="fc-title">{{ report_title }}</h1></div>
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key=report_type country_side=side %}
   <form method="get" class="fc-form-grid fc-report-filters">
     {% if as_of_date %}<div class="fc-field"><label>As of</label><input class="form-control" type="date" name="as_of" value="{{ as_of_date|date:'Y-m-d' }}"></div>{% else %}<div class="fc-field"><label>Start</label><input class="form-control" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}"></div><div class="fc-field"><label>End</label><input class="form-control" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}"></div>{% endif %}
     <div class="fc-field"><label>Business side</label><select class="form-select" name="side"><option value="">Combined</option><option value="CA" {% if side == 'CA' %}selected{% endif %}>Canada</option><option value="BD" {% if side == 'BD' %}selected{% endif %}>Bangladesh</option></select></div>

@@ -2,6 +2,7 @@
 <main class="fc-shell">{% include "crm/finance_operations/_styles.html" %}{% include "crm/finance_operations/_nav.html" %}
   {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
   <div class="ops-toolbar ops-center-heading"><div><div class="ops-title-line"><h1>{% if locked_side %}{{ country_name }} Finance{% else %}Finance Operations Center{% endif %}</h1>{% if locked_side %}<span class="ops-country-badge country-{{ locked_side|lower }}">{{ country_name }} Finance <b>{% if locked_side == 'BD' %}BDT{% else %}CAD{% endif %}</b></span>{% endif %}</div><p class="ops-form-note">Daily transactions, approvals, and posting activity</p></div></div>
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key="FINANCE_CENTER" country_side=locked_side %}
   <section class="ops-stat-grid" aria-label="Finance operations status">
     <a class="ops-stat" href="{% url 'finance_approval_center' %}"><strong>{{ counts.pending }}</strong><span>Pending Approval</span></a>
     <a class="ops-stat" href="{% url 'finance_approval_center' %}?state=EVIDENCE_REQUIRED"><strong>{{ counts.evidence }}</strong><span>Evidence Required</span></a>

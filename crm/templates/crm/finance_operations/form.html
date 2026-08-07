@@ -32,6 +32,8 @@
     </div>
   {% endif %}
 
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key=workflow.operation_type country_side=locked_side %}
+
   {% if workflow.operation_type == 'CUSTOMER_REFUND' or workflow.operation_type == 'CUSTOMER_CREDIT_NOTE' or workflow.operation_type == 'CUSTOMER_CREDIT' %}
     <nav class="ops-related" aria-label="Customer adjustment workflows">
       <a href="{% url 'finance_operation_create' 'customer-refund' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Refund</a>
@@ -97,7 +99,7 @@
     {% endfor %}
 
     {% if workflow.operation_type == 'CUSTOMER_PAYMENT' %}
-      <aside class="ops-payment-summary" aria-labelledby="payment-summary-title">
+      <aside class="ops-payment-summary" data-payment-summary="customer" aria-labelledby="payment-summary-title">
         <div class="ops-summary-head">
           <div><span>Review</span><h2 id="payment-summary-title">Payment Summary</h2></div>
           <i data-lucide="receipt-text"></i>
@@ -106,6 +108,22 @@
           <div><dt>Customer</dt><dd data-summary="customer">Not selected</dd></div>
           <div><dt>Invoice</dt><dd data-summary="invoice">Not selected</dd></div>
           <div><dt>Invoice Total</dt><dd data-summary="total">-</dd></div>
+          <div><dt>Already Paid</dt><dd data-summary="paid">-</dd></div>
+          <div><dt>Outstanding</dt><dd data-summary="outstanding">-</dd></div>
+          <div><dt>Payment Entered</dt><dd data-summary="payment">-</dd></div>
+          <div class="ops-summary-remaining"><dt>Remaining After Payment</dt><dd data-summary="remaining">-</dd></div>
+        </dl>
+      </aside>
+    {% elif workflow.operation_type == 'SUPPLIER_PAYMENT' %}
+      <aside class="ops-payment-summary" data-payment-summary="supplier" aria-labelledby="supplier-payment-summary-title">
+        <div class="ops-summary-head">
+          <div><span>Review</span><h2 id="supplier-payment-summary-title">Supplier Payment Summary</h2></div>
+          <i data-lucide="receipt-text"></i>
+        </div>
+        <dl>
+          <div><dt>Supplier</dt><dd data-summary="supplier">Not selected</dd></div>
+          <div><dt>Bill</dt><dd data-summary="bill">Not selected</dd></div>
+          <div><dt>Bill Total</dt><dd data-summary="total">-</dd></div>
           <div><dt>Already Paid</dt><dd data-summary="paid">-</dd></div>
           <div><dt>Outstanding</dt><dd data-summary="outstanding">-</dd></div>
           <div><dt>Payment Entered</dt><dd data-summary="payment">-</dd></div>

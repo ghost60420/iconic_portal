@@ -339,20 +339,46 @@
     return `${currency} ${numeric.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   }
 
+  function supplierBillTotal(option) {
+    if (!option) return NaN;
+    const match = optionSecondary(option).match(/\|\s*[A-Z]{3}\s+([\d,]+(?:\.\d+)?)\s+total\s*\|/i);
+    return match ? Number(match[1].replaceAll(",", "")) : NaN;
+  }
+
   function updatePaymentSummary() {
     const summary = form.parentElement.querySelector(".ops-payment-summary");
     if (!summary) return;
-    const customer = selectedOption(form.elements.customer);
-    const invoice = selectedOption(form.elements.invoice);
+    const summaryKind = summary.dataset.paymentSummary;
     const amountInput = form.elements.amount;
-    const currency = invoice ? invoice.dataset.currency : (currencySelect ? currencySelect.value : "");
     const amount = Number(amountInput && amountInput.value ? amountInput.value : 0);
-    const outstanding = Number(invoice ? invoice.dataset.outstanding : NaN);
+    let currency = currencySelect ? currencySelect.value : "";
+    let outstanding = NaN;
+    let total = NaN;
+    let paid = NaN;
+
+    if (summaryKind === "supplier") {
+      const supplier = selectedOption(form.elements.supplier);
+      const bill = selectedOption(form.elements.supplier_bill);
+      currency = bill ? bill.dataset.currency : currency;
+      outstanding = Number(bill ? bill.dataset.outstanding : NaN);
+      total = supplierBillTotal(bill);
+      paid = Number.isFinite(total) && Number.isFinite(outstanding) ? total - outstanding : NaN;
+      summary.querySelector('[data-summary="supplier"]').textContent = optionPrimary(supplier) || "Not selected";
+      summary.querySelector('[data-summary="bill"]').textContent = optionPrimary(bill) || "Not selected";
+    } else {
+      const customer = selectedOption(form.elements.customer);
+      const invoice = selectedOption(form.elements.invoice);
+      currency = invoice ? invoice.dataset.currency : currency;
+      outstanding = Number(invoice ? invoice.dataset.outstanding : NaN);
+      total = Number(invoice ? invoice.dataset.total : NaN);
+      paid = Number(invoice ? invoice.dataset.paid : NaN);
+      summary.querySelector('[data-summary="customer"]').textContent = optionPrimary(customer) || "Not selected";
+      summary.querySelector('[data-summary="invoice"]').textContent = optionPrimary(invoice) || "Not selected";
+    }
+
     const remaining = Number.isFinite(outstanding) ? outstanding - amount : NaN;
-    summary.querySelector('[data-summary="customer"]').textContent = optionPrimary(customer) || "Not selected";
-    summary.querySelector('[data-summary="invoice"]').textContent = optionPrimary(invoice) || "Not selected";
-    summary.querySelector('[data-summary="total"]').textContent = formatMoney(currency, invoice && invoice.dataset.total);
-    summary.querySelector('[data-summary="paid"]').textContent = formatMoney(currency, invoice && invoice.dataset.paid);
+    summary.querySelector('[data-summary="total"]').textContent = formatMoney(currency, total);
+    summary.querySelector('[data-summary="paid"]').textContent = formatMoney(currency, paid);
     summary.querySelector('[data-summary="outstanding"]').textContent = formatMoney(currency, outstanding);
     summary.querySelector('[data-summary="payment"]').textContent = amount > 0 ? formatMoney(currency, amount) : "-";
     const remainingNode = summary.querySelector('[data-summary="remaining"]');
@@ -360,7 +386,7 @@
     remainingNode.classList.toggle("is-negative", Number.isFinite(remaining) && remaining < 0);
   }
 
-  [form.elements.customer, form.elements.invoice, form.elements.amount].filter(Boolean).forEach(function (field) {
+  [form.elements.customer, form.elements.invoice, form.elements.supplier, form.elements.supplier_bill, form.elements.amount].filter(Boolean).forEach(function (field) {
     field.addEventListener(field.tagName === "INPUT" ? "input" : "change", updatePaymentSummary);
   });
   updatePaymentSummary();

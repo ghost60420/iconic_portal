@@ -206,6 +206,8 @@
       </div>
     </div>
 
+    {% include "crm/finance_operations/_page_guidance.html" with guidance_key="production_profit" country_side="BD" %}
+
     <div class="pp-section-title">Company Revenue Overview</div>
     {% for company in company_revenue %}
       <div class="pp-summary" aria-label="Company revenue {{ company.currency }}">

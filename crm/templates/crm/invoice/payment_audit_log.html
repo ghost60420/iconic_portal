@@ -97,6 +97,8 @@
     <a class="crm-btn-secondary" href="{% url 'accounts_receivable_dashboard' %}">Accounts Receivable</a>
   </div>
 
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key="PAYMENT_AUDIT" %}
+
   <div class="payment-audit-card">
     {% if audit_rows %}
       <div class="payment-audit-table-wrap">

@@ -21,7 +21,7 @@ from crm.models import (
     Supplier,
 )
 from crm.services.chart_of_accounts import account_by_key, bootstrap_chart_of_accounts
-from crm.services.finance_operations import workflow_definition
+from crm.services.finance_operations import WORKFLOWS, workflow_definition
 
 
 @override_settings(
@@ -215,6 +215,89 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertContains(response, "Canada Finance")
         self.assertContains(response, "finance_form.js")
         self.assertContains(response, 'data-parent-field="customer"')
+
+    def test_major_finance_forms_render_one_distinct_page_guide(self):
+        cases = (
+            ("customer-payment", "CA", "Record money received from a customer.", "Creating invoices, supplier payments, or refunds."),
+            ("supplier-bill", "CA", "Record a bill received from a supplier.", "Recording the actual payment."),
+            ("supplier-payment", "CA", "Record money paid to a supplier.", "Creating a supplier bill."),
+            ("expense", "CA", "Record company operating expenses.", "Supplier bills that should be tracked through Accounts Payable"),
+            ("utility", "BD", "Record electricity, hydro, water, gas, internet, telephone, or other utility bills.", "General supplier purchases or production materials."),
+            ("payroll", "BD", "Record approved payroll costs.", "General employee reimbursements"),
+            ("production-cost", "BD", "Record actual production costs for an order.", "Office expenses or general company expenses."),
+            ("factory-daily-cost", "BD", "Track production days used and the factory operating cost", "Estimated Quick Costing days"),
+        )
+        client = self.client_for_user()
+
+        for slug, side, purpose, prohibited_use in cases:
+            with self.subTest(slug=slug, side=side):
+                response = client.get(f"{reverse('finance_operation_create', args=[slug])}?side={side}")
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, purpose)
+                self.assertContains(response, prohibited_use)
+                self.assertEqual(response.content.count(b'data-finance-guidance='), 1)
+
+    def test_every_daily_workflow_has_specific_guidance(self):
+        client = self.client_for_user()
+
+        for slug, operation_type, _title, _icon, _group in WORKFLOWS:
+            with self.subTest(slug=slug):
+                side = "BD" if slug in {"production-cost", "factory-daily-cost", "inventory-adjustment"} else "CA"
+                response = client.get(f"{reverse('finance_operation_create', args=[slug])}?side={side}")
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, f'data-finance-guidance="{operation_type}"')
+                self.assertNotContains(response, "Complete this approved Finance workflow")
+
+    def test_supplier_payment_page_has_live_balance_summary(self):
+        response = self.client_for_user().get(
+            f"{reverse('finance_operation_create', args=['supplier-payment'])}?side=CA"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-payment-summary="supplier"')
+        self.assertContains(response, "Supplier Payment Summary")
+        self.assertContains(response, "Bill Total")
+        self.assertContains(response, "Already Paid")
+        self.assertContains(response, "Remaining After Payment")
+
+    def test_country_guidance_remains_locked_and_compact(self):
+        client = self.client_for_user()
+        canada = client.get(f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA")
+        bangladesh = client.get(f"{reverse('finance_operation_create', args=['utility'])}?side=BD")
+
+        self.assertContains(canada, "Canada Finance")
+        self.assertContains(canada, "Canada office and Canada business transactions only")
+        self.assertContains(canada, "Do not enter Bangladesh factory transactions here")
+        self.assertContains(bangladesh, "Bangladesh Finance")
+        self.assertContains(bangladesh, "Bangladesh factory and Bangladesh business transactions only")
+        self.assertContains(bangladesh, "Do not enter Canada transactions here")
+
+        report = client.get(f"{reverse('financial_general_ledger')}?side=BD")
+        self.assertEqual(report.status_code, 200)
+        self.assertContains(report, "Bangladesh Finance")
+        self.assertContains(report, "BDT")
+        self.assertContains(report, "Do not enter Canada transactions here")
+
+    def test_major_finance_reports_render_read_only_guidance(self):
+        cases = (
+            ("profit_loss_dashboard", "Show how much the company earned and spent"),
+            ("balance_sheet_dashboard", "Show company assets, liabilities, and equity"),
+            ("cash_flow_dashboard", "Show cash entering and leaving the company"),
+            ("accounts_receivable_dashboard", "Show customer invoices that are still unpaid"),
+            ("accounts_payable_dashboard", "Show approved supplier bills that are still unpaid"),
+            ("executive_financial_dashboard", "Show an executive view of revenue, profit, cash"),
+            ("kpi_scorecard_dashboard", "Show an executive view of revenue, profit, cash"),
+            ("production_profit_report", "Compare order revenue with linked production costs"),
+        )
+        client = self.client_for_user()
+
+        for url_name, purpose in cases:
+            with self.subTest(url_name=url_name):
+                response = client.get(reverse(url_name), follow=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, purpose)
+                self.assertContains(response, "reporting only")
+                self.assertEqual(response.content.count(b'data-finance-guidance='), 1)
 
     def test_country_lock_validation_is_unchanged(self):
         form = CustomerPaymentOperationForm(

@@ -1,5 +1,6 @@
 {% extends "crm/base.html" %}{% block content %}
 <main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">{% include "crm/financial_core/_nav.html" %}
+  {% include "crm/finance_operations/_page_guidance.html" with guidance_key="CHART_OF_ACCOUNTS" %}
   <section class="fc-band"><h2>Chart of Accounts</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Parent</th><th>Normal</th><th>Control</th><th>Active</th></tr></thead><tbody>
     {% for row in accounts %}<tr><td>{{ row.code }}</td><td>{{ row.name }}</td><td>{{ row.get_account_type_display }}</td><td>{{ row.parent.name|default:"-" }}</td><td>{{ row.normal_balance }}</td><td>{{ row.is_control_account|yesno:"Yes,No" }}</td><td>{{ row.is_active|yesno:"Yes,No" }}</td></tr>{% empty %}<tr><td colspan="7" class="fc-empty">Chart of Accounts has not been bootstrapped.</td></tr>{% endfor %}
   </tbody></table></div></section>
