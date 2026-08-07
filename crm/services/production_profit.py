@@ -842,22 +842,71 @@ def _local_revenue(order, invoice_rows):
     return None, None, "Unavailable"
 
 
-def _local_cost(order):
+def _factory_overhead_from_accounting(accounting_rows):
+    overhead = ZERO
+    for entry in accounting_rows:
+        side = (entry.get("side") or "").upper().strip()
+        direction = (entry.get("direction") or "").upper().strip()
+        main_type = (entry.get("main_type") or "").upper().strip()
+        descriptor = " ".join(
+            str(entry.get(field) or "").lower()
+            for field in ("sub_type", "description", "internal_note")
+        )
+        if (
+            side == "BD"
+            and direction == "OUT"
+            and main_type in COST_MAIN_TYPES
+            and "factory" in descriptor
+            and any(term in descriptor for term in ("overhead", "daily", "running"))
+        ):
+            amount_bdt = _decimal(entry.get("amount_bdt"))
+            if amount_bdt <= 0 and (entry.get("currency") or "").upper().strip() == "BDT":
+                amount_bdt = _decimal(entry.get("amount_original"))
+            overhead += max(amount_bdt, ZERO)
+    return _money(overhead)
+
+
+def _timeline_overhead(order, accounting_rows):
+    posted_overhead = _factory_overhead_from_accounting(accounting_rows)
+    if posted_overhead > 0:
+        return posted_overhead, "Posted factory overhead"
+    quick_costing = getattr(order, "source_quick_costing", None)
+    timeline = getattr(quick_costing, "factory_timeline", None) if quick_costing else None
+    if not timeline or timeline.daily_cost_currency != "BDT":
+        return ZERO, ""
+    if timeline.actual_timeline_cost is not None:
+        return _money(timeline.actual_timeline_cost), "Actual factory timeline"
+    return _money(timeline.estimated_timeline_cost), "Estimated factory timeline"
+
+
+def _local_cost(order, accounting_rows):
     quantity = max(int(order.qty_total or 0), 0)
     cost_per_piece = _decimal(order.sewing_cost_per_piece_bdt)
     if quantity <= 0 or cost_per_piece <= 0:
         return None, "Unavailable"
     cost = Decimal(quantity) * cost_per_piece + max(_decimal(order.extra_local_cost_bdt), ZERO)
-    return _money(cost), "Production sewing cost"
+    overhead, overhead_source = _timeline_overhead(order, accounting_rows)
+    source = "Production sewing cost"
+    if overhead > 0:
+        cost += overhead
+        source = f"{source} + {overhead_source}"
+    return _money(cost), source
 
 
-def _canada_cost(order, accounting_rows):
+def _canada_cost(order, accounting_rows, rate):
     explicit = _decimal(order.actual_total_cost_bdt) or _decimal(order.production_total_cost_bdt)
     linked_total, _linked_sewing = _linked_bd_costs(accounting_rows)
     if explicit > 0:
         return _money(explicit), "Production total cost"
     if linked_total > 0:
         return linked_total, "BD accounting cost"
+    approved_summary = order.approved_costing_summary or {}
+    approved_cost = _decimal(approved_summary.get("total_cost_order"))
+    approved_currency = (order.approved_currency or approved_summary.get("currency") or "").upper().strip()
+    if approved_cost > 0 and approved_currency == "BDT":
+        return _money(approved_cost), "Approved Quick Costing estimate"
+    if approved_cost > 0 and approved_currency == "CAD" and rate and rate > 1:
+        return _money(approved_cost * rate), "Approved Quick Costing estimate"
     return None, "Unavailable"
 
 
@@ -912,7 +961,7 @@ def _build_order_row(order, invoice_rows, accounting_rows, rate):
 
     if classification == "bangladesh_local":
         revenue_currency, revenue, revenue_source = _local_revenue(order, invoice_rows)
-        cost_bdt, cost_source = _local_cost(order)
+        cost_bdt, cost_source = _local_cost(order, accounting_rows)
         cost_cad = _convert_bdt_to_cad(cost_bdt, rate)
         profit = _money(revenue - cost_bdt) if revenue is not None and cost_bdt is not None and revenue_currency == "BDT" else None
         profit_currency = "BDT" if profit is not None else None
@@ -924,7 +973,7 @@ def _build_order_row(order, invoice_rows, accounting_rows, rate):
     elif classification == "canada_export":
         revenue_currency, revenue = _invoice_revenue(invoice_rows)
         revenue_source = "Invoice total" if revenue is not None else "Unavailable"
-        cost_bdt, cost_source = _canada_cost(order, accounting_rows)
+        cost_bdt, cost_source = _canada_cost(order, accounting_rows, rate)
         cost_cad = _convert_bdt_to_cad(cost_bdt, rate)
         profit = _money(revenue - cost_cad) if revenue is not None and cost_cad is not None and revenue_currency == "CAD" else None
         profit_currency = "CAD" if profit is not None else None
@@ -1265,7 +1314,9 @@ def build_production_profit_report(
     orders = (
         ProductionOrder.objects.filter(pk__in=order_ids, is_archived=False)
         .exclude(production_order_type="sampling")
-        .select_related("customer", "product", "lead")
+        .select_related(
+            "customer", "product", "lead", "source_quick_costing", "source_quick_costing__factory_timeline",
+        )
         .order_by("-created_at", "-id")
     )
     rows = [

@@ -1039,9 +1039,9 @@ class QuickCostingTimelineSnapshot(FinancialAuditFields):
 
     @property
     def timeline_variance(self):
-        if self.actual_timeline_cost is None:
+        if self.actual_production_days is None:
             return None
-        return self.actual_timeline_cost - self.estimated_timeline_cost
+        return self.actual_production_days - self.estimated_production_days
 
     @property
     def profit_variance(self):

@@ -143,6 +143,88 @@
     padding-top: 14px;
   }
 
+  .quick-timeline-heading {
+    margin: 16px 0 8px;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .quick-timeline-form {
+    margin: 10px 0 14px;
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.55);
+  }
+
+  .quick-timeline-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .quick-timeline-fields label,
+  .quick-timeline-fields small {
+    display: block;
+  }
+
+  .quick-timeline-fields label {
+    margin-bottom: 5px;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .quick-timeline-fields input {
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 9px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: #020617;
+    color: #f8fafc;
+    font-size: 12px;
+  }
+
+  .quick-timeline-fields input:disabled {
+    color: #cbd5e1;
+    opacity: 1;
+  }
+
+  .quick-timeline-fields small {
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  .quick-timeline-notice {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(234, 179, 8, 0.42);
+    border-radius: 8px;
+    background: rgba(113, 63, 18, 0.22);
+    color: #fde68a;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .quick-timeline-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .quick-timeline-status.timeline-green { color: #86efac; border-color: rgba(34, 197, 94, .45); background: rgba(34, 197, 94, .14); }
+  .quick-timeline-status.timeline-yellow { color: #fde68a; border-color: rgba(234, 179, 8, .45); background: rgba(234, 179, 8, .14); }
+  .quick-timeline-status.timeline-red { color: #fca5a5; border-color: rgba(239, 68, 68, .45); background: rgba(239, 68, 68, .14); }
+
   .quick-section-title {
     margin: 0 0 12px 0;
     color: #fde68a;
@@ -681,6 +763,10 @@
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       overflow-x: visible !important;
     }
+
+    .quick-timeline-fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   /* Phase A.5: detail page polish, preserving all costing actions. */
@@ -1013,6 +1099,7 @@
             <div class="quick-summary-row"><span>Total Product and Production Cost</span><strong>{% if calc.cost_available %}{{ calc.product_production_cost_total|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
             <div class="quick-summary-row"><span>Gross Profit Before Commission</span><strong>{% if calc.cost_available %}{{ calc.profit_before_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
             <div class="quick-summary-row"><span>Sales Commission</span><strong>{% if calc.cost_available %}{{ calc.commission_total|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
+            {% if factory_timeline %}<div class="quick-summary-row"><span>Less Factory Timeline Cost</span><strong>{{ calc.factory_timeline_cost|finance_money:"BDT" }}</strong></div>{% endif %}
             <div class="quick-summary-row"><span>Final Profit</span><strong>{% if calc.cost_available %}{{ calc.final_profit_after_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
             <div class="quick-summary-row"><span>Final Margin</span><strong>{% if calc.cost_available %}{{ calc.net_profit_margin_percent|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></div>
           </div>
@@ -1059,8 +1146,13 @@
       </div>
     </details>
 
+    {% endif %}
+
+    {% include "crm/costing/_factory_timeline.html" %}
+
+    {% if not quick_costing.is_bangladesh_local_sewing %}
     <details class="quick-detail-card" open>
-      <summary>4. Sales</summary>
+      <summary>5. Sales</summary>
       <div class="quick-detail-body">
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.selling_price_per_piece_pair }}</strong></div>
@@ -1073,7 +1165,7 @@
     </details>
 
     <details class="quick-detail-card" open>
-      <summary>5. Profit Summary</summary>
+      <summary>6. Profit Summary</summary>
       <div class="quick-detail-body">
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Profit Health</span><strong><span class="quick-health-badge health-{{ profit_health.tone }}">{{ profit_health.label }}</span></strong></div>
@@ -1085,6 +1177,7 @@
           <span hidden>Profit Before Commission</span>
           <div class="quick-summary-row"><span>Gross Profit Before Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.profit_before_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.profit_before_commission_total_pair }}</span></strong></div>
           <div class="quick-summary-row"><span>Sales Commission</span><strong class="quick-money-pair"><span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.commission_total_pair }}</span></strong></div>
+          {% if factory_timeline %}<div class="quick-summary-row"><span>Less Factory Timeline Cost</span><strong>{{ calc.display.factory_timeline_cost_pair }}</strong></div>{% endif %}
           <span hidden>Final Profit After Commission</span>
           <div class="quick-summary-row"><span>Final Profit</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.final_profit_after_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.final_profit_after_commission_total_pair }}</span></strong></div>
           <div class="quick-summary-row"><span>Final Margin</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.net_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
@@ -1096,7 +1189,7 @@
     {% endif %}
 
     <details class="quick-detail-card" open>
-      <summary>6. Live Order Summary</summary>
+      <summary>7. Live Order Summary</summary>
       <div class="quick-detail-body">
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
@@ -1170,8 +1263,6 @@
         </div>
       </section>
 	  </section>
-
-  {% include "crm/costing/_factory_timeline.html" %}
 
   {% if can_approve %}
     <section class="quick-detail-card" style="margin-top:14px;">

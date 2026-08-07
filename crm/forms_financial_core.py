@@ -10,7 +10,6 @@ from crm.models import (
     Customer,
     ExpenseCategory,
     ExpenseRecord,
-    FactoryRunningCostDefault,
     FinancialAccount,
     FinancialAdjustmentRequest,
     FinancialDocument,
@@ -277,26 +276,25 @@ class SupplierPaymentForm(forms.Form):
 
 
 class FactoryTimelineEstimateForm(forms.Form):
-    daily_default = forms.ModelChoiceField(queryset=FactoryRunningCostDefault.objects.none())
-    estimated_days = forms.IntegerField(min_value=1)
-    estimated_revenue = forms.DecimalField(max_digits=18, decimal_places=2)
-    other_estimated_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
-    target_margin_percent = forms.DecimalField(max_digits=8, decimal_places=4, required=False)
-    approved_minimum_margin_percent = forms.DecimalField(max_digits=8, decimal_places=4, required=False)
+    estimated_days = forms.IntegerField(min_value=1, label="Estimated Production Days")
+    daily_factory_cost = forms.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        label="Daily Factory Operating Cost",
+    )
+    daily_cost_currency = forms.CharField(label="Daily Cost Currency", disabled=True)
 
     def __init__(self, *args, **kwargs):
+        can_override_rate = kwargs.pop("can_override_rate", False)
         super().__init__(*args, **kwargs)
-        self.fields["daily_default"].queryset = FactoryRunningCostDefault.objects.filter(is_active=True).order_by(
-            "side", "-effective_from"
-        )
+        self.fields["daily_factory_cost"].disabled = not can_override_rate
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-select" if isinstance(field.widget, forms.Select) else "form-control")
 
 
 class FactoryTimelineActualForm(forms.Form):
-    actual_days = forms.IntegerField(min_value=1)
-    actual_revenue = forms.DecimalField(max_digits=18, decimal_places=2)
-    other_actual_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    actual_days = forms.IntegerField(min_value=1, label="Actual Production Days")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -150,6 +150,21 @@ def approve_quick_costing(quick_costing, *, approver):
             raise CostingWorkflowError("This Quick Costing already has an invoice.")
         if not quick_costing.approval_submitted_at:
             raise CostingWorkflowError("Quick Costing must be submitted before CEO approval.")
+        from crm.services.factory_timeline import (
+            FactoryTimelineError,
+            refresh_estimated_factory_timeline,
+            timeline_required_for_approval,
+        )
+
+        factory_timeline = getattr(quick_costing, "factory_timeline", None)
+        if timeline_required_for_approval(quick_costing) and not factory_timeline:
+            raise CostingWorkflowError(
+                "Estimated Production Days and the Finance factory daily-cost snapshot are required before approval."
+            )
+        try:
+            refresh_estimated_factory_timeline(quick_costing, factory_timeline, actor=approver)
+        except FactoryTimelineError as exc:
+            raise CostingWorkflowError(str(exc)) from exc
         approved_at = timezone.now()
         previous_status = quick_costing.status
         quick_costing.status = QuickCosting.STATUS_APPROVED
@@ -575,7 +590,9 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
 
 def build_production_profit_snapshot(order):
     invoices = list(
-        order.invoices.select_related("quick_costing").order_by("-issue_date", "-created_at", "-id")
+        order.invoices.select_related("quick_costing", "quick_costing__factory_timeline").order_by(
+            "-issue_date", "-created_at", "-id"
+        )
     )
     totals_by_currency = {}
     for invoice in invoices:
@@ -617,7 +634,12 @@ def build_production_profit_snapshot(order):
 
     quick_invoice = next((invoice for invoice in invoices if invoice.quick_costing_id), None)
     if quick_invoice and len(invoices) == 1:
-        summary = quick_invoice.quick_costing.calculation_summary()
+        from crm.services.factory_timeline import apply_factory_timeline_to_summary
+
+        summary = apply_factory_timeline_to_summary(
+            quick_invoice.quick_costing,
+            quick_invoice.quick_costing.calculation_summary(),
+        )
         source_currency = normalize_costing_currency(summary.get("currency"))
         try:
             converted_cost = _quick_money_for_invoice(

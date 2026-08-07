@@ -11,7 +11,7 @@ from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404, HttpResponseBadRequest
+from django.http import FileResponse, Http404, HttpResponseBadRequest, HttpResponseForbidden
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -78,6 +78,8 @@ from crm.services.expense_management import (
     submit_expense,
 )
 from crm.services.factory_timeline import (
+    configured_factory_default,
+    current_estimated_inputs,
     FactoryTimelineError,
     record_actual_factory_timeline,
     save_estimated_factory_timeline,
@@ -103,6 +105,15 @@ from crm.services.financial_permissions import (
     scope_production_costs_for_user,
     scope_supplier_bills_for_user,
 )
+from crm.services.operations_permissions import (
+    ROLE_ADMIN,
+    ROLE_CEO,
+    ROLE_DIRECTOR,
+    ROLE_FINANCE,
+    ROLE_MANAGER,
+    operations_role_names,
+)
+from crm.permissions import can_view_internal_costing
 from crm.services.financial_adjustments import (
     FinancialAdjustmentError,
     decide_adjustment_request,
@@ -1113,19 +1124,39 @@ def financial_document_download(request, pk):
 
 @require_http_methods(["GET", "POST"])
 def financial_quick_costing_timeline(request, pk):
-    quick_costing = get_object_or_404(QuickCosting.objects.select_related("factory_timeline"), pk=pk)
+    if not request.user.is_authenticated or not (
+        can_view_internal_costing(request.user)
+        or can_manage_financial_transactions(request.user)
+        or can_enter_production_cost(request.user)
+    ):
+        return HttpResponseForbidden("No access")
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("opportunity", "factory_timeline", "factory_timeline__source_default"),
+        pk=pk,
+    )
+    if request.method == "GET":
+        return redirect("quick_costing_detail", pk=pk)
+    snapshot = getattr(quick_costing, "factory_timeline", None)
+    daily_default = snapshot.source_default if snapshot else configured_factory_default(quick_costing)
+    roles = operations_role_names(request.user)
+    can_override_rate = bool(
+        request.user.is_superuser
+        or roles.intersection({ROLE_CEO, ROLE_FINANCE, ROLE_ADMIN, ROLE_DIRECTOR, ROLE_MANAGER})
+    )
     estimate_initial = {
-        "target_margin_percent": quick_costing.target_margin_percent,
-        "estimated_revenue": (quick_costing.selling_price_per_piece or Decimal("0")) * quick_costing.quantity,
-        "other_estimated_cost": (
-            (quick_costing.material_cost or Decimal("0"))
-            + (quick_costing.production_cost or Decimal("0"))
-            + (quick_costing.other_expenses or Decimal("0"))
-            + (quick_costing.shipping_cost or Decimal("0"))
-        ),
+        "estimated_days": snapshot.estimated_production_days if snapshot else None,
+        "daily_factory_cost": snapshot.daily_factory_cost if snapshot else getattr(daily_default, "daily_amount", None),
+        "daily_cost_currency": snapshot.daily_cost_currency if snapshot else getattr(daily_default, "currency", ""),
     }
-    estimate_form = FactoryTimelineEstimateForm(prefix="estimate", initial=estimate_initial)
-    actual_form = FactoryTimelineActualForm(prefix="actual")
+    estimate_form = FactoryTimelineEstimateForm(
+        prefix="estimate",
+        initial=estimate_initial,
+        can_override_rate=can_override_rate,
+    )
+    actual_form = FactoryTimelineActualForm(
+        prefix="actual",
+        initial={"actual_days": snapshot.actual_production_days if snapshot else None},
+    )
     if request.method == "POST":
         if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
             messages.error(request, "Finance posting is disabled.")
@@ -1133,15 +1164,40 @@ def financial_quick_costing_timeline(request, pk):
         action = request.POST.get("action")
         try:
             if action == "estimate":
-                estimate_form = FactoryTimelineEstimateForm(request.POST, prefix="estimate")
+                estimate_form = FactoryTimelineEstimateForm(
+                    request.POST,
+                    prefix="estimate",
+                    initial=estimate_initial,
+                    can_override_rate=can_override_rate,
+                )
                 if estimate_form.is_valid():
-                    save_estimated_factory_timeline(quick_costing, actor=request.user, **estimate_form.cleaned_data)
+                    if not daily_default:
+                        raise FactoryTimelineError(
+                            "Configure an active Bangladesh factory daily operating cost in Finance Settings first."
+                        )
+                    if quick_costing.is_locked and not snapshot:
+                        raise FactoryTimelineError(
+                            "Historical approved costings remain unchanged; create a costing revision to add a timeline."
+                        )
+                    if snapshot and snapshot.locked_at:
+                        raise FactoryTimelineError("The approved estimate is locked; create a costing revision.")
+                    inputs = current_estimated_inputs(quick_costing)
+                    save_estimated_factory_timeline(
+                        quick_costing,
+                        estimated_days=estimate_form.cleaned_data["estimated_days"],
+                        daily_default=daily_default,
+                        daily_amount_snapshot=estimate_form.cleaned_data["daily_factory_cost"],
+                        approved_minimum_margin_percent=(snapshot.approved_minimum_margin_percent if snapshot else None),
+                        actor=request.user,
+                        **inputs,
+                    )
                     messages.success(request, "Factory timeline estimate saved.")
                     return redirect("quick_costing_detail", pk=pk)
             elif action == "actual":
+                if not can_enter_production_cost(request.user):
+                    return HttpResponseForbidden("Production or Finance permission is required.")
                 actual_form = FactoryTimelineActualForm(request.POST, prefix="actual")
                 if actual_form.is_valid():
-                    snapshot = getattr(quick_costing, "factory_timeline", None)
                     if not snapshot:
                         raise FactoryTimelineError("Save and approve the timeline estimate first.")
                     record_actual_factory_timeline(snapshot, actor=request.user, **actual_form.cleaned_data)
@@ -1149,13 +1205,4 @@ def financial_quick_costing_timeline(request, pk):
                     return redirect("quick_costing_detail", pk=pk)
         except FactoryTimelineError as exc:
             messages.error(request, str(exc))
-    return render(
-        request,
-        "crm/financial_core/timeline_form.html",
-        {
-            "quick_costing": quick_costing,
-            "snapshot": getattr(quick_costing, "factory_timeline", None),
-            "estimate_form": estimate_form,
-            "actual_form": actual_form,
-        },
-    )
+    return redirect("quick_costing_detail", pk=pk)

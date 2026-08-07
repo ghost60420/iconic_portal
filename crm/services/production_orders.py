@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from crm.models import CostingAuditLog, CostingHeader, Invoice, ProductionOrder, ProductionStage, QuickCosting
 from crm.services.costing_workflow import CostingWorkflowError, get_costing_quote_amounts
+from crm.services.factory_timeline import apply_factory_timeline_to_summary
 from crm.services.order_lifecycle import create_lifecycle_from_production
 from crm.services.production_payment import select_production_payment_invoice
 
@@ -110,7 +111,7 @@ def _quick_costing_customer(quick_costing):
 
 
 def _quick_costing_approved_summary(quick_costing, summary, invoice):
-    return {
+    approved_summary = {
         "pricing_type": quick_costing.effective_pricing_type,
         "service_type": quick_costing.service_type_label,
         "currency": quick_costing.currency or "",
@@ -121,12 +122,23 @@ def _quick_costing_approved_summary(quick_costing, summary, invoice):
         "product_production_cost_total": _decimal_text(summary.get("product_production_cost_total")),
         "shipping_cost_total": _decimal_text(summary.get("shipping_cost_total")),
         "other_expenses_total": _decimal_text(summary.get("other_expenses_total")),
+        "total_cost_order": _decimal_text(summary.get("total_cost")),
         "gross_profit_total": _decimal_text(summary.get("gross_profit_total")),
         "commission_total": _decimal_text(summary.get("commission_total")),
         "net_profit_total": _decimal_text(summary.get("net_profit_total")),
         "invoice_number": getattr(invoice, "invoice_number", ""),
         "invoice_total": _decimal_text(getattr(invoice, "total_amount", Decimal("0"))),
     }
+    timeline = getattr(quick_costing, "factory_timeline", None)
+    if timeline:
+        approved_summary.update(
+            estimated_production_days=timeline.estimated_production_days,
+            daily_factory_cost=_decimal_text(timeline.daily_factory_cost),
+            daily_factory_cost_currency=timeline.daily_cost_currency,
+            estimated_factory_timeline_cost=_decimal_text(timeline.estimated_timeline_cost),
+            estimated_profit=_decimal_text(timeline.estimated_profit),
+        )
+    return approved_summary
 
 
 def create_production_order_from_paid_full_package_quick_costing(
@@ -141,7 +153,10 @@ def create_production_order_from_paid_full_package_quick_costing(
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
-            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer", "salesperson")
+            .select_related(
+                "opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer",
+                "salesperson", "factory_timeline",
+            )
             .get(pk=quick_costing.pk)
         )
         if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
@@ -181,7 +196,7 @@ def create_production_order_from_paid_full_package_quick_costing(
         if not production_invoice:
             raise ProductionOrderCreationError(payment_check["message"])
 
-        summary = quick_costing.calculation_summary()
+        summary = apply_factory_timeline_to_summary(quick_costing, quick_costing.calculation_summary())
         lead = getattr(opportunity, "lead", None)
         customer = _quick_costing_customer(quick_costing) or getattr(production_invoice, "customer", None)
         total_value = getattr(production_invoice, "total_amount", None) or summary.get("sales_value") or summary.get("revenue")
@@ -247,7 +262,10 @@ def create_production_order_from_approved_quick_costing(
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
-            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+            .select_related(
+                "opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer",
+                "factory_timeline",
+            )
             .get(pk=quick_costing.pk)
         )
         if quick_costing.effective_pricing_type != QuickCosting.PRICING_CMT:
@@ -279,7 +297,7 @@ def create_production_order_from_approved_quick_costing(
         if not production_invoice:
             raise ProductionOrderCreationError(payment_check["message"])
 
-        summary = quick_costing.calculation_summary()
+        summary = apply_factory_timeline_to_summary(quick_costing, quick_costing.calculation_summary())
         lead = getattr(opportunity, "lead", None) if opportunity else None
         customer = getattr(opportunity, "customer", None) if opportunity else None
         if not customer and lead:
@@ -297,6 +315,15 @@ def create_production_order_from_approved_quick_costing(
             "total_sewing_revenue_bdt": str(summary["revenue"]),
             "total_sewing_cost_bdt": str(summary["total_cost"]) if summary["cost_available"] else None,
         }
+        timeline = getattr(quick_costing, "factory_timeline", None)
+        if timeline:
+            approved_summary.update(
+                estimated_production_days=timeline.estimated_production_days,
+                daily_factory_cost=str(timeline.daily_factory_cost),
+                daily_factory_cost_currency=timeline.daily_cost_currency,
+                estimated_factory_timeline_cost=str(timeline.estimated_timeline_cost),
+                estimated_profit=str(timeline.estimated_profit),
+            )
         try:
             order = ProductionOrder.objects.create(
                 source_quick_costing=quick_costing,

@@ -73,6 +73,7 @@ def _quick_base_queryset(for_rows=False):
                 "approved_by",
                 "rejected_by",
                 "production_order",
+                "factory_timeline",
             )
             .prefetch_related("invoices", "production_order__stages")
             .order_by("-approval_submitted_at", "-updated_at", "-id")

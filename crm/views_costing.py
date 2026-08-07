@@ -3,13 +3,14 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Subquery
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,6 +19,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm, QuickCostingForm
+from .forms_financial_core import FactoryTimelineActualForm, FactoryTimelineEstimateForm
 from .models import (
     CostingHeader,
     CostingLineItem,
@@ -25,6 +27,7 @@ from .models import (
     CostingAuditLog,
     CostingSnapshot,
     CRMAuditLog,
+    FactoryRunningCostDefault,
     NEW_COSTING_CATEGORY_CHOICES,
     NEW_COSTING_CURRENCY_CHOICES,
     NEW_COSTING_UOM_CHOICES,
@@ -48,9 +51,27 @@ from .services.costing_workflow import (
     create_invoice_from_quick_costing,
     get_costing_quote_amounts,
 )
+from .services.factory_timeline import (
+    apply_factory_timeline_to_summary,
+    factory_cost_in_costing_currency,
+    FactoryTimelineError,
+    refresh_estimated_factory_timeline,
+)
+from .services.financial_permissions import can_enter_production_cost
 from .services.ceo_approval_queue import build_ceo_approval_queue_querysets
 from .services.order_lifecycle import create_lifecycle_from_costing
-from .services.operations_permissions import ROLE_SALES, ROLE_SALES_MANAGER, can_approve_costing, has_operations_role
+from .services.operations_permissions import (
+    ROLE_ADMIN,
+    ROLE_CEO,
+    ROLE_DIRECTOR,
+    ROLE_FINANCE,
+    ROLE_MANAGER,
+    ROLE_SALES,
+    ROLE_SALES_MANAGER,
+    can_approve_costing,
+    has_operations_role,
+    operations_role_names,
+)
 from .services.production_orders import (
     QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
     ProductionOrderCreationError,
@@ -211,6 +232,8 @@ def _format_quick_money_lines(value, exchange_rate, currency="BDT", is_legacy_cu
 
 def _quick_costing_calc(quick_costing):
     summary = quick_costing.calculation_summary()
+    timeline = quick_costing._state.fields_cache.get("factory_timeline")
+    summary = apply_factory_timeline_to_summary(quick_costing, summary, snapshot=timeline)
     exchange_rate = summary.get("exchange_rate")
     currency = summary["currency"]
     is_legacy_currency = summary["is_legacy_currency"]
@@ -274,6 +297,7 @@ def _quick_costing_calc(quick_costing):
         "net_profit_margin_percent": summary["net_profit_margin_percent"],
         "target_margin_percent": summary["target_margin_percent"],
         "margin_status": summary["margin_status"],
+        "factory_timeline_cost": summary.get("factory_timeline_cost", Decimal("0")),
     }
     calc["cost_available"] = calc["total_cost_order"] > Decimal("0")
     money_pair = lambda value: _format_quick_money_pair(value, exchange_rate, currency, is_legacy_currency)
@@ -370,6 +394,7 @@ def _quick_costing_calc(quick_costing):
         "target_margin_percent": _format_quick_percent(calc["target_margin_percent"]) if calc["target_margin_percent"] is not None else "N/A",
         "target_margin_percent_label": f"{_format_quick_percent(calc['target_margin_percent'])}%" if calc["target_margin_percent"] is not None else "N/A",
         "margin_status": calc["margin_status"],
+        "factory_timeline_cost_pair": money_pair(calc["factory_timeline_cost"]),
         "currency": "Legacy BDT with CAD conversion" if is_legacy_currency else currency,
         "exchange_rate": f"1 CAD = {_format_quick_decimal(exchange_rate)} BDT" if exchange_rate else "N/A",
     }
@@ -1100,7 +1125,10 @@ def cost_sheet_list(request):
         return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
-    quick_qs = QuickCosting.objects.select_related("created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead").order_by("-updated_at")
+    quick_qs = QuickCosting.objects.select_related(
+        "created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead",
+        "factory_timeline",
+    ).order_by("-updated_at")
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)
@@ -1391,8 +1419,18 @@ def quick_costing_detail(request, pk):
     denied = _deny_without_internal_costing(request)
     if denied:
         return denied
+    today = timezone.localdate()
+    factory_default_qs = FactoryRunningCostDefault.objects.filter(
+        is_active=True,
+        side="BD",
+        effective_from__lte=today,
+    ).filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today)).order_by("-effective_from", "-pk")
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related(
+        QuickCosting.objects.annotate(
+            configured_factory_default_id=Subquery(factory_default_qs.values("pk")[:1]),
+            configured_factory_default_amount=Subquery(factory_default_qs.values("daily_amount")[:1]),
+            configured_factory_default_currency=Subquery(factory_default_qs.values("currency")[:1]),
+        ).select_related(
             "created_by", "salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to", "approved_by",
             "rejected_by", "quoted_by", "production_order", "previous_revision", "superseded_by",
             "revision_root", "recall_requested_by", "recall_rejected_by", "recalled_by",
@@ -1400,7 +1438,43 @@ def quick_costing_detail(request, pk):
         ),
         pk=pk,
     )
+    factory_timeline = getattr(quick_costing, "factory_timeline", None)
+    factory_default = factory_timeline.source_default if factory_timeline else None
+    if not factory_default and quick_costing.configured_factory_default_id:
+        factory_default = SimpleNamespace(
+            pk=quick_costing.configured_factory_default_id,
+            daily_amount=quick_costing.configured_factory_default_amount,
+            currency=quick_costing.configured_factory_default_currency,
+        )
+    user_roles = operations_role_names(request.user)
+    can_override_factory_rate = bool(
+        request.user.is_superuser
+        or user_roles.intersection({ROLE_CEO, ROLE_FINANCE, ROLE_ADMIN, ROLE_DIRECTOR, ROLE_MANAGER})
+    )
+    timeline_estimate_form = FactoryTimelineEstimateForm(
+        prefix="estimate",
+        can_override_rate=can_override_factory_rate,
+        initial={
+            "estimated_days": factory_timeline.estimated_production_days if factory_timeline else None,
+            "daily_factory_cost": factory_timeline.daily_factory_cost if factory_timeline else getattr(factory_default, "daily_amount", None),
+            "daily_cost_currency": factory_timeline.daily_cost_currency if factory_timeline else getattr(factory_default, "currency", ""),
+        },
+    )
+    timeline_actual_form = FactoryTimelineActualForm(
+        prefix="actual",
+        initial={"actual_days": factory_timeline.actual_production_days if factory_timeline else None},
+    )
     calc = _quick_costing_calc(quick_costing)
+    daily_cost = factory_timeline.daily_factory_cost if factory_timeline else getattr(factory_default, "daily_amount", None)
+    daily_currency = factory_timeline.daily_cost_currency if factory_timeline else getattr(factory_default, "currency", "")
+    try:
+        daily_cost_in_costing_currency = (
+            factory_cost_in_costing_currency(quick_costing, daily_cost, daily_currency)
+            if daily_cost is not None and daily_currency
+            else None
+        )
+    except FactoryTimelineError:
+        daily_cost_in_costing_currency = None
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     quick_costing._workflow_invoice_resolved = True
     revision_history = list(
@@ -1415,6 +1489,7 @@ def quick_costing_detail(request, pk):
             "opportunity",
             "opportunity__lead",
             "opportunity__assigned_to",
+            "factory_timeline",
         )
         .order_by("revision_number", "created_at", "pk")
     )
@@ -1480,7 +1555,25 @@ def quick_costing_detail(request, pk):
     reference_images = list(reference_images_for_opportunity(quick_costing.opportunity))
     context = {
         "quick_costing": quick_costing,
-        "factory_timeline": getattr(quick_costing, "factory_timeline", None),
+        "factory_timeline": factory_timeline,
+        "factory_default": factory_default,
+        "timeline_estimate_form": timeline_estimate_form,
+        "timeline_actual_form": timeline_actual_form,
+        "timeline_base_profit": calc["net_profit_total"] + calc["factory_timeline_cost"],
+        "timeline_daily_cost_in_costing_currency": daily_cost_in_costing_currency,
+        "can_edit_timeline_estimate": bool(
+            getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
+            and factory_default
+            and not quick_costing.is_locked
+            and (not factory_timeline or not factory_timeline.locked_at)
+        ),
+        "can_override_factory_rate": can_override_factory_rate,
+        "can_record_timeline_actual": bool(
+            getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
+            and factory_timeline
+            and factory_timeline.locked_at
+            and can_enter_production_cost(request.user)
+        ),
         "calc": calc,
         "invoice": invoice,
         "production_order": getattr(quick_costing, "production_order", None),
@@ -1553,7 +1646,10 @@ def quick_costing_edit(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to"),
+        QuickCosting.objects.select_related(
+            "salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to",
+            "factory_timeline", "factory_timeline__source_default",
+        ),
         pk=pk,
     )
     if quick_costing.status in {
@@ -1570,9 +1666,19 @@ def quick_costing_edit(request, pk):
     if request.method == "POST":
         form = QuickCostingForm(request.POST, instance=quick_costing, opportunity=quick_costing.opportunity)
         if form.is_valid():
-            quick_costing = form.save()
-            messages.success(request, "Quick costing updated.")
-            return redirect("quick_costing_detail", pk=pk)
+            try:
+                with transaction.atomic():
+                    quick_costing = form.save()
+                    refresh_estimated_factory_timeline(
+                        quick_costing,
+                        getattr(quick_costing, "factory_timeline", None),
+                        actor=request.user,
+                    )
+            except FactoryTimelineError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, "Quick costing updated.")
+                return redirect("quick_costing_detail", pk=pk)
         messages.error(request, "Please fix the errors below.")
     else:
         form = QuickCostingForm(instance=quick_costing, opportunity=quick_costing.opportunity)
@@ -2175,7 +2281,7 @@ def quick_costing_export_excel(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "salesperson", "approved_by", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
+        QuickCosting.objects.select_related("created_by", "salesperson", "approved_by", "opportunity", "opportunity__assigned_to", "opportunity__lead", "factory_timeline"),
         pk=pk,
     )
     try:
@@ -2221,6 +2327,10 @@ def quick_costing_export_excel(request, pk):
             ("Total Product and Production Cost", calc["display"]["product_production_cost_total_pair"]),
             ("Gross Profit Before Commission", calc["display"]["gross_profit_total_pair"]),
             ("Sales Commission", calc["display"]["commission_total_pair"]),
+        ])
+        if calc["factory_timeline_cost"]:
+            rows.append(("Factory Timeline Cost", calc["display"]["factory_timeline_cost_pair"]))
+        rows.extend([
             ("Final Profit", calc["display"]["net_profit_total_pair"]),
             ("Final Margin", f"{calc['display']['net_profit_margin_percent']}%"),
             ("Target Margin %", quick_costing.target_margin_percent or ""),
@@ -2254,7 +2364,7 @@ def quick_costing_export_pdf(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
+        QuickCosting.objects.select_related("created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead", "factory_timeline"),
         pk=pk,
     )
 
@@ -2386,9 +2496,13 @@ def quick_costing_export_pdf(request, pk):
             ("Total Product and Production Cost", calc["display"]["product_production_cost_per_piece_pair"], calc["display"]["product_production_cost_total_pair"]),
             ("Gross Profit Before Commission", calc["display"]["gross_profit_per_piece_pair"], calc["display"]["gross_profit_total_pair"]),
             ("Sales Commission", calc["display"]["commission_per_piece_pair"], calc["display"]["commission_total_pair"]),
+        ]
+        if calc["factory_timeline_cost"]:
+            rows.append(("Factory Timeline Cost", "", calc["display"]["factory_timeline_cost_pair"]))
+        rows.extend([
             ("Final Profit", calc["display"]["net_profit_per_piece_pair"], calc["display"]["net_profit_total_pair"]),
             ("Final Margin", "", f"{calc['display']['net_profit_margin_percent']}%"),
-        ]
+        ])
 
         y = draw_table_header(y)
         for index, (label, per_piece, total_order) in enumerate(rows, start=1):
@@ -2429,13 +2543,17 @@ def quick_costing_export_pdf(request, pk):
             ("Commission Per Piece", calc["display"]["commission_per_piece_pair"]),
             ("Commission Total", calc["display"]["commission_total_pair"]),
             ("Commission Percent", calc["display"]["commission_percent_label"]),
+        ]
+        if calc["factory_timeline_cost"]:
+            summary_rows.append(("Factory Timeline Cost", calc["display"]["factory_timeline_cost_pair"]))
+        summary_rows.extend([
             ("Net Profit Per Piece", calc["display"]["net_profit_per_piece_pair"]),
             ("Final Profit", calc["display"]["net_profit_total_pair"]),
             ("Final Margin", f"{calc['display']['net_profit_margin_percent']}%"),
             ("Target Margin", calc["display"]["target_margin_percent_label"]),
             ("Margin Status", calc["display"]["margin_status"]),
             ("Prepared By", text(prepared_by)),
-        ]
+        ])
 
         y -= 20
         summary_box_height = 52 + (((len(summary_rows) + 1) // 2) * 23)
