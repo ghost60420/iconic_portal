@@ -27,7 +27,11 @@ from crm.services.production_orders import _quick_costing_approved_summary
 from crm.services.production_profit import _local_cost
 
 
-@override_settings(FINANCIAL_CORE_WRITES_ENABLED=True, FINANCIAL_CORE_REPORTING_ACTIVE=True)
+@override_settings(
+    FINANCIAL_CORE_WRITES_ENABLED=True,
+    FINANCIAL_CORE_REPORTING_ACTIVE=True,
+    SECURE_SSL_REDIRECT=False,
+)
 class QuickCostingFactoryTimelineTests(TestCase):
     def setUp(self):
         self.admin = get_user_model().objects.create_superuser(
