@@ -127,6 +127,7 @@
     let visibleButtons = [];
     let activeIndex = -1;
     let renderToken = 0;
+    let suppressNextFocus = false;
 
     function closeResults() {
       results.hidden = true;
@@ -152,12 +153,16 @@
     }
 
     function choose(option) {
+      const inputAlreadyFocused = document.activeElement === input;
       select.value = option.value;
       input.setCustomValidity("");
       syncInput();
       closeResults();
       select.dispatchEvent(new Event("change", {bubbles: true}));
-      input.focus();
+      if (!inputAlreadyFocused) {
+        suppressNextFocus = true;
+        input.focus({preventScroll: true});
+      }
     }
 
     function addEmptyState(message) {
@@ -234,6 +239,10 @@
     }
 
     input.addEventListener("focus", function () {
+      if (suppressNextFocus) {
+        suppressNextFocus = false;
+        return;
+      }
       if (selectedOption(select)) input.select();
       renderResults();
     });
