@@ -98,6 +98,72 @@ COUNTRY_CENTER_SLUGS = {
     ),
 }
 
+ADVANCED_FORM_FIELDS = {
+    "rate_to_cad", "rate_to_bdt", "destination_rate_to_cad", "destination_rate_to_bdt",
+}
+
+FORM_SECTION_LAYOUTS = {
+    FinanceOperation.TYPE_CUSTOMER_PAYMENT: (
+        ("Transaction Details", "Date, country, currency, and payment reference.", ("transaction_date", "currency", "reference")),
+        ("Customer and Invoice", "Choose the customer first, then select an eligible outstanding invoice.", ("customer", "invoice")),
+        ("Payment", "Enter the received amount and the account receiving the funds.", ("amount", "payment_method", "payment_account", "supporting_document")),
+        ("Notes", "Record the business purpose and any useful review notes.", ("business_purpose", "notes")),
+        ("Review", "Use these controls only when an exception requires approval.", ("allow_customer_credit", "duplicate_override", "duplicate_reason")),
+    ),
+    FinanceOperation.TYPE_SUPPLIER_BILL: (
+        ("Bill Information", "Supplier bill number and dates.", ("transaction_date", "reference", "bill_date", "due_date", "currency")),
+        ("Supplier", "Select the approved supplier for this country.", ("supplier",)),
+        ("Expense Details", "Classify where the cost belongs.", ("category", "department", "production_order", "customer")),
+        ("Amounts", "The total must equal subtotal plus tax.", ("amount_before_tax", "tax", "total")),
+        ("Evidence", "Attach the bill and explain its business purpose.", ("supporting_document", "business_purpose", "notes")),
+    ),
+    FinanceOperation.TYPE_UTILITY_BILL: (
+        ("Utility Information", "Utility, vendor, and service location.", ("utility_type", "vendor", "location", "meter_or_account")),
+        ("Billing Period", "Dates covered by this utility bill.", ("billing_period_start", "billing_period_end")),
+        ("Bill Details", "Bill date, due date, amount, and reference.", ("transaction_date", "reference", "bill_date", "due_date", "currency", "amount")),
+        ("Payment", "Record whether the bill is paid and the account used.", ("payment_status", "payment_account")),
+        ("Evidence", "Attach the receipt or bill and add review notes.", ("supporting_document", "business_purpose", "notes")),
+    ),
+    FinanceOperation.TYPE_COMPANY_EXPENSE: (
+        ("Transaction Details", "Date, country, currency, and receipt reference.", ("transaction_date", "currency", "reference")),
+        ("Vendor", "Choose a configured supplier or provide the vendor name.", ("vendor", "vendor_name", "production_order")),
+        ("Expense Details", "Classify the expense and responsible department.", ("category", "department", "recurring", "due_date")),
+        ("Amounts", "The total must equal subtotal plus tax.", ("amount_before_tax", "tax", "total")),
+        ("Payment", "Record payment status, method, and account.", ("payment_status", "payment_method", "payment_account")),
+        ("Evidence", "Attach the receipt and explain the purpose.", ("supporting_document", "business_purpose", "notes")),
+    ),
+}
+
+
+def _form_sections(form, operation_type):
+    layout = FORM_SECTION_LAYOUTS.get(operation_type)
+    if layout is None:
+        layout = (
+            ("Transaction Details", "Core transaction information.", ("transaction_date", "currency", "reference")),
+            ("Workflow Details", "Information required for this workflow.", tuple()),
+            ("Evidence and Notes", "Supporting evidence and business context.", ("supporting_document", "business_purpose", "notes")),
+        )
+    visible_names = [
+        name for name, field in form.fields.items()
+        if not field.widget.is_hidden and name not in ADVANCED_FORM_FIELDS
+    ]
+    assigned = set()
+    sections = []
+    for title, help_text, names in layout:
+        if title == "Workflow Details" and not names:
+            names = tuple(
+                name for name in visible_names
+                if name not in assigned and name not in {"supporting_document", "business_purpose", "notes"}
+            )
+        fields = [form[name] for name in names if name in visible_names and name not in assigned]
+        if fields:
+            sections.append({"title": title, "help": help_text, "fields": fields})
+            assigned.update(field.name for field in fields)
+    remaining = [form[name] for name in visible_names if name not in assigned]
+    if remaining:
+        sections.append({"title": "Additional Details", "help": "Additional information required for this workflow.", "fields": remaining})
+    return sections
+
 
 def _requested_side(request):
     sides = accessible_financial_sides(request.user)
@@ -355,6 +421,7 @@ def finance_operation_create(request, workflow_slug):
     context.update(
         workflow=workflow,
         form=form,
+        form_sections=_form_sections(form, workflow["operation_type"]),
         recent=recent,
         category_form=category_form,
         can_manage_categories=can_manage_categories,
@@ -367,6 +434,7 @@ def finance_operation_create(request, workflow_slug):
             and _can_use_finance_advanced(request.user)
         ),
         can_view_form_advanced=_can_use_finance_advanced(request.user),
+        can_manage_setup=can_manage_financial_transactions(request.user),
     )
     return render(request, "crm/finance_operations/form.html", _common(request, **context))
 

@@ -707,6 +707,12 @@ class ExpenseCategory(FinancialAuditFields):
         self.code = (self.code or "").upper().strip()
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        label = self.name
+        if self.subcategory:
+            label = f"{label} / {self.subcategory}"
+        return f"{label} ({self.code})"
+
 
 class ExpenseRecord(FinancialAuditFields):
     APPROVAL_DRAFT = "DRAFT"
@@ -1001,6 +1007,9 @@ class FactoryRunningCostDefault(FinancialAuditFields):
     def clean(self):
         if self.effective_to and self.effective_to < self.effective_from:
             raise ValidationError({"effective_to": "Effective-to cannot precede effective-from."})
+
+    def __str__(self):
+        return f"{self.name} | {self.currency} {self.daily_amount:,.2f} per day"
 
 
 class QuickCostingTimelineSnapshot(FinancialAuditFields):

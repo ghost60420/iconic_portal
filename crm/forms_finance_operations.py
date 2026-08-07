@@ -1,9 +1,11 @@
 from calendar import monthrange
+from collections import OrderedDict
 from datetime import date
 from decimal import Decimal
 
 from django import forms
-from django.db.models import Q
+from django.db.models import F, Q
+from django.forms.models import ModelChoiceIterator
 
 from crm.models import (
     CashBankAccount,
@@ -68,7 +70,9 @@ def _customers_for_sides(sides):
     query = Q(pk__in=[])
     if "CA" in sides:
         query |= (
-            ~Q(market__iexact="BD")
+            Q(market__iexact="CA")
+            | Q(country__iexact="CA")
+            | Q(country__icontains="canada")
             | Q(invoice__invoice_region="CA")
             | Q(invoice__invoice_region="", invoice__currency__in=("CAD", "USD"))
             | Q(production_orders__factory_location__iexact="ca")
@@ -76,11 +80,31 @@ def _customers_for_sides(sides):
     if "BD" in sides:
         query |= (
             Q(market__iexact="BD")
+            | Q(country__iexact="BD")
+            | Q(country__icontains="bangladesh")
             | Q(invoice__invoice_region="BD")
             | Q(invoice__invoice_region="", invoice__currency="BDT")
             | Q(production_orders__factory_location__iexact="bd")
         )
-    return Customer.objects.filter(query).distinct()
+    return Customer.objects.filter(query, is_active=True, is_archived=False).distinct()
+
+
+def _eligible_invoices(user, sides):
+    issued = Q(financial_state__document_status="ISSUED") | Q(status__in=("sent", "partial"))
+    return (
+        scope_invoices_for_user(
+            Invoice.objects.filter(
+                issued,
+                is_archived=False,
+                total_amount__gt=F("paid_amount"),
+            ).select_related("customer", "order", "financial_state"),
+            user,
+        )
+        .filter(_invoice_side_query(sides))
+        .exclude(status="cancelled")
+        .distinct()
+        .order_by("due_date", "id")
+    )
 
 
 def _departments_for_sides(sides):
@@ -92,7 +116,12 @@ def _departments_for_sides(sides):
 
 class InvoiceBalanceChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, invoice):
-        return f"{invoice.invoice_number} - {invoice.currency} {invoice.balance:,.2f} remaining"
+        date_label = invoice.effective_invoice_date.isoformat() if invoice.effective_invoice_date else "No date"
+        return (
+            f"{invoice.invoice_number} - {date_label} - {invoice.currency} {invoice.total_amount:,.2f} total - "
+            f"{invoice.paid_amount:,.2f} paid - {invoice.balance:,.2f} outstanding - "
+            f"{invoice.payment_status_label}"
+        )
 
 
 class SupplierBillBalanceChoiceField(forms.ModelChoiceField):
@@ -101,6 +130,174 @@ class SupplierBillBalanceChoiceField(forms.ModelChoiceField):
             f"{bill.bill_number} - {bill.currency} {bill.total_amount:,.2f} total; "
             f"{bill.remaining_amount:,.2f} outstanding"
         )
+
+
+def _country_context(side):
+    return {"CA": ("Canada", "CAD"), "BD": ("Bangladesh", "BDT")}.get(side, ("", ""))
+
+
+def _customer_side(customer):
+    market = (customer.market or "").upper().strip()
+    country = (customer.country or "").lower()
+    if market == "BD" or market == "BANGLADESH" or "bangladesh" in country:
+        return "BD"
+    if market == "CA" or market == "CANADA" or "canada" in country:
+        return "CA"
+    return ""
+
+
+def _category_group(category):
+    text = f"{category.code} {category.name} {category.subcategory}".upper()
+    groups = (
+        ("Payroll", ("SALARY", "WAGES", "BONUS", "OVERTIME", "PAYROLL")),
+        ("Utilities", ("ELECTRIC", "HYDRO", "WATER", "GAS", "INTERNET", "PHONE", "UTILITY")),
+        ("Marketing", ("MARKETING", "ADVERT", "PROMOTION")),
+        ("Travel", ("TRAVEL", "VEHICLE", "TRANSPORT")),
+        ("Maintenance", ("MAINTENANCE", "REPAIR", "MACHINE_SERVICE", "CLEANING")),
+        ("Professional Fees", ("PROFESSIONAL", "LEGAL", "CONSULT", "AUDIT")),
+        ("Taxes", ("TAX", "DUTY")),
+        ("Factory", ("FACTORY", "PRODUCTION", "SECURITY", "FUEL")),
+        ("Office", ("OFFICE", "SOFTWARE", "INSURANCE", "BANK_FEE")),
+    )
+    for group, markers in groups:
+        if any(marker in text for marker in markers):
+            return group
+    return "Other"
+
+
+class GroupedExpenseCategoryIterator(ModelChoiceIterator):
+    def __iter__(self):
+        if self.field.empty_label is not None:
+            yield ("", self.field.empty_label)
+        groups = OrderedDict()
+        queryset = self.queryset
+        if not queryset._prefetch_related_lookups:
+            queryset = queryset.iterator()
+        for category in queryset:
+            groups.setdefault(_category_group(category), []).append(self.choice(category))
+        for group, choices in groups.items():
+            yield (group, choices)
+
+
+class ExpenseCategoryChoiceField(forms.ModelChoiceField):
+    iterator = GroupedExpenseCategoryIterator
+
+
+def _option_metadata(kind, instance, side=""):
+    country, currency = _country_context(side)
+    if kind == "customer":
+        customer_side = side or _customer_side(instance)
+        country, currency = _country_context(customer_side)
+        primary = instance.account_brand or instance.contact_name or "Customer"
+        secondary = " | ".join(
+            value for value in (instance.customer_code, country or instance.country, currency, instance.phone, instance.email)
+            if value
+        )
+        search = " ".join(
+            str(value or "")
+            for value in (primary, instance.customer_code, instance.contact_name, instance.phone, instance.email, instance.country)
+        )
+        return {"primary": primary, "secondary": secondary, "search": search, "side": customer_side}
+    if kind == "invoice":
+        customer = instance.customer
+        invoice_side = instance.invoice_region or ("BD" if instance.currency == "BDT" else "CA")
+        customer_name = customer.account_brand or customer.contact_name if customer else "Customer unavailable"
+        order_reference = ""
+        if instance.order:
+            order_reference = instance.order.purchase_order_number or instance.order.title or str(instance.order.pk)
+        reference = (instance.notes or "").strip()
+        secondary = (
+            f"{instance.effective_invoice_date:%b %d, %Y} | {customer_name} | "
+            f"{instance.currency} {instance.total_amount:,.2f} total | {instance.paid_amount:,.2f} paid | "
+            f"{instance.balance:,.2f} outstanding | {instance.payment_status_label}"
+        )
+        if order_reference:
+            secondary += f" | PO {order_reference}"
+        search = " ".join(
+            str(value or "")
+            for value in (
+                instance.invoice_number, customer_name, reference, instance.total_amount,
+                instance.paid_amount, instance.balance, order_reference,
+            )
+        )
+        return {
+            "primary": instance.invoice_number,
+            "secondary": secondary,
+            "search": search,
+            "customer-id": instance.customer_id or "",
+            "side": invoice_side,
+            "currency": instance.currency,
+            "total": instance.total_amount,
+            "paid": instance.paid_amount,
+            "outstanding": instance.balance,
+            "status": instance.payment_status_label,
+        }
+    if kind == "supplier":
+        secondary = " | ".join(
+            value for value in (
+                instance.code, instance.get_side_display(), instance.default_currency,
+                instance.contact_name, instance.phone, instance.email,
+            ) if value
+        )
+        return {
+            "primary": instance.name,
+            "secondary": secondary,
+            "search": f"{instance.name} {instance.code} {instance.contact_name} {instance.phone} {instance.email}",
+            "side": instance.side,
+            "currency": instance.default_currency,
+        }
+    if kind == "account":
+        return {
+            "primary": f"{instance.name} | {instance.currency}",
+            "secondary": f"{instance.get_side_display()} | {instance.get_kind_display()}",
+            "search": f"{instance.name} {instance.currency} {instance.get_side_display()} {instance.get_kind_display()}",
+            "side": instance.side,
+            "currency": instance.currency,
+        }
+    if kind == "category":
+        return {
+            "primary": instance.name,
+            "secondary": " | ".join(value for value in (instance.subcategory, instance.code) if value),
+            "search": f"{instance.name} {instance.subcategory} {instance.code} {_category_group(instance)}",
+            "group": _category_group(instance),
+        }
+    if kind == "supplier_bill":
+        return {
+            "primary": instance.bill_number,
+            "secondary": (
+                f"{instance.supplier.name} | {instance.currency} {instance.total_amount:,.2f} total | "
+                f"{instance.remaining_amount:,.2f} outstanding"
+            ),
+            "search": f"{instance.bill_number} {instance.supplier.name} {instance.total_amount} {instance.remaining_amount}",
+            "supplier-id": instance.supplier_id,
+            "currency": instance.currency,
+            "outstanding": instance.remaining_amount,
+        }
+    return {"primary": str(instance), "secondary": "", "search": str(instance)}
+
+
+class FinanceSearchSelect(forms.Select):
+    def __init__(self, *args, finance_kind="record", search_placeholder="Search...", empty_message="No results.", **kwargs):
+        self.finance_kind = finance_kind
+        attrs = dict(kwargs.pop("attrs", {}) or {})
+        attrs.update(
+            {
+                "class": "form-select finance-native-select finance-searchable-select",
+                "data-finance-search": finance_kind,
+                "data-search-placeholder": search_placeholder,
+                "data-empty-message": empty_message,
+            }
+        )
+        super().__init__(*args, attrs=attrs, **kwargs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        instance = getattr(value, "instance", None)
+        if instance is not None:
+            metadata = _option_metadata(self.finance_kind, instance, self.attrs.get("data-finance-side", ""))
+            for key, item in metadata.items():
+                option["attrs"][f"data-{key}"] = str(item)
+        return option
 
 
 class FinanceOperationForm(forms.Form):
@@ -145,6 +342,7 @@ class FinanceOperationForm(forms.Form):
         self.fields["reference"].label = "Reference"
         self.fields["business_purpose"].label = "Purpose"
         self.fields["supporting_document"].label = "Receipt"
+        self._configure_searchable_fields()
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
@@ -152,6 +350,62 @@ class FinanceOperationForm(forms.Form):
                 field.widget.attrs.setdefault("class", "form-select")
             else:
                 field.widget.attrs.setdefault("class", "form-control")
+
+    def _configure_searchable_fields(self):
+        country_name, _currency = _country_context(self.locked_side)
+        kind_by_model = {
+            Customer: "customer",
+            Invoice: "invoice",
+            Supplier: "supplier",
+            CashBankAccount: "account",
+            ExpenseCategory: "category",
+            SupplierBill: "supplier_bill",
+            ProductionOrder: "production_order",
+            Department: "department",
+            EmployeeProfile: "staff",
+            QuickCosting: "costing",
+            FactoryRunningCostDefault: "factory_rate",
+            InventoryItem: "inventory",
+        }
+        placeholders = {
+            "customer": "Search customer...",
+            "invoice": "Search invoice...",
+            "supplier": "Search supplier...",
+            "account": "Search payment account...",
+            "category": "Search expense category...",
+            "supplier_bill": "Search supplier bill...",
+            "production_order": "Search production order...",
+            "department": "Search department...",
+            "staff": "Search staff...",
+            "costing": "Search Quick Costing...",
+            "factory_rate": "Search factory rate...",
+            "inventory": "Search inventory...",
+        }
+        empty_messages = {
+            "customer": f"No {country_name or 'eligible'} customers found.",
+            "invoice": "Select a customer to view eligible invoices.",
+            "supplier": f"No {country_name or 'eligible'} suppliers configured.",
+            "account": f"No {country_name or 'eligible'} payment accounts configured.",
+            "category": "No active expense categories configured.",
+            "supplier_bill": "Select a supplier to view approved outstanding bills.",
+        }
+        for field in self.fields.values():
+            if not isinstance(field, forms.ModelChoiceField):
+                continue
+            kind = kind_by_model.get(field.queryset.model, "record")
+            widget = FinanceSearchSelect(
+                finance_kind=kind,
+                search_placeholder=placeholders.get(kind, "Search records..."),
+                empty_message=empty_messages.get(kind, "No matching records."),
+            )
+            if self.locked_side:
+                widget.attrs["data-finance-side"] = self.locked_side
+            if kind == "invoice":
+                widget.attrs["data-parent-field"] = "customer"
+            elif kind == "supplier_bill":
+                widget.attrs["data-parent-field"] = "supplier"
+            field.widget = widget
+            field.widget.choices = field.choices
 
     def clean_side(self):
         side = self.cleaned_data["side"]
@@ -202,14 +456,16 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        invoices = scope_invoices_for_user(
-            Invoice.objects.filter(financial_state__document_status="ISSUED").select_related("customer"), self.user
-        ).filter(_invoice_side_query(self.allowed_sides)).exclude(status="cancelled").order_by("due_date", "id")
+        invoices = _eligible_invoices(self.user, self.allowed_sides)
         self.fields["invoice"].queryset = invoices
-        self.fields["customer"].queryset = Customer.objects.filter(invoice__in=invoices).distinct().order_by(
+        self.fields["customer"].queryset = _customers_for_sides(self.allowed_sides).order_by(
             "account_brand", "contact_name"
         )
         self.fields["payment_account"].queryset = self._accounts()
+        self.fields["customer"].label = "Customer"
+        self.fields["invoice"].label = "Invoice"
+        self.fields["amount"].label = "Amount"
+        self.fields["payment_account"].label = "Payment Account"
 
     def clean(self):
         cleaned = super().clean()
@@ -285,9 +541,7 @@ class CustomerAdjustmentOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, initial_kind=None, **kwargs):
         super().__init__(*args, **kwargs)
-        invoices = scope_invoices_for_user(
-            Invoice.objects.select_related("customer", "financial_state"), self.user
-        ).filter(_invoice_side_query(self.allowed_sides)).exclude(status="cancelled")
+        invoices = _eligible_invoices(self.user, self.allowed_sides)
         self.fields["invoice"].queryset = invoices
         self.fields["customer"].queryset = _customers_for_sides(self.allowed_sides).order_by(
             "account_brand", "contact_name"
@@ -341,7 +595,7 @@ class SupplierBillOperationForm(FinanceOperationForm):
     amount_before_tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
     tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
     total = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
-    category = forms.ModelChoiceField(queryset=ExpenseCategory.objects.none())
+    category = ExpenseCategoryChoiceField(queryset=ExpenseCategory.objects.none())
     department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
     production_order = forms.ModelChoiceField(queryset=ProductionOrder.objects.none(), required=False)
     customer = forms.ModelChoiceField(queryset=Customer.objects.all(), required=False)
@@ -354,6 +608,10 @@ class SupplierBillOperationForm(FinanceOperationForm):
         self.fields["department"].queryset = _departments_for_sides(sides)
         self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
         self.fields["customer"].queryset = _customers_for_sides(sides).order_by("account_brand", "contact_name")
+        self.fields["reference"].label = "Bill Number"
+        self.fields["amount_before_tax"].label = "Subtotal"
+        self.fields["tax"].label = "Tax"
+        self.fields["total"].label = "Total"
 
     def clean(self):
         cleaned = super().clean()
@@ -463,7 +721,7 @@ class SupplierPaymentOperationForm(FinanceOperationForm):
 class ExpenseOperationForm(FinanceOperationForm):
     vendor = forms.ModelChoiceField(queryset=Supplier.objects.none(), required=False)
     vendor_name = forms.CharField(max_length=200, required=False)
-    category = forms.ModelChoiceField(queryset=ExpenseCategory.objects.none())
+    category = ExpenseCategoryChoiceField(queryset=ExpenseCategory.objects.none())
     department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
     amount_before_tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
     tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
@@ -483,6 +741,10 @@ class ExpenseOperationForm(FinanceOperationForm):
         self.fields["department"].queryset = _departments_for_sides(sides)
         self.fields["production_order"].queryset = _production_orders_for_sides(sides).order_by("-created_at")
         self.fields["payment_account"].queryset = self._accounts()
+        self.fields["amount_before_tax"].label = "Subtotal"
+        self.fields["tax"].label = "Tax"
+        self.fields["total"].label = "Total"
+        self.fields["payment_account"].label = "Payment Account"
 
     def clean(self):
         cleaned = super().clean()
@@ -556,6 +818,8 @@ class UtilityOperationForm(FinanceOperationForm):
         sides = self.allowed_sides
         self.fields["vendor"].queryset = Supplier.objects.filter(is_active=True, side__in=sides).order_by("name")
         self.fields["payment_account"].queryset = self._accounts()
+        self.fields["meter_or_account"].label = "Account or Meter Number"
+        self.fields["payment_account"].label = "Payment Account"
 
     def clean(self):
         cleaned = super().clean()

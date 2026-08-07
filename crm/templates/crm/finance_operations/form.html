@@ -1,12 +1,178 @@
-{% extends "crm/base.html" %}{% load humanize %}{% block content %}
-<main class="fc-shell">{% include "crm/finance_operations/_styles.html" %}{% include "crm/finance_operations/_nav.html" %}
-  <div class="ops-toolbar"><div><h2 style="margin:0">{{ workflow.title }}</h2><p class="ops-form-note">{{ workflow.group }}</p></div><a class="fc-btn" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}"><i data-lucide="arrow-left"></i>Back</a></div>
-  {% if locked_side %}<div class="ops-no-ledger" style="margin-top:12px"><strong>{{ country_name }} transaction</strong><br>Business side is locked to {{ country_name }}. Only approved {{ country_name }} records are available.{% if can_switch_side %} <a class="fc-link" href="{% url 'finance_operation_create' workflow.slug %}?side={{ other_side }}">Switch country with warning</a>.{% endif %}</div>{% endif %}
-  {% if workflow.operation_type == 'CUSTOMER_REFUND' or workflow.operation_type == 'CUSTOMER_CREDIT_NOTE' or workflow.operation_type == 'CUSTOMER_CREDIT' %}<div class="ops-related" style="margin-top:12px"><a href="{% url 'finance_operation_create' 'customer-refund' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Refund</a><a href="{% url 'finance_operation_create' 'customer-credit-note' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Credit Note</a><a href="{% url 'finance_operation_create' 'customer-credit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Unapplied Credit</a></div>{% endif %}
-  {% if workflow.group == 'Bank' %}<div class="ops-related" style="margin-top:12px"><a href="{% url 'finance_operation_create' 'bank-deposit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Deposit</a><a href="{% url 'finance_operation_create' 'bank-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Withdrawal</a><a href="{% url 'finance_operation_create' 'cash-deposit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cash Deposit</a><a href="{% url 'finance_operation_create' 'cash-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cash Withdrawal</a><a href="{% url 'finance_operation_create' 'money-transfer' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Transfer</a><a href="{% url 'finance_operation_create' 'bank-fee' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Fee</a><a href="{% url 'finance_operation_create' 'processor-fee' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Processor Fee</a></div>{% endif %}
-  {% if workflow.group == 'Owner and Loan' %}<div class="ops-related" style="margin-top:12px"><a href="{% url 'finance_operation_create' 'owner-investment' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Owner Investment</a><a href="{% url 'finance_operation_create' 'owner-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Owner Withdrawal</a><a href="{% url 'finance_operation_create' 'loan-received' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Loan Received</a><a href="{% url 'finance_operation_create' 'loan-principal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Principal</a><a href="{% url 'finance_operation_create' 'loan-interest' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Interest</a><a href="{% url 'finance_operation_create' 'shareholder-advance' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Shareholder Advance</a><a href="{% url 'finance_operation_create' 'shareholder-repayment' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Shareholder Repayment</a></div>{% endif %}
-  <section class="fc-band"><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.non_field_errors }}<div class="fc-form-grid">{% for field in form %}{% if field.is_hidden %}{{ field }}{% elif field.name != 'rate_to_cad' and field.name != 'rate_to_bdt' and field.name != 'destination_rate_to_cad' and field.name != 'destination_rate_to_bdt' %}<div class="fc-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="fc-help">{{ field.help_text }}</div>{% endif %}<div class="fc-errors">{{ field.errors }}</div></div>{% endif %}{% endfor %}</div>{% if can_view_form_advanced %}<details class="fc-band" style="margin-top:12px"><summary>Advanced Details</summary><div class="fc-form-grid" style="margin-top:12px">{% for field in form %}{% if field.name == 'rate_to_cad' or field.name == 'rate_to_bdt' or field.name == 'destination_rate_to_cad' or field.name == 'destination_rate_to_bdt' %}<div class="fc-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="fc-help">{{ field.help_text }}</div>{% endif %}<div class="fc-errors">{{ field.errors }}</div></div>{% endif %}{% endfor %}</div></details>{% endif %}<div class="fc-actions"><button class="fc-btn primary" type="submit"><i data-lucide="send"></i>Submit for Approval</button><a class="fc-btn" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cancel</a></div></form></section>
-  {% if can_manage_categories %}<section class="fc-band"><h2>Expense Categories</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="category"><div class="fc-form-grid">{% for field in category_form %}<div class="fc-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="fc-errors">{{ field.errors }}</div></div>{% endfor %}</div><button class="fc-btn" type="submit"><i data-lucide="folder-plus"></i>Add Category</button></form></section>{% endif %}
-  {% if utility_history or utility_budgets %}<div class="fc-split"><section class="fc-band"><h2>Previous Utility Periods</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Date</th><th>Vendor</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in utility_history %}<tr><td>{{ row.transaction_date }}</td><td>{{ row.supplier }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td>{{ row.get_state_display }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No previous utility entries.</td></tr>{% endfor %}</tbody></table></div></section><section class="fc-band"><h2>Utility Budget</h2><div class="fc-table-wrap"><table class="fc-table"><thead><tr><th>Month</th><th>Side</th><th class="num">Budget</th></tr></thead><tbody>{% for row in utility_budgets %}<tr><td>{{ row.year }}-{{ row.month|stringformat:"02d" }}</td><td>{{ row.side|default:"Combined" }}</td><td class="num">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="3" class="fc-empty">No utility budget configured.</td></tr>{% endfor %}</tbody></table></div></section></div>{% endif %}
-  <section class="fc-band"><h2>Recent {{ workflow.title }}</h2><div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Operation</th><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in recent %}<tr><td><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td>{{ row.transaction_date }}</td><td>{{ row.reference }}</td><td class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td>{{ row.get_state_display }}</td></tr>{% empty %}<tr><td colspan="5" class="fc-empty">No records for this workflow.</td></tr>{% endfor %}</tbody></table></div></section>
-</main><script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>{% endblock %}
+{% extends "crm/base.html" %}
+{% load humanize static %}
+{% block content %}
+<main class="fc-shell ops-form-page" data-country="{{ locked_side }}" data-can-manage-setup="{% if can_manage_setup %}1{% else %}0{% endif %}">
+  {% include "crm/finance_operations/_styles.html" %}
+  {% include "crm/finance_operations/_nav.html" %}
+
+  <div class="ops-toolbar ops-form-toolbar">
+    <div>
+      <div class="ops-title-line">
+        <h1>{{ workflow.title }}</h1>
+        {% if locked_side %}
+          <span class="ops-country-badge country-{{ locked_side|lower }}">
+            {{ country_name }} Finance <b>{% if locked_side == 'BD' %}BDT{% else %}CAD{% endif %}</b>
+          </span>
+        {% endif %}
+      </div>
+      <p class="ops-form-note">{{ workflow.group }}</p>
+    </div>
+    <a class="fc-btn ops-btn-outline" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">
+      <i data-lucide="arrow-left"></i>Back
+    </a>
+  </div>
+
+  {% if locked_side %}
+    <div class="ops-country-lock" role="status">
+      <i data-lucide="lock-keyhole"></i>
+      <span>Business side is locked to {{ country_name }}. Only approved {{ country_name }} records are available.</span>
+      {% if can_switch_side %}
+        <a class="fc-link" href="{% url 'finance_operation_create' workflow.slug %}?side={{ other_side }}">Switch country with warning</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if workflow.operation_type == 'CUSTOMER_REFUND' or workflow.operation_type == 'CUSTOMER_CREDIT_NOTE' or workflow.operation_type == 'CUSTOMER_CREDIT' %}
+    <nav class="ops-related" aria-label="Customer adjustment workflows">
+      <a href="{% url 'finance_operation_create' 'customer-refund' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Refund</a>
+      <a href="{% url 'finance_operation_create' 'customer-credit-note' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Credit Note</a>
+      <a href="{% url 'finance_operation_create' 'customer-credit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Unapplied Credit</a>
+    </nav>
+  {% endif %}
+  {% if workflow.group == 'Bank' %}
+    <nav class="ops-related" aria-label="Bank and cash workflows">
+      <a href="{% url 'finance_operation_create' 'bank-deposit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Deposit</a>
+      <a href="{% url 'finance_operation_create' 'bank-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Withdrawal</a>
+      <a href="{% url 'finance_operation_create' 'cash-deposit' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cash Deposit</a>
+      <a href="{% url 'finance_operation_create' 'cash-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cash Withdrawal</a>
+      <a href="{% url 'finance_operation_create' 'money-transfer' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Transfer</a>
+      <a href="{% url 'finance_operation_create' 'bank-fee' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Bank Fee</a>
+      <a href="{% url 'finance_operation_create' 'processor-fee' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Processor Fee</a>
+    </nav>
+  {% endif %}
+  {% if workflow.group == 'Owner and Loan' %}
+    <nav class="ops-related" aria-label="Owner and loan workflows">
+      <a href="{% url 'finance_operation_create' 'owner-investment' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Owner Investment</a>
+      <a href="{% url 'finance_operation_create' 'owner-withdrawal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Owner Withdrawal</a>
+      <a href="{% url 'finance_operation_create' 'loan-received' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Loan Received</a>
+      <a href="{% url 'finance_operation_create' 'loan-principal' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Principal</a>
+      <a href="{% url 'finance_operation_create' 'loan-interest' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Interest</a>
+      <a href="{% url 'finance_operation_create' 'shareholder-advance' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Shareholder Advance</a>
+      <a href="{% url 'finance_operation_create' 'shareholder-repayment' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Shareholder Repayment</a>
+    </nav>
+  {% endif %}
+
+  <form class="ops-finance-form" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% for field in form %}{% if field.is_hidden %}{{ field }}{% endif %}{% endfor %}
+    {% if form.non_field_errors %}
+      <div class="fc-alert bad ops-validation-summary" role="alert">
+        <i data-lucide="circle-alert"></i>
+        <div>{{ form.non_field_errors }}</div>
+      </div>
+    {% endif %}
+
+    {% for section in form_sections %}
+      <section class="ops-form-section" aria-labelledby="ops-section-{{ forloop.counter }}">
+        <header class="ops-form-section-head">
+          <div class="ops-section-number">{{ forloop.counter }}</div>
+          <div>
+            <h2 id="ops-section-{{ forloop.counter }}">{{ section.title }}</h2>
+            <p>{{ section.help }}</p>
+          </div>
+        </header>
+        <div class="ops-form-grid">
+          {% for field in section.fields %}
+            <div class="fc-field ops-field field-{{ field.name }}{% if field.errors %} has-error{% endif %}">
+              <label for="{{ field.id_for_label }}">
+                {{ field.label }}{% if field.field.required %}<span class="ops-required" aria-label="required">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}<div class="fc-help">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="fc-errors" role="alert"><i data-lucide="circle-alert"></i>{{ field.errors }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    {% if workflow.operation_type == 'CUSTOMER_PAYMENT' %}
+      <aside class="ops-payment-summary" aria-labelledby="payment-summary-title">
+        <div class="ops-summary-head">
+          <div><span>Review</span><h2 id="payment-summary-title">Payment Summary</h2></div>
+          <i data-lucide="receipt-text"></i>
+        </div>
+        <dl>
+          <div><dt>Customer</dt><dd data-summary="customer">Not selected</dd></div>
+          <div><dt>Invoice</dt><dd data-summary="invoice">Not selected</dd></div>
+          <div><dt>Invoice Total</dt><dd data-summary="total">-</dd></div>
+          <div><dt>Already Paid</dt><dd data-summary="paid">-</dd></div>
+          <div><dt>Outstanding</dt><dd data-summary="outstanding">-</dd></div>
+          <div><dt>Payment Entered</dt><dd data-summary="payment">-</dd></div>
+          <div class="ops-summary-remaining"><dt>Remaining After Payment</dt><dd data-summary="remaining">-</dd></div>
+        </dl>
+      </aside>
+    {% endif %}
+
+    {% if can_view_form_advanced %}
+      <details class="ops-advanced">
+        <summary><i data-lucide="settings-2"></i>Advanced Details</summary>
+        <p>Approved exchange-rate details used by Finance and CEO reviewers.</p>
+        <div class="ops-form-grid">
+          {% for field in form %}
+            {% if field.name == 'rate_to_cad' or field.name == 'rate_to_bdt' or field.name == 'destination_rate_to_cad' or field.name == 'destination_rate_to_bdt' %}
+              <div class="fc-field ops-field{% if field.errors %} has-error{% endif %}">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="fc-help">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<div class="fc-errors" role="alert">{{ field.errors }}</div>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
+
+    <div class="ops-form-actions">
+      <button class="fc-btn primary ops-submit" type="submit"><i data-lucide="send"></i>Submit for Approval</button>
+      <a class="fc-btn ops-btn-outline" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cancel</a>
+    </div>
+  </form>
+
+  {% if can_manage_categories %}
+    <section class="fc-band ops-category-setup" id="expense-categories">
+      <h2>Expense Categories</h2>
+      <form method="post">
+        {% csrf_token %}<input type="hidden" name="action" value="category">
+        <div class="fc-form-grid">
+          {% for field in category_form %}
+            <div class="fc-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}<div class="fc-errors">{{ field.errors }}</div></div>
+          {% endfor %}
+        </div>
+        <button class="fc-btn" type="submit"><i data-lucide="folder-plus"></i>Add Category</button>
+      </form>
+    </section>
+  {% endif %}
+
+  {% if utility_history or utility_budgets %}
+    <div class="fc-split">
+      <section class="fc-band"><h2>Previous Utility Periods</h2><div class="fc-table-wrap"><table class="fc-table ops-responsive-table"><thead><tr><th>Date</th><th>Vendor</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in utility_history %}<tr><td data-label="Date">{{ row.transaction_date }}</td><td data-label="Vendor">{{ row.supplier }}</td><td data-label="Amount" class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td data-label="Status">{{ row.get_state_display }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No previous utility entries.</td></tr>{% endfor %}</tbody></table></div></section>
+      <section class="fc-band"><h2>Utility Budget</h2><div class="fc-table-wrap"><table class="fc-table ops-responsive-table"><thead><tr><th>Month</th><th>Side</th><th class="num">Budget</th></tr></thead><tbody>{% for row in utility_budgets %}<tr><td data-label="Month">{{ row.year }}-{{ row.month|stringformat:"02d" }}</td><td data-label="Side">{{ row.side|default:"Combined" }}</td><td data-label="Budget" class="num">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td></tr>{% empty %}<tr><td colspan="3" class="fc-empty">No utility budget configured.</td></tr>{% endfor %}</tbody></table></div></section>
+    </div>
+  {% endif %}
+
+  <section class="fc-band ops-recent-section">
+    <h2>Recent {{ workflow.title }}</h2>
+    <div class="fc-table-wrap"><table class="fc-table ops-table ops-responsive-table"><thead><tr><th>Operation</th><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>{% for row in recent %}<tr><td data-label="Operation"><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td data-label="Date">{{ row.transaction_date }}</td><td data-label="Reference">{{ row.reference }}</td><td data-label="Amount" class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td data-label="Status"><span class="ops-state {{ row.state|lower }}">{{ row.get_state_display }}</span></td></tr>{% empty %}<tr><td colspan="5" class="fc-empty">No records for this workflow.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+</main>
+
+<script id="finance-selector-setup" type="application/json">{
+  "supplier": "{% url 'financial_supplier_center' %}",
+  "account": "{% url 'financial_currency_center' %}",
+  "category": "#expense-categories"
+}</script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<script src="{% static 'crm/finance_form.js' %}"></script>
+<script>if(window.lucide){lucide.createIcons();}</script>
+{% endblock %}
