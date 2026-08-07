@@ -278,6 +278,20 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertContains(report, "BDT")
         self.assertContains(report, "Do not enter Canada transactions here")
 
+        country_pages = (
+            ("accounting_ca_master", "Canada Finance", "CANADA_TRANSFER"),
+            ("accounting_ca_grid", "Canada Finance", "CANADA_ENTRIES"),
+            ("accounting_bd_daily", "Bangladesh Finance", "BANGLADESH_DAILY"),
+            ("accounting_bd_grid", "Bangladesh Finance", "BANGLADESH_ENTRIES"),
+        )
+        for url_name, country_label, guidance_key in country_pages:
+            with self.subTest(url_name=url_name):
+                response = client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, country_label)
+                self.assertContains(response, f'data-finance-guidance="{guidance_key}"')
+                self.assertEqual(response.content.count(b'data-finance-guidance='), 1)
+
     def test_major_finance_reports_render_read_only_guidance(self):
         cases = (
             ("profit_loss_dashboard", "Show how much the company earned and spent"),
@@ -287,6 +301,8 @@ class FinanceFormUsabilityTests(TestCase):
             ("accounts_payable_dashboard", "Show approved supplier bills that are still unpaid"),
             ("executive_financial_dashboard", "Show an executive view of revenue, profit, cash"),
             ("kpi_scorecard_dashboard", "Show an executive view of revenue, profit, cash"),
+            ("budget_vs_actual_dashboard", "Compare the approved budget with posted actual results"),
+            ("financial_forecast_dashboard", "Show a read-only cash forecast"),
             ("production_profit_report", "Compare order revenue with linked production costs"),
         )
         client = self.client_for_user()

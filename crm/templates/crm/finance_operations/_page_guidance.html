@@ -65,7 +65,8 @@
         {% elif guidance_key == 'reconciliations' %}Compare company account activity with an external bank statement.
         {% elif guidance_key == 'production_costs' %}Review and manage Financial Core production cost records.
         {% elif guidance_key == 'payroll' %}Review and manage restricted Financial Core payroll batches.
-        {% elif guidance_key == 'budget_actual' %}Compare the approved budget with posted actual results for the selected month.
+        {% elif guidance_key == 'budget_actual' or guidance_key == 'legacy_budget_actual' %}Compare the approved budget with posted actual results for the selected period.
+        {% elif guidance_key == 'financial_forecast' %}Show a read-only cash forecast from recent activity, open receivables, and open payables.
         {% elif guidance_key == 'profit_loss' or guidance_key == 'legacy_profit_loss' %}Show how much the company earned and spent during the selected period.
         {% elif guidance_key == 'balance_sheet' or guidance_key == 'legacy_balance_sheet' %}Show company assets, liabilities, and equity as of the selected date.
         {% elif guidance_key == 'cash_flow' or guidance_key == 'legacy_cash_flow' %}Show cash entering and leaving the company during the selected period.
@@ -76,6 +77,10 @@
         {% elif guidance_key == 'executive_dashboard' or guidance_key == 'FINANCE_DASHBOARD' %}Show an executive view of revenue, profit, cash, receivables, payables, and financial health.
         {% elif guidance_key == 'CANADA_FINANCE' %}Review Canada financial activity and CAD totals.
         {% elif guidance_key == 'BANGLADESH_FINANCE' %}Review Bangladesh financial activity and BDT totals.
+        {% elif guidance_key == 'CANADA_TRANSFER' %}Manage the CAD to BDT display rate and record an approved Canada-to-Bangladesh transfer.
+        {% elif guidance_key == 'CANADA_ENTRIES' %}Review Canada accounting entries and CAD totals.
+        {% elif guidance_key == 'BANGLADESH_DAILY' %}Review the current Bangladesh monthly summary and latest BDT entries.
+        {% elif guidance_key == 'BANGLADESH_ENTRIES' %}Review Bangladesh accounting entries and BDT totals.
         {% elif guidance_key == 'production_profit' %}Compare order revenue with linked production costs and actual profit.
         {% elif guidance_key == 'kpi' %}Review revenue, margins, working capital, collections, and financial health indicators.
         {% elif guidance_key == 'PAYMENT_AUDIT' %}Review deleted invoice payment records and their audit evidence.
@@ -124,7 +129,8 @@
         {% elif guidance_key == 'reconciliations' %}Use this after a bank statement is available for the selected period.
         {% elif guidance_key == 'production_costs' %}Use this to verify cost records linked to production orders.
         {% elif guidance_key == 'payroll' %}Use this for authorized payroll review, approval, and payment administration.
-        {% elif guidance_key == 'budget_actual' %}Use this to review spending and revenue performance against the approved monthly budget.
+        {% elif guidance_key == 'budget_actual' or guidance_key == 'legacy_budget_actual' %}Use this to review spending and revenue performance against the approved budget.
+        {% elif guidance_key == 'financial_forecast' %}Use this to plan near-term collections, payments, and cash requirements.
         {% elif guidance_key == 'profit_loss' or guidance_key == 'legacy_profit_loss' %}Use this to review revenue, costs, expenses, and profit.
         {% elif guidance_key == 'balance_sheet' or guidance_key == 'legacy_balance_sheet' %}Use this to review the company's financial position at a point in time.
         {% elif guidance_key == 'cash_flow' or guidance_key == 'legacy_cash_flow' %}Use this to review operating, investing, financing, and net cash movement.
@@ -136,6 +142,10 @@
         {% elif guidance_key == 'executive_dashboard' or guidance_key == 'FINANCE_DASHBOARD' %}Use this for leadership review of company performance, liquidity, and action items.
         {% elif guidance_key == 'CANADA_FINANCE' %}Use this to review Canada office and Canada business results.
         {% elif guidance_key == 'BANGLADESH_FINANCE' %}Use this to review Bangladesh factory and Bangladesh business results.
+        {% elif guidance_key == 'CANADA_TRANSFER' %}Use this only for an approved transfer between Canada and Bangladesh company accounts.
+        {% elif guidance_key == 'CANADA_ENTRIES' %}Use this for Canada historical lookup, filtering, and audit review.
+        {% elif guidance_key == 'BANGLADESH_DAILY' %}Use this for a quick daily review of Bangladesh activity and monthly position.
+        {% elif guidance_key == 'BANGLADESH_ENTRIES' %}Use this for Bangladesh historical lookup, filtering, and audit review.
         {% elif guidance_key == 'kpi' %}Use this to review targets, trends, and financial health indicators.
         {% elif guidance_key == 'PAYMENT_AUDIT' %}Use this when investigating a removed payment or invoice balance change.
         {% elif guidance_key == 'ACCOUNTING_ENTRIES' %}Use this for historical lookup and audit review.
@@ -178,7 +188,8 @@
         {% elif guidance_key == 'reconciliations' %}Company account, statement period, opening balance, closing balance, and statement evidence.
         {% elif guidance_key == 'production_costs' %}Production order, cost category, date, estimate, actual amount, supplier, and evidence.
         {% elif guidance_key == 'payroll' %}Pay period, side, department, restricted payroll lines, approval, and payment account details.
-        {% elif guidance_key == 'budget_actual' %}Select the year, month, business side, and permitted budget filters.
+        {% elif guidance_key == 'budget_actual' or guidance_key == 'legacy_budget_actual' %}Select the year, month, business side, and permitted budget filters.
+        {% elif guidance_key == 'financial_forecast' %}Select the forecast horizon, currency, business side, customer, and supplier filters.
         {% elif guidance_key == 'profit_loss' or guidance_key == 'legacy_profit_loss' or guidance_key == 'cash_flow' or guidance_key == 'legacy_cash_flow' %}Select the reporting period and any permitted business-side or currency filters.
         {% elif guidance_key == 'balance_sheet' or guidance_key == 'legacy_balance_sheet' or guidance_key == 'trial_balance' %}Select the as-of date and any permitted business-side filter.
         {% elif guidance_key == 'general_ledger' %}Select the period, business side, and account to review.
@@ -186,6 +197,9 @@
         {% elif guidance_key == 'ap_aging' or guidance_key == 'legacy_ap' %}Select the date, supplier, bill status, side, or currency filters you need.
         {% elif guidance_key == 'production_profit' %}Select the reporting period and production filters; no accounting transaction is entered here.
         {% elif guidance_key == 'kpi' or guidance_key == 'executive_dashboard' or guidance_key == 'FINANCE_DASHBOARD' or guidance_key == 'CANADA_FINANCE' or guidance_key == 'BANGLADESH_FINANCE' %}Select the period and available side, currency, customer, or status filters.
+        {% elif guidance_key == 'CANADA_TRANSFER' %}Enter the approved CAD to BDT rate, transfer date, CAD amount, method, and note.
+        {% elif guidance_key == 'CANADA_ENTRIES' or guidance_key == 'BANGLADESH_ENTRIES' %}Select the month, category, and search filters needed for review.
+        {% elif guidance_key == 'BANGLADESH_DAILY' %}No transaction is entered here; use the links to open the approved workflow or a detailed report.
         {% elif guidance_key == 'PAYMENT_AUDIT' or guidance_key == 'ACCOUNTING_ENTRIES' or guidance_key == 'CHART_OF_ACCOUNTS' %}Select available search or filters; this page does not require a new transaction.
         {% elif guidance_key == 'OPERATION_DETAIL' %}Review the displayed record and attach evidence only when the existing workflow permits it.
         {% elif guidance_key == 'POSTING_PREVIEW' %}Review the displayed posting date, currency conversion, debit, credit, and source details.
@@ -218,6 +232,8 @@
         {% elif guidance_key == 'OPERATION_DETAIL' %}Any permitted review, evidence, approval, or posting action is recorded in the audit history.
         {% elif guidance_key == 'POSTING_PREVIEW' %}Nothing changes on this page; return to the operation to continue the existing approval or posting workflow.
         {% elif guidance_key == 'FINANCE_CENTER' %}The selected form opens with its business side locked; submission goes through the existing approval process.
+        {% elif guidance_key == 'CANADA_TRANSFER' %}The existing workflow creates linked Canada money-out and Bangladesh money-in entries.
+        {% elif guidance_key == 'CANADA_ENTRIES' or guidance_key == 'BANGLADESH_DAILY' or guidance_key == 'BANGLADESH_ENTRIES' or guidance_key == 'financial_forecast' or guidance_key == 'legacy_budget_actual' %}Filters refresh the displayed information only; no financial record changes.
         {% elif guidance_key == 'PAYMENT_AUDIT' or guidance_key == 'ACCOUNTING_ENTRIES' or guidance_key == 'CHART_OF_ACCOUNTS' %}Search and filters update the view only; no financial record changes.
         {% elif guidance_key == 'production_profit' %}Filters recalculate the displayed profitability from existing linked records only.
         {% else %}Filters refresh the displayed report only; no accounting transaction or financial record changes.{% endif %}
@@ -238,6 +254,9 @@
     {% elif guidance_key == 'FACTORY_DAILY_COST' %} Estimated Quick Costing days or unrelated factory purchases.
     {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_DEPOSIT' or guidance_key == 'CASH_WITHDRAWAL' %} Internal transfers. Internal transfers are not revenue and are not expenses.
     {% elif guidance_key == 'ACCOUNT_TRANSFER' %} Customer receipts, supplier payments, revenue, or expenses.
+    {% elif guidance_key == 'CANADA_TRANSFER' %} Customer receipts, supplier payments, revenue, or expenses. Internal transfers are not revenue and are not expenses.
+    {% elif guidance_key == 'CANADA_ENTRIES' or guidance_key == 'BANGLADESH_DAILY' or guidance_key == 'BANGLADESH_ENTRIES' %} Entering a new transaction; use the appropriate Finance Operations workflow.
+    {% elif guidance_key == 'financial_forecast' or guidance_key == 'legacy_budget_actual' %} Entering or changing financial transactions. This page is for reporting only.
     {% elif guidance_key == 'BANK_FEE' or guidance_key == 'PROCESSOR_FEE' %} Supplier bills, customer refunds, or internal transfers.
     {% elif guidance_key == 'OWNER_INVESTMENT' %} Customer revenue, loan proceeds, or shareholder advances.
     {% elif guidance_key == 'OWNER_WITHDRAWAL' %} Payroll, employee reimbursements, or company operating expenses.
