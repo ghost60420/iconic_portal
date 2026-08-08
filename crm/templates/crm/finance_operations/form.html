@@ -8,7 +8,7 @@
   <div class="ops-toolbar ops-form-toolbar">
     <div>
       <div class="ops-title-line">
-        <h1>{{ workflow.title }}</h1>
+        <h1>{% if editing_draft %}Edit Draft · {% endif %}{{ workflow.title }}</h1>
         {% if locked_side %}
           <span class="ops-country-badge country-{{ locked_side|lower }}">
             {{ country_name }} Finance <b>{% if locked_side == 'BD' %}BDT{% else %}CAD{% endif %}</b>
@@ -33,6 +33,11 @@
   {% endif %}
 
   {% include "crm/finance_operations/_page_guidance.html" with guidance_key=workflow.operation_type country_side=locked_side %}
+
+  <div class="ops-required-note" role="note">
+    <span>* Required before submission</span>
+    <small>Drafts require only the minimum accounting fields. Receipt and supporting documents are optional.</small>
+  </div>
 
   {% if workflow.operation_type == 'CUSTOMER_REFUND' or workflow.operation_type == 'CUSTOMER_CREDIT_NOTE' or workflow.operation_type == 'CUSTOMER_CREDIT' %}
     <nav class="ops-related" aria-label="Customer adjustment workflows">
@@ -66,6 +71,14 @@
 
   <form class="ops-finance-form" method="post" enctype="multipart/form-data">
     {% csrf_token %}
+    {% if editing_draft %}<input type="hidden" name="draft_id" value="{{ editing_draft.pk }}">{% endif %}
+    {% if missing_document_confirmation %}
+      <input type="hidden" name="confirm_missing_document" value="yes">
+      <div class="fc-alert warn ops-document-warning" role="alert">
+        <i data-lucide="triangle-alert"></i>
+        <div><strong>No supporting document attached.</strong><span>Continue with approval?</span></div>
+      </div>
+    {% endif %}
     {% for field in form %}{% if field.is_hidden %}{{ field }}{% endif %}{% endfor %}
     {% if form.non_field_errors %}
       <div class="fc-alert bad ops-validation-summary" role="alert">
@@ -152,8 +165,13 @@
     {% endif %}
 
     <div class="ops-form-actions">
-      <button class="fc-btn primary ops-submit" type="submit"><i data-lucide="send"></i>Submit for Approval</button>
-      <a class="fc-btn ops-btn-outline" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cancel</a>
+      <button class="fc-btn ops-save-draft" type="submit" name="action" value="draft"><i data-lucide="save"></i>Save Draft</button>
+      <button class="fc-btn primary ops-submit" type="submit" name="action" value="submit"><i data-lucide="send"></i>{% if missing_document_confirmation %}Continue with Approval{% else %}Submit for Approval{% endif %}</button>
+      {% if editing_draft %}
+        <a class="fc-btn ops-btn-outline" href="{% url 'finance_operation_detail' editing_draft.pk %}">Cancel</a>
+      {% else %}
+        <a class="fc-btn ops-btn-outline" href="{% url 'finance_operations_center' %}{% if locked_side %}?side={{ locked_side }}{% endif %}">Cancel</a>
+      {% endif %}
     </div>
   </form>
 

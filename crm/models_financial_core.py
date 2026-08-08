@@ -754,7 +754,7 @@ class ExpenseRecord(FinancialAuditFields):
     payment_status = models.CharField(max_length=10, choices=PAYMENT_CHOICES, default=PAYMENT_UNPAID, db_index=True)
     due_date = models.DateField(null=True, blank=True, db_index=True)
     description = models.TextField()
-    business_purpose = models.TextField()
+    business_purpose = models.TextField(blank=True, default="")
     approval_status = models.CharField(max_length=10, choices=APPROVAL_CHOICES, default=APPROVAL_DRAFT, db_index=True)
     is_recurring_instance = models.BooleanField(default=False, db_index=True)
     recurring_template = models.ForeignKey(
@@ -1290,7 +1290,7 @@ class FinanceOperation(FinancialAuditFields):
     reference = models.CharField(max_length=120, blank=True, default="", db_index=True)
     payment_method = models.CharField(max_length=30, blank=True, default="")
     party_name = models.CharField(max_length=200, blank=True, default="")
-    business_purpose = models.TextField()
+    business_purpose = models.TextField(blank=True, default="")
     reason = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     details = models.JSONField(default=dict, blank=True)

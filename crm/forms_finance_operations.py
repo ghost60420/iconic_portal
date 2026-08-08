@@ -316,10 +316,13 @@ class FinanceOperationForm(forms.Form):
         required=False,
         help_text="Optional when an approved rate exists for the transaction date.",
     )
-    reference = forms.CharField(max_length=120)
-    business_purpose = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    reference = forms.CharField(max_length=120, required=False)
+    business_purpose = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
-    supporting_document = forms.FileField()
+    supporting_document = forms.FileField(
+        required=False,
+        help_text="Optional. You can attach a receipt or supporting document now or add it later.",
+    )
 
     def __init__(self, *args, user=None, workflow=None, locked_side="", **kwargs):
         self.user = user
@@ -343,13 +346,47 @@ class FinanceOperationForm(forms.Form):
         self.fields["business_purpose"].label = "Purpose"
         self.fields["supporting_document"].label = "Receipt"
         self._configure_searchable_fields()
-        for field in self.fields.values():
+        for name, field in self.fields.items():
+            if field.required:
+                field.error_messages["required"] = self._required_message(name, field)
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
             elif isinstance(field.widget, (forms.Select, forms.SelectMultiple)):
                 field.widget.attrs.setdefault("class", "form-select")
             else:
                 field.widget.attrs.setdefault("class", "form-control")
+
+    @staticmethod
+    def _required_message(name, field):
+        messages = {
+            "transaction_date": "Please enter the transaction date.",
+            "customer": "Please select a customer.",
+            "invoice": "Please select an invoice.",
+            "supplier": "Please select a supplier.",
+            "supplier_bill": "Please select a supplier bill.",
+            "amount": "Please enter the transaction amount.",
+            "total": "Please enter the total amount.",
+            "payment_account": "Please select the bank or cash account.",
+        }
+        if name in messages:
+            return messages[name]
+        label = (field.label or name.replace("_", " ")).lower()
+        if isinstance(field, (forms.ModelChoiceField, forms.ChoiceField)):
+            return f"Please select {label}."
+        return f"Please enter {label}."
+
+    def draft_form_values(self):
+        values = {}
+        for name, field in self.fields.items():
+            if name == "supporting_document":
+                continue
+            value = self.cleaned_data.get(name)
+            if isinstance(field, forms.ModelMultipleChoiceField):
+                value = [item.pk for item in value]
+            elif isinstance(field, forms.ModelChoiceField):
+                value = value.pk if value is not None else ""
+            values[name] = _json_value(value) if value is not None else ""
+        return values
 
     def _configure_searchable_fields(self):
         country_name, _currency = _country_context(self.locked_side)
@@ -593,7 +630,13 @@ class SupplierBillOperationForm(FinanceOperationForm):
     bill_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     due_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     amount_before_tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
-    tax = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    tax = forms.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        initial=Decimal("0"),
+    )
     total = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
     category = ExpenseCategoryChoiceField(queryset=ExpenseCategory.objects.none())
     department = forms.ModelChoiceField(queryset=Department.objects.none(), required=False)
@@ -803,8 +846,8 @@ class UtilityOperationForm(FinanceOperationForm):
     )
     utility_type = forms.ChoiceField(choices=UTILITY_CHOICES)
     vendor = forms.ModelChoiceField(queryset=Supplier.objects.none())
-    billing_period_start = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
-    billing_period_end = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    billing_period_start = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    billing_period_end = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     bill_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     due_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
@@ -871,8 +914,20 @@ class PayrollOperationForm(FinanceOperationForm):
         choices=(("BASE", "Base salary"), ("OVERTIME", "Overtime"), ("BONUS", "Bonus"), ("COMMISSION", "Commission"))
     )
     gross_amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
-    deductions = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
-    employer_cost = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
+    deductions = forms.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        initial=Decimal("0"),
+    )
+    employer_cost = forms.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        initial=Decimal("0"),
+    )
     net_paid = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0"))
     payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
 
@@ -905,6 +960,8 @@ class PayrollOperationForm(FinanceOperationForm):
         cleaned["period_end"] = period_end
         gross = cleaned.get("gross_amount") or Decimal("0")
         deductions = cleaned.get("deductions") or Decimal("0")
+        cleaned["deductions"] = deductions
+        cleaned["employer_cost"] = cleaned.get("employer_cost") or Decimal("0")
         net = cleaned.get("net_paid") or Decimal("0")
         if gross != deductions + net:
             self.add_error("net_paid", "Gross amount must equal deductions plus net paid.")
@@ -1166,7 +1223,7 @@ class OwnerLoanOperationForm(FinanceOperationForm):
     party = forms.CharField(max_length=200)
     amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
     payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
-    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1257,7 +1314,7 @@ class InventoryAdjustmentOperationForm(FinanceOperationForm):
     unit_cost = forms.DecimalField(max_digits=18, decimal_places=4, min_value=Decimal("0.0001"))
     direction = forms.ChoiceField(choices=(("INCREASE", "Increase"), ("DECREASE", "Decrease")))
     supplier = forms.ModelChoiceField(queryset=Supplier.objects.none(), required=False)
-    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -159,25 +159,25 @@
     <div class="finance-guide-item">
       <span class="finance-guide-label">What To Enter Or Select</span>
       <p>
-        {% if guidance_key == 'CUSTOMER_PAYMENT' %}Date, customer, open invoice, amount, payment method, payment account, reference, and receipt.
-        {% elif guidance_key == 'CUSTOMER_REFUND' %}Customer, invoice, refund amount, destination account, reason, reference, and evidence.
-        {% elif guidance_key == 'CUSTOMER_CREDIT_NOTE' %}Customer, invoice, approved credit amount, reason, reference, and evidence.
-        {% elif guidance_key == 'CUSTOMER_CREDIT' %}Customer, amount, receiving account, payment method, reference, and evidence.
-        {% elif guidance_key == 'SUPPLIER_BILL' %}Supplier, bill number, bill and due dates, category, amount, purpose, and evidence.
-        {% elif guidance_key == 'SUPPLIER_PAYMENT' %}Supplier, approved bill, payment date, amount, method, source account, and evidence.
-        {% elif guidance_key == 'COMPANY_EXPENSE' %}Date, vendor, category, department, amount, payment account, purpose, and receipt.
-        {% elif guidance_key == 'UTILITY_BILL' %}Utility type, vendor, location, billing period, dates, amount, payment details, and receipt.
-        {% elif guidance_key == 'PAYROLL' %}Pay period, staff or department, approved amounts, payment details, reference, and evidence.
-        {% elif guidance_key == 'PRODUCTION_COST' %}Production order, cost category, supplier, date, actual amount, purpose, and evidence.
-        {% elif guidance_key == 'FACTORY_DAILY_COST' %}Production order, actual days, saved daily rate, date, purpose, and evidence.
-        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Transfer date, source account, destination account, amount, reference, purpose, and evidence.
-        {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' or guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}Date, company account, amount, source or purpose, reference, and evidence.
-        {% elif guidance_key == 'BANK_FEE' or guidance_key == 'PROCESSOR_FEE' %}Date, company account, fee amount, reference, business purpose, and statement evidence.
-        {% elif guidance_key == 'OWNER_INVESTMENT' or guidance_key == 'OWNER_WITHDRAWAL' %}Date, company account, owner reference, amount, purpose, and supporting evidence.
-        {% elif guidance_key == 'LOAN_RECEIVED' or guidance_key == 'LOAN_PRINCIPAL' or guidance_key == 'LOAN_INTEREST' %}Date, company account, lender or loan reference, amount, purpose, and supporting evidence.
-        {% elif guidance_key == 'SHAREHOLDER_ADVANCE' or guidance_key == 'SHAREHOLDER_REPAYMENT' %}Date, company account, shareholder reference, amount, purpose, and evidence.
-        {% elif guidance_key == 'ASSET_PURCHASE' %}Asset details, purchase date, supplier, amount, payment account, purpose, and evidence.
-        {% elif guidance_key == 'INVENTORY_ADJUSTMENT' %}Inventory item, adjustment date, approved quantity or value change, reason, and evidence.
+        {% if guidance_key == 'CUSTOMER_PAYMENT' %}Date, customer, open invoice, amount, payment method, and payment account. Reference and receipt are optional.
+        {% elif guidance_key == 'CUSTOMER_REFUND' %}Customer, invoice when applicable, refund amount, destination account, and reason. Reference and evidence are optional.
+        {% elif guidance_key == 'CUSTOMER_CREDIT_NOTE' %}Customer, invoice, approved credit amount, and reason. Reference and evidence are optional.
+        {% elif guidance_key == 'CUSTOMER_CREDIT' %}Customer, amount, receiving account, and payment method. Reference and evidence are optional.
+        {% elif guidance_key == 'SUPPLIER_BILL' %}Supplier, bill and due dates, category, and amount. Bill number, purpose, and evidence are optional.
+        {% elif guidance_key == 'SUPPLIER_PAYMENT' %}Supplier, approved bill, payment date, amount, method, and source account. Evidence is optional.
+        {% elif guidance_key == 'COMPANY_EXPENSE' %}Date, vendor, category, amount, and payment details. Department, purpose, and receipt are optional.
+        {% elif guidance_key == 'UTILITY_BILL' %}Utility type, vendor, location, dates, amount, and payment details. Billing period and receipt are optional.
+        {% elif guidance_key == 'PAYROLL' %}Pay period, staff or department, approved amounts, and payment details. Reference and evidence are optional.
+        {% elif guidance_key == 'PRODUCTION_COST' %}Production order, cost category, supplier, date, and actual amount. Purpose and evidence are optional.
+        {% elif guidance_key == 'FACTORY_DAILY_COST' %}Production order, actual days, saved daily rate, and date. Purpose and evidence are optional.
+        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Transfer date, source account, destination account, and amount. Reference, purpose, and evidence are optional.
+        {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' or guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}Date, company account, and amount. Source, purpose, reference, and evidence are optional where the workflow permits.
+        {% elif guidance_key == 'BANK_FEE' or guidance_key == 'PROCESSOR_FEE' %}Date, company account, and fee amount. Reference, purpose, and statement evidence are optional.
+        {% elif guidance_key == 'OWNER_INVESTMENT' or guidance_key == 'OWNER_WITHDRAWAL' %}Date, company account, owner, and amount. Reference, purpose, and supporting evidence are optional.
+        {% elif guidance_key == 'LOAN_RECEIVED' or guidance_key == 'LOAN_PRINCIPAL' or guidance_key == 'LOAN_INTEREST' %}Date, company account, lender, and amount. Loan reference, purpose, and supporting evidence are optional.
+        {% elif guidance_key == 'SHAREHOLDER_ADVANCE' or guidance_key == 'SHAREHOLDER_REPAYMENT' %}Date, company account, shareholder, and amount. Reference, purpose, and evidence are optional.
+        {% elif guidance_key == 'ASSET_PURCHASE' %}Asset details, purchase date, supplier, amount, and payment account. Purpose and evidence are optional.
+        {% elif guidance_key == 'INVENTORY_ADJUSTMENT' %}Inventory item, adjustment date, approved quantity or value change, and direction. Reason and evidence are optional.
         {% elif guidance_key == 'APPROVAL_CENTER' %}Filters for side, currency, type, department, risk, and status.
         {% elif guidance_key == 'FINANCE_ACTIVITY' %}Date and optional side, department, currency, type, or user filters.
         {% elif guidance_key == 'expenses' %}Expense date, category, vendor, amount, side, department, evidence, and permitted approval details.
@@ -204,7 +204,7 @@
         {% elif guidance_key == 'OPERATION_DETAIL' %}Review the displayed record and attach evidence only when the existing workflow permits it.
         {% elif guidance_key == 'POSTING_PREVIEW' %}Review the displayed posting date, currency conversion, debit, credit, and source details.
         {% elif guidance_key == 'FINANCE_CENTER' %}Choose the workflow that matches the transaction you need to record.
-        {% else %}Enter the transaction details, amount, purpose, and required supporting document shown on the form.{% endif %}
+        {% else %}Enter the transaction details and amount. Add purpose, notes, or a supporting document when available.{% endif %}
       </p>
     </div>
     <div class="finance-guide-item">

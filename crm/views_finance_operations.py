@@ -38,9 +38,11 @@ from crm.services.finance_operations import (
     FinanceOperationWritesDisabled,
     UTILITY_ACCOUNT_KEYS,
     WORKFLOW_BY_SLUG,
+    WORKFLOW_BY_TYPE,
     audit_operation,
     post_operation,
     review_operation,
+    save_draft_operation,
     submit_operation,
     workflow_definition,
 )
@@ -115,14 +117,14 @@ FORM_SECTION_LAYOUTS = {
         ("Supplier", "Select the approved supplier for this country.", ("supplier",)),
         ("Expense Details", "Classify where the cost belongs.", ("category", "department", "production_order", "customer")),
         ("Amounts", "The total must equal subtotal plus tax.", ("amount_before_tax", "tax", "total")),
-        ("Evidence", "Attach the bill and explain its business purpose.", ("supporting_document", "business_purpose", "notes")),
+        ("Evidence", "Add the bill, purpose, or review notes when available.", ("supporting_document", "business_purpose", "notes")),
     ),
     FinanceOperation.TYPE_UTILITY_BILL: (
         ("Utility Information", "Utility, vendor, and service location.", ("utility_type", "vendor", "location", "meter_or_account")),
         ("Billing Period", "Dates covered by this utility bill.", ("billing_period_start", "billing_period_end")),
         ("Bill Details", "Bill date, due date, amount, and reference.", ("transaction_date", "reference", "bill_date", "due_date", "currency", "amount")),
         ("Payment", "Record whether the bill is paid and the account used.", ("payment_status", "payment_account")),
-        ("Evidence", "Attach the receipt or bill and add review notes.", ("supporting_document", "business_purpose", "notes")),
+        ("Evidence", "Add the receipt, bill, or review notes when available.", ("supporting_document", "business_purpose", "notes")),
     ),
     FinanceOperation.TYPE_COMPANY_EXPENSE: (
         ("Transaction Details", "Date, country, currency, and receipt reference.", ("transaction_date", "currency", "reference")),
@@ -130,7 +132,7 @@ FORM_SECTION_LAYOUTS = {
         ("Expense Details", "Classify the expense and responsible department.", ("category", "department", "recurring", "due_date")),
         ("Amounts", "The total must equal subtotal plus tax.", ("amount_before_tax", "tax", "total")),
         ("Payment", "Record payment status, method, and account.", ("payment_status", "payment_method", "payment_account")),
-        ("Evidence", "Attach the receipt and explain the purpose.", ("supporting_document", "business_purpose", "notes")),
+        ("Evidence", "Add the receipt, purpose, or review notes when available.", ("supporting_document", "business_purpose", "notes")),
     ),
 }
 
@@ -141,7 +143,7 @@ def _form_sections(form, operation_type):
         layout = (
             ("Transaction Details", "Core transaction information.", ("transaction_date", "currency", "reference")),
             ("Workflow Details", "Information required for this workflow.", tuple()),
-            ("Evidence and Notes", "Supporting evidence and business context.", ("supporting_document", "business_purpose", "notes")),
+            ("Evidence and Notes", "Optional supporting evidence and business context.", ("supporting_document", "business_purpose", "notes")),
         )
     visible_names = [
         name for name, field in form.fields.items()
@@ -322,7 +324,7 @@ def finance_operations_center(request):
     )
 
 
-def _form_for_request(request, workflow, *, bind=True, locked_side=""):
+def _form_for_request(request, workflow, *, bind=True, locked_side="", initial=None):
     form_class = FORM_BY_TYPE[workflow["operation_type"]]
     data = None
     if bind and request.method == "POST":
@@ -335,10 +337,45 @@ def _form_for_request(request, workflow, *, bind=True, locked_side=""):
         "user": request.user,
         "workflow": workflow,
         "locked_side": locked_side,
+        "initial": initial,
     }
     if form_class is CustomerAdjustmentOperationForm:
         kwargs["initial_kind"] = workflow["operation_type"]
     return form_class(**kwargs)
+
+
+def _draft_form_initial(operation):
+    saved = operation.details.get("_draft_form_values") if operation else None
+    if saved:
+        return saved
+    if not operation:
+        return None
+    return {
+        "transaction_date": operation.transaction_date,
+        "side": operation.side,
+        "currency": operation.currency,
+        "rate_to_cad": operation.rate_to_cad,
+        "rate_to_bdt": operation.rate_to_bdt,
+        "reference": operation.reference,
+        "business_purpose": operation.business_purpose,
+        "notes": operation.notes,
+    }
+
+
+def _draft_for_request(request, workflow):
+    raw_id = request.POST.get("draft_id") if request.method == "POST" else request.GET.get("draft")
+    if not raw_id:
+        return None
+    try:
+        draft_id = int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise Http404("Finance draft not found.") from exc
+    draft = _get_operation(request, draft_id)
+    if draft.state != FinanceOperation.STATE_DRAFT or draft.operation_type != workflow["operation_type"]:
+        raise Http404("Finance draft not found.")
+    if draft.created_by_id != request.user.pk and not can_manage_financial_transactions(request.user):
+        raise Http404("Finance draft not found.")
+    return draft
 
 
 def _utility_context(request, form, *, locked_side=""):
@@ -373,7 +410,12 @@ def finance_operation_create(request, workflow_slug):
         raise Http404(str(exc)) from exc
     if not can_submit_finance_operation(request.user, workflow["operation_type"]):
         raise Http404("Finance workflow not found.")
+    editing_draft = _draft_for_request(request, workflow)
     locked_side = _requested_side(request)
+    if editing_draft:
+        if locked_side and editing_draft.side != locked_side:
+            raise PermissionDenied("The draft belongs to a different business side.")
+        locked_side = editing_draft.side
     can_manage_categories = (
         workflow["operation_type"] == FinanceOperation.TYPE_COMPANY_EXPENSE
         and can_manage_financial_transactions(request.user)
@@ -392,24 +434,61 @@ def finance_operation_create(request, workflow_slug):
         messages.success(request, f"Expense category {category.name} created.")
         target = reverse("finance_operation_create", kwargs={"workflow_slug": workflow_slug})
         return redirect(f"{target}?side={locked_side}" if locked_side else target)
-    form = _form_for_request(request, workflow, bind=not category_post, locked_side=locked_side)
+    form = _form_for_request(
+        request,
+        workflow,
+        bind=not category_post,
+        locked_side=locked_side,
+        initial=_draft_form_initial(editing_draft),
+    )
+    missing_document_confirmation = False
     if request.method == "POST" and form.is_valid():
-        try:
-            with transaction.atomic():
-                operation = form.build_operation()
-                if locked_side and operation.side != locked_side:
-                    raise ValidationError("The business side is locked for this transaction.")
-                operation = submit_operation(operation, actor=request.user)
-                _attach_document(
-                    operation,
-                    form.cleaned_data.get("supporting_document"),
-                    actor=request.user,
-                    description=f"{workflow['title']} evidence",
-                )
-            messages.success(request, f"{operation.operation_number} submitted for approval. No journal was posted.")
-            return redirect("finance_operation_detail", pk=operation.pk)
-        except (FinanceOperationError, ValidationError, ValueError) as exc:
-            form.add_error(None, str(exc))
+        action = request.POST.get("action") or "submit"
+        if action not in {"draft", "submit"}:
+            form.add_error(None, "Please choose Save Draft or Submit for Approval.")
+        else:
+            uploaded_document = form.cleaned_data.get("supporting_document")
+            has_existing_document = bool(editing_draft and editing_draft.document_count)
+            if (
+                action == "submit"
+                and not uploaded_document
+                and not has_existing_document
+                and request.POST.get("confirm_missing_document") != "yes"
+            ):
+                missing_document_confirmation = True
+            else:
+                try:
+                    with transaction.atomic():
+                        candidate = form.build_operation()
+                        if locked_side and candidate.side != locked_side:
+                            raise ValidationError("The business side is locked for this transaction.")
+                        candidate.details["_draft_form_values"] = form.draft_form_values()
+                        if action == "draft" or editing_draft:
+                            operation = save_draft_operation(
+                                candidate,
+                                actor=request.user,
+                                existing=editing_draft,
+                            )
+                        else:
+                            operation = candidate
+                        if action == "submit":
+                            operation = submit_operation(operation, actor=request.user)
+                        _attach_document(
+                            operation,
+                            uploaded_document,
+                            actor=request.user,
+                            description=f"{workflow['title']} evidence",
+                        )
+                    if action == "draft":
+                        messages.success(request, "Draft saved successfully.")
+                    else:
+                        messages.success(
+                            request,
+                            f"{operation.operation_number} submitted for approval. No journal was posted.",
+                        )
+                    return redirect("finance_operation_detail", pk=operation.pk)
+                except (FinanceOperationError, ValidationError, ValueError) as exc:
+                    form.add_error(None, str(exc))
     recent = _operation_queryset(request).filter(operation_type=workflow["operation_type"])
     if locked_side:
         recent = recent.filter(side=locked_side)
@@ -435,6 +514,8 @@ def finance_operation_create(request, workflow_slug):
         ),
         can_view_form_advanced=_can_use_finance_advanced(request.user),
         can_manage_setup=can_manage_financial_transactions(request.user),
+        editing_draft=editing_draft,
+        missing_document_confirmation=missing_document_confirmation,
     )
     return render(request, "crm/finance_operations/form.html", _common(request, **context))
 
@@ -446,6 +527,14 @@ def finance_operation_detail(request, pk):
     audit_events = FinancialAuditEvent.objects.filter(
         content_type=content_type, object_id=operation.pk
     ).select_related("actor").order_by("-created_at")
+    can_edit_draft = bool(
+        operation.state == FinanceOperation.STATE_DRAFT
+        and can_submit_finance_operation(request.user, operation.operation_type)
+        and (
+            operation.created_by_id == request.user.pk
+            or can_manage_financial_transactions(request.user)
+        )
+    )
     return render(
         request,
         "crm/finance_operations/detail.html",
@@ -455,12 +544,19 @@ def finance_operation_detail(request, pk):
             audit_events=audit_events,
             evidence_form=FinancialEvidenceUploadForm(),
             can_review=can_review_finance_operation(request.user, operation),
+            can_edit_draft=can_edit_draft,
+            operation_workflow=WORKFLOW_BY_TYPE[operation.operation_type],
             can_attach=(
                 operation.state in {
+                    FinanceOperation.STATE_DRAFT,
                     FinanceOperation.STATE_PENDING,
                     FinanceOperation.STATE_EVIDENCE_REQUIRED,
                 }
-                and (operation.submitted_by_id == request.user.pk or can_review_finance_operation(request.user, operation))
+                and (
+                    operation.created_by_id == request.user.pk
+                    or operation.submitted_by_id == request.user.pk
+                    or can_review_finance_operation(request.user, operation)
+                )
             ),
         ),
     )
@@ -471,8 +567,16 @@ def finance_operation_detail(request, pk):
 def finance_operation_evidence(request, pk):
     operation = _get_operation(request, pk)
     allowed = (
-        operation.state in {FinanceOperation.STATE_PENDING, FinanceOperation.STATE_EVIDENCE_REQUIRED}
-        and (operation.submitted_by_id == request.user.pk or can_review_finance_operation(request.user, operation))
+        operation.state in {
+            FinanceOperation.STATE_DRAFT,
+            FinanceOperation.STATE_PENDING,
+            FinanceOperation.STATE_EVIDENCE_REQUIRED,
+        }
+        and (
+            operation.created_by_id == request.user.pk
+            or operation.submitted_by_id == request.user.pk
+            or can_review_finance_operation(request.user, operation)
+        )
     )
     if not allowed:
         raise Http404("Finance operation not found.")

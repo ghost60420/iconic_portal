@@ -199,6 +199,11 @@ def _snapshot_from_operation(operation):
     )
 
 
+def _posting_reference(operation, suffix=""):
+    base = (operation.reference or "").strip() or operation.operation_number
+    return f"{base}{suffix}"
+
+
 def _line(account_key, *, debit=0, credit=0, description=""):
     return {
         "account_key": account_key,
@@ -497,24 +502,56 @@ def build_posting_preview(operation):
     }
 
 
-@transaction.atomic
-def submit_operation(operation, *, actor):
-    submitter = _actor(actor)
+_DRAFT_INPUT_FIELDS = (
+    "operation_type",
+    "transaction_date",
+    "side",
+    "currency",
+    "amount_before_tax",
+    "tax_amount",
+    "total_amount",
+    "rate_to_cad",
+    "rate_to_bdt",
+    "amount_cad",
+    "amount_bdt",
+    "customer_id",
+    "invoice_id",
+    "supplier_id",
+    "supplier_bill_id",
+    "employee_id",
+    "department_id",
+    "production_order_id",
+    "opportunity_id",
+    "expense_category_id",
+    "from_account_id",
+    "to_account_id",
+    "reference",
+    "payment_method",
+    "party_name",
+    "business_purpose",
+    "reason",
+    "notes",
+    "details",
+    "duplicate_warning",
+    "duplicate_warning_text",
+    "source_content_type_id",
+    "source_object_id",
+)
+
+
+def _check_operation_access(operation, actor):
     from crm.services.financial_permissions import (
         accessible_financial_sides,
         can_submit_finance_operation,
     )
 
-    if not can_submit_finance_operation(submitter, operation.operation_type):
-        raise FinanceOperationError("You do not have permission to submit this finance workflow.")
-    if operation.side not in accessible_financial_sides(submitter):
+    if not can_submit_finance_operation(actor, operation.operation_type):
+        raise FinanceOperationError("You do not have permission to use this Finance workflow.")
+    if operation.side not in accessible_financial_sides(actor):
         raise FinanceOperationError("You do not have access to the selected business side.")
-    if operation.pk:
-        raise FinanceOperationError("Only a new finance operation can be submitted through this workflow.")
-    operation.operation_number = operation.operation_number or operation_number()
-    operation.risk_level = (
-        FinanceOperation.RISK_HIGH if operation.operation_type in HIGH_RISK_TYPES else FinanceOperation.RISK_STANDARD
-    )
+
+
+def _snapshot_operation_currency(operation, actor):
     snapshot = resolve_currency_snapshot(
         native_amount=operation.total_amount,
         currency=operation.currency,
@@ -522,15 +559,87 @@ def submit_operation(operation, *, actor):
         rate_to_cad=operation.rate_to_cad,
         rate_to_bdt=operation.rate_to_bdt,
         source_record=None,
-        actor=submitter,
+        actor=actor,
         create_review=False,
     )
     operation.rate_to_cad = snapshot.rate_to_cad
     operation.rate_to_bdt = snapshot.rate_to_bdt
     operation.amount_cad = snapshot.amount_cad
     operation.amount_bdt = snapshot.amount_bdt
+
+
+@transaction.atomic
+def save_draft_operation(operation, *, actor, existing=None):
+    editor = _actor(actor)
+    _check_operation_access(operation, editor)
+    if existing is not None:
+        from crm.services.financial_permissions import can_access_finance_operation, can_manage_financial_transactions
+
+        locked = FinanceOperation.objects.select_for_update().get(pk=existing.pk)
+        if locked.state != FinanceOperation.STATE_DRAFT:
+            raise FinanceOperationError("Only a draft Finance transaction can be edited.")
+        if locked.operation_type != operation.operation_type:
+            raise FinanceOperationError("The draft transaction type cannot be changed.")
+        if locked.created_by_id != editor.pk and not can_manage_financial_transactions(editor):
+            raise FinanceOperationError("You do not have permission to edit this draft.")
+        if not can_access_finance_operation(editor, locked):
+            raise FinanceOperationError("You do not have access to this draft.")
+        before = {"state": locked.state, "amount": str(locked.total_amount)}
+        for field_name in _DRAFT_INPUT_FIELDS:
+            setattr(locked, field_name, getattr(operation, field_name))
+        draft = locked
+    else:
+        if operation.pk:
+            raise FinanceOperationError("This Finance transaction already exists.")
+        draft = operation
+        draft.operation_number = draft.operation_number or operation_number()
+        draft.created_by = editor
+        before = None
+    draft.risk_level = (
+        FinanceOperation.RISK_HIGH
+        if draft.operation_type in HIGH_RISK_TYPES
+        else FinanceOperation.RISK_STANDARD
+    )
+    _snapshot_operation_currency(draft, editor)
+    draft.state = FinanceOperation.STATE_DRAFT
+    draft.modified_by = editor
+    draft.submitted_by = None
+    draft.submitted_at = None
+    draft.posting_preview = {}
+    draft.posting_error = ""
+    draft.full_clean()
+    draft.save()
+    audit_operation(
+        draft,
+        "DRAFT_SAVED",
+        editor,
+        reason="Finance draft saved.",
+        before=before,
+        after={"state": draft.state, "type": draft.operation_type, "amount": str(draft.total_amount)},
+    )
+    return draft
+
+
+@transaction.atomic
+def submit_operation(operation, *, actor):
+    submitter = _actor(actor)
+    if operation.pk:
+        from crm.services.financial_permissions import can_access_finance_operation
+
+        operation = FinanceOperation.objects.select_for_update().get(pk=operation.pk)
+        if operation.state != FinanceOperation.STATE_DRAFT:
+            raise FinanceOperationError("Only a draft Finance transaction can be submitted.")
+        if not can_access_finance_operation(submitter, operation):
+            raise FinanceOperationError("You do not have access to this draft.")
+    _check_operation_access(operation, submitter)
+    operation.operation_number = operation.operation_number or operation_number()
+    operation.risk_level = (
+        FinanceOperation.RISK_HIGH if operation.operation_type in HIGH_RISK_TYPES else FinanceOperation.RISK_STANDARD
+    )
+    _snapshot_operation_currency(operation, submitter)
     operation.state = FinanceOperation.STATE_PENDING
-    operation.created_by = operation.modified_by = operation.submitted_by = submitter
+    operation.created_by = operation.created_by or submitter
+    operation.modified_by = operation.submitted_by = submitter
     operation.submitted_at = timezone.now()
     operation.full_clean()
     operation.save()
@@ -563,12 +672,6 @@ def review_operation(operation, *, actor, action, notes):
     if action == "APPROVE":
         if locked.risk_level == FinanceOperation.RISK_HIGH and locked.submitted_by_id == reviewer.pk:
             raise FinanceOperationError("A user cannot approve their own high-risk finance operation.")
-        has_rate_snapshot = (
-            locked.operation_type == FinanceOperation.TYPE_FACTORY_DAILY_COST
-            and bool(locked.details.get("daily_default_id"))
-        )
-        if not locked.documents.exists() and not has_rate_snapshot:
-            raise FinanceOperationError("Supporting evidence is required before approval.")
         preview = build_posting_preview(locked)
         if preview["missing_accounts"]:
             raise FinanceOperationError("Posting accounts are incomplete: " + ", ".join(preview["missing_accounts"]))
@@ -660,7 +763,7 @@ def _post_customer(operation, actor):
             payment_method=operation.payment_method or "bank",
             rate_to_cad=operation.rate_to_cad,
             rate_to_bdt=operation.rate_to_bdt,
-            notes=f"Finance operation {operation.operation_number}; reference {operation.reference}",
+            notes=f"Finance operation {operation.operation_number}; reference {_posting_reference(operation)}",
         )
         recorded = record_invoice_payment(operation.invoice, payment, actor=actor)
         excess = money(operation.total_amount - applied)
@@ -671,7 +774,7 @@ def _post_customer(operation, actor):
                 currency=operation.currency,
                 receipt_date=operation.transaction_date,
                 payment_account=operation.to_account,
-                reference=f"{operation.reference}-CREDIT",
+                reference=_posting_reference(operation, "-CREDIT"),
                 actor=actor,
                 invoices=(),
                 payment_method=operation.payment_method,
@@ -688,7 +791,7 @@ def _post_customer(operation, actor):
             currency=operation.currency,
             receipt_date=operation.transaction_date,
             payment_account=operation.to_account,
-            reference=operation.reference,
+            reference=_posting_reference(operation),
             actor=actor,
             invoices=(),
             payment_method=operation.payment_method,
@@ -705,7 +808,7 @@ def _post_customer(operation, actor):
             currency=operation.currency,
             refund_date=operation.transaction_date,
             payment_account=operation.from_account,
-            reference=operation.reference,
+            reference=_posting_reference(operation),
             evidence_reference=operation.operation_number,
             actor=actor,
             rate_to_cad=operation.rate_to_cad,
@@ -716,7 +819,7 @@ def _post_customer(operation, actor):
         invoice=operation.invoice,
         amount=operation.total_amount,
         credit_date=operation.transaction_date,
-        reference=operation.reference,
+        reference=_posting_reference(operation),
         evidence_reference=operation.operation_number,
         actor=actor,
         rate_to_cad=operation.rate_to_cad,
@@ -729,7 +832,7 @@ def _post_supplier_bill(operation, actor):
     category = operation.expense_category
     bill = SupplierBill.objects.create(
         supplier=operation.supplier,
-        bill_number=operation.reference,
+        bill_number=_posting_reference(operation),
         bill_date=operation.transaction_date,
         due_date=date.fromisoformat(operation.details["due_date"]),
         currency=operation.currency,
@@ -765,7 +868,7 @@ def _post_supplier_payment(operation, actor):
         currency=operation.currency,
         payment_date=operation.transaction_date,
         payment_account=operation.from_account,
-        reference=operation.reference,
+        reference=_posting_reference(operation),
         actor=actor,
         payment_method=operation.payment_method,
         rate_to_cad=operation.rate_to_cad,
@@ -797,7 +900,7 @@ def _post_expense(operation, actor):
         payment_account=operation.from_account if payment_status == ExpenseRecord.PAYMENT_PAID else None,
         payment_status=payment_status,
         due_date=date.fromisoformat(operation.details["due_date"]) if operation.details.get("due_date") else None,
-        description=operation.notes or operation.business_purpose,
+        description=operation.notes or operation.business_purpose or operation.operation_number,
         business_purpose=operation.business_purpose,
         approval_status=ExpenseRecord.APPROVAL_DRAFT,
         is_recurring_instance=bool(operation.details.get("is_recurring")),
@@ -897,7 +1000,7 @@ def _post_production_cost(operation, actor):
             currency=operation.currency,
             payment_date=operation.transaction_date,
             payment_account=operation.from_account,
-            reference=f"{operation.reference}-PAY",
+            reference=_posting_reference(operation, "-PAY"),
             actor=actor,
             payment_method=operation.payment_method,
             rate_to_cad=operation.rate_to_cad,

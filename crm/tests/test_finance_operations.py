@@ -260,6 +260,266 @@ class FinanceOperationsTests(TestCase):
                 self.assertContains(response, title)
         self.assertEqual(JournalEntry.objects.filter(source_key__startswith="FINANCE-OPERATION:").count(), 0)
 
+    def test_shared_optional_fields_and_draft_controls_render_for_every_workflow(self):
+        client = Client()
+        client.force_login(self.submitter)
+        for slug, _operation_type, _title, _icon, _group in WORKFLOWS:
+            with self.subTest(slug=slug):
+                response = client.get(reverse("finance_operation_create", args=[slug]))
+                form = response.context["form"]
+                self.assertFalse(form.fields["supporting_document"].required)
+                self.assertFalse(form.fields["reference"].required)
+                self.assertFalse(form.fields["business_purpose"].required)
+                self.assertFalse(form.fields["notes"].required)
+                self.assertContains(response, "Save Draft")
+                self.assertContains(response, "* Required before submission")
+                self.assertContains(response, "Receipt and supporting documents are optional.")
+
+    def test_requested_workflows_save_draft_without_receipt_and_do_not_post(self):
+        self.submitter.access.role = "CA"
+        self.submitter.access.save(update_fields=("role",))
+        self.submitter.employee_profile.department_ref = self.department
+        self.submitter.employee_profile.save(update_fields=("department_ref",))
+        invoice = self.invoice("OPS-DRAFT-PAYMENT")
+        supplier_bill = self.supplier_bill("OPS-DRAFT-SUPPLIER-PAYMENT", "100")
+        common = {
+            "transaction_date": "2026-02-20",
+            "side": "CA",
+            "currency": "CAD",
+            "rate_to_cad": "1",
+            "rate_to_bdt": "100",
+            "action": "draft",
+        }
+        workflows = (
+            (
+                "customer-payment",
+                FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+                {
+                    "customer": self.customer.pk,
+                    "invoice": invoice.pk,
+                    "amount": "25.00",
+                    "payment_method": "bank",
+                    "payment_account": self.bank.pk,
+                },
+            ),
+            (
+                "supplier-bill",
+                FinanceOperation.TYPE_SUPPLIER_BILL,
+                {
+                    "supplier": self.supplier.pk,
+                    "bill_date": "2026-02-20",
+                    "due_date": "2026-03-20",
+                    "amount_before_tax": "80.00",
+                    "tax": "0",
+                    "total": "80.00",
+                    "category": self.office_rent.pk,
+                },
+            ),
+            (
+                "supplier-payment",
+                FinanceOperation.TYPE_SUPPLIER_PAYMENT,
+                {
+                    "supplier": self.supplier.pk,
+                    "supplier_bill": supplier_bill.pk,
+                    "amount": "20.00",
+                    "payment_method": "bank",
+                    "payment_account": self.bank.pk,
+                },
+            ),
+            (
+                "expense",
+                FinanceOperation.TYPE_COMPANY_EXPENSE,
+                {
+                    "vendor": self.supplier.pk,
+                    "category": self.office_rent.pk,
+                    "amount_before_tax": "60.00",
+                    "tax": "0",
+                    "total": "60.00",
+                    "payment_status": "PAID",
+                    "payment_method": "bank",
+                    "payment_account": self.bank.pk,
+                },
+            ),
+            (
+                "utility",
+                FinanceOperation.TYPE_UTILITY_BILL,
+                {
+                    "utility_type": "HYDRO",
+                    "vendor": self.supplier.pk,
+                    "bill_date": "2026-02-20",
+                    "due_date": "2026-03-20",
+                    "amount": "50.00",
+                    "location": "OFFICE",
+                    "payment_status": "UNPAID",
+                },
+            ),
+            (
+                "payroll",
+                FinanceOperation.TYPE_PAYROLL,
+                {
+                    "payroll_month": "2026-02",
+                    "department": self.department.pk,
+                    "payroll_type": "BASE",
+                    "gross_amount": "100.00",
+                    "net_paid": "100.00",
+                    "payment_account": self.bank.pk,
+                },
+            ),
+            (
+                "production-cost",
+                FinanceOperation.TYPE_PRODUCTION_COST,
+                {
+                    "production_order": self.production_order.pk,
+                    "cost_category": "FABRIC",
+                    "supplier": self.supplier.pk,
+                    "estimated_cost": "75.00",
+                    "actual_cost": "80.00",
+                    "payment_status": "UNPAID",
+                },
+            ),
+        )
+        protected_counts = {
+            "journals": JournalEntry.objects.count(),
+            "receivables": ReceivableEvent.objects.count(),
+            "supplier_bills": SupplierBill.objects.count(),
+            "expenses": ExpenseRecord.objects.count(),
+            "payroll": PayrollBatch.objects.count(),
+            "inventory": InventoryMovement.objects.count(),
+        }
+        client = Client()
+        client.force_login(self.submitter)
+        created = []
+        for slug, operation_type, values in workflows:
+            with self.subTest(slug=slug):
+                response = client.post(
+                    f"{reverse('finance_operation_create', args=[slug])}?side=CA",
+                    {**common, **values},
+                    follow=True,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Draft saved successfully.")
+                operation = FinanceOperation.objects.filter(operation_type=operation_type).latest("pk")
+                created.append(operation.pk)
+                self.assertEqual(operation.state, FinanceOperation.STATE_DRAFT)
+                self.assertEqual(operation.documents.count(), 0)
+                self.assertEqual(operation.reference, "")
+                self.assertEqual(operation.business_purpose, "")
+        self.assertEqual(len(created), 7)
+        self.assertEqual(JournalEntry.objects.count(), protected_counts["journals"])
+        self.assertEqual(ReceivableEvent.objects.count(), protected_counts["receivables"])
+        self.assertEqual(SupplierBill.objects.count(), protected_counts["supplier_bills"])
+        self.assertEqual(ExpenseRecord.objects.count(), protected_counts["expenses"])
+        self.assertEqual(PayrollBatch.objects.count(), protected_counts["payroll"])
+        self.assertEqual(InventoryMovement.objects.count(), protected_counts["inventory"])
+
+    def test_customer_payment_without_receipt_requires_confirmation_then_submits(self):
+        invoice = self.invoice("OPS-NO-DOCUMENT-PAYMENT")
+        payload = {
+            "transaction_date": "2026-02-21",
+            "side": "CA",
+            "currency": "CAD",
+            "rate_to_cad": "1",
+            "rate_to_bdt": "100",
+            "customer": self.customer.pk,
+            "invoice": invoice.pk,
+            "amount": "30.00",
+            "payment_method": "bank",
+            "payment_account": self.bank.pk,
+            "action": "submit",
+        }
+        client = Client()
+        client.force_login(self.submitter)
+        before = FinanceOperation.objects.count()
+        warning = client.post(
+            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
+            payload,
+        )
+        self.assertEqual(warning.status_code, 200)
+        self.assertContains(warning, "No supporting document attached.")
+        self.assertContains(warning, "Continue with approval?")
+        self.assertEqual(FinanceOperation.objects.count(), before)
+
+        submitted = client.post(
+            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
+            {**payload, "confirm_missing_document": "yes"},
+        )
+        self.assertEqual(submitted.status_code, 302)
+        operation = FinanceOperation.objects.latest("pk")
+        self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+        self.assertEqual(operation.documents.count(), 0)
+        self.assertFalse(JournalEntry.objects.filter(source_key=f"FINANCE-OPERATION:{operation.pk}").exists())
+
+        client.force_login(self.approver)
+        review = client.get(reverse("finance_operation_review", args=[operation.pk, "approve"]))
+        self.assertContains(review, "Supporting Document: Missing")
+        approved = review_operation(
+            operation,
+            actor=self.approver,
+            action="APPROVE",
+            notes="Approved without evidence after review.",
+        )
+        self.assertEqual(approved.state, FinanceOperation.STATE_APPROVED)
+        self.assertFalse(JournalEntry.objects.filter(source_key=f"FINANCE-OPERATION:{operation.pk}").exists())
+
+    def test_draft_can_be_edited_and_returned_for_more_information(self):
+        invoice = self.invoice("OPS-EDIT-DRAFT")
+        payload = {
+            "transaction_date": "2026-02-22",
+            "side": "CA",
+            "currency": "CAD",
+            "rate_to_cad": "1",
+            "rate_to_bdt": "100",
+            "customer": self.customer.pk,
+            "invoice": invoice.pk,
+            "amount": "10.00",
+            "payment_method": "bank",
+            "payment_account": self.bank.pk,
+            "action": "draft",
+        }
+        client = Client()
+        client.force_login(self.submitter)
+        saved = client.post(
+            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
+            payload,
+        )
+        self.assertEqual(saved.status_code, 302)
+        draft = FinanceOperation.objects.latest("pk")
+        edit_url = (
+            f"{reverse('finance_operation_create', args=['customer-payment'])}"
+            f"?side=CA&draft={draft.pk}"
+        )
+        edit = client.get(edit_url)
+        self.assertEqual(edit.context["form"]["amount"].value(), "10.00")
+        updated = client.post(
+            edit_url,
+            {**payload, "draft_id": draft.pk, "amount": "15.00"},
+        )
+        self.assertEqual(updated.status_code, 302)
+        draft.refresh_from_db()
+        self.assertEqual(draft.total_amount, Decimal("15.00"))
+        self.assertEqual(FinanceOperation.objects.filter(pk=draft.pk).count(), 1)
+
+        submitted = client.post(
+            edit_url,
+            {
+                **payload,
+                "draft_id": draft.pk,
+                "amount": "15.00",
+                "action": "submit",
+                "confirm_missing_document": "yes",
+            },
+        )
+        self.assertEqual(submitted.status_code, 302)
+        draft.refresh_from_db()
+        self.assertEqual(draft.state, FinanceOperation.STATE_PENDING)
+        returned = review_operation(
+            draft,
+            actor=self.approver,
+            action="EVIDENCE_REQUIRED",
+            notes="Please provide more information about this payment.",
+        )
+        self.assertEqual(returned.state, FinanceOperation.STATE_EVIDENCE_REQUIRED)
+
     def test_country_centers_use_the_shared_workflows_with_locked_links(self):
         client = Client()
         client.force_login(self.submitter)
