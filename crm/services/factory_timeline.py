@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from crm.models import FactoryRunningCostDefault, QuickCosting, QuickCostingTimelineSnapshot
+from crm.models import ExchangeRate, FactoryRunningCostDefault, QuickCosting, QuickCostingTimelineSnapshot
 from crm.services.costing_currency import CurrencyConversionError, convert_currency, normalize_costing_currency
 from crm.services.financial_currency import money
 
@@ -86,6 +86,25 @@ def _timeline_cost_in_costing_currency(quick_costing, amount, source_currency):
 
 def factory_cost_in_costing_currency(quick_costing, amount, source_currency):
     return _timeline_cost_in_costing_currency(quick_costing, amount, source_currency)
+
+
+def _snapshot_finance_bdt_per_cad(quick_costing, source_currency):
+    """Persist the approved Finance rate when a CAD costing has no stored rate."""
+    target_currency = normalize_costing_currency(quick_costing.currency)
+    source_currency = normalize_costing_currency(source_currency)
+    if {source_currency, target_currency} != {"BDT", "CAD"}:
+        return
+    current_rate = quick_costing.exchange_rate_bdt_per_cad
+    if current_rate is not None and current_rate > 1:
+        return
+    rate_row = ExchangeRate.objects.select_for_update().order_by("-updated_at", "-pk").first()
+    rate = getattr(rate_row, "cad_to_bdt", None)
+    if rate is None or rate <= 1:
+        raise FactoryTimelineError(
+            "A valid Finance BDT-per-CAD exchange rate is required before the factory timeline can be saved."
+        )
+    QuickCosting.objects.filter(pk=quick_costing.pk).update(exchange_rate_bdt_per_cad=rate)
+    quick_costing.exchange_rate_bdt_per_cad = rate
 
 
 def current_estimated_inputs(quick_costing):
@@ -195,6 +214,7 @@ def save_estimated_factory_timeline(
     user = _actor(actor)
     locked = QuickCosting.objects.select_for_update().get(pk=quick_costing.pk)
     default = FactoryRunningCostDefault.objects.select_for_update().get(pk=daily_default.pk, is_active=True)
+    _snapshot_finance_bdt_per_cad(locked, default.currency)
     estimated_days = int(estimated_days)
     if estimated_days <= 0:
         raise FactoryTimelineError("Estimated production days must be greater than zero.")

@@ -51,6 +51,7 @@ from crm.services.financial_permissions import (
     can_submit_finance_operation,
     scope_finance_operations_for_user,
 )
+from crm.services.factory_timeline import save_estimated_factory_timeline
 from crm.services.receivable_accounting import issue_invoice_to_financial_core
 
 
@@ -281,6 +282,17 @@ class FinanceOperationsTests(TestCase):
         self.assertContains(bangladesh, "Record Inventory Adjustment")
 
     def test_country_forms_filter_suppliers_accounts_invoices_and_default_currency(self):
+        cad_factory_costing = QuickCosting.objects.create(
+            buyer_name="CAD Factory Buyer",
+            project_name="CAD Bangladesh Factory Cost",
+            quantity=100,
+            currency="CAD",
+            selling_price_per_piece=Decimal("10"),
+            status=QuickCosting.STATUS_APPROVED,
+            approved_by=self.approver,
+            approved_at=timezone.now(),
+            created_by=self.submitter,
+        )
         bd_supplier = Supplier.objects.create(
             code="OPS-BD-SUP",
             name="Bangladesh Operations Supplier",
@@ -334,7 +346,7 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(bd_factory_response.status_code, 200)
         self.assertQuerySetEqual(
             bd_factory_response.context["form"].fields["quick_costing"].queryset,
-            [self.quick_costing],
+            [cad_factory_costing, self.quick_costing],
         )
 
         ca_payment = client.get(
@@ -619,6 +631,18 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(PayrollBatch.objects.get(reference=payroll.operation_number).state, PayrollBatch.STATE_PAID)
 
     def test_production_cost_and_factory_daily_snapshot_preserve_rate(self):
+        locked_timeline = save_estimated_factory_timeline(
+            self.quick_costing,
+            estimated_days=5,
+            daily_default=self.factory_default,
+            estimated_revenue=Decimal("100000"),
+            other_estimated_cost=Decimal("30000"),
+            daily_amount_snapshot=Decimal("10000"),
+            target_margin_percent=Decimal("20"),
+            approved_minimum_margin_percent=Decimal("10"),
+            actor=self.approver,
+        )
+        self.assertIsNotNone(locked_timeline.locked_at)
         production = self.operation(
             FinanceOperation.TYPE_PRODUCTION_COST,
             "120",
@@ -657,9 +681,11 @@ class FinanceOperationsTests(TestCase):
         production.source_record.refresh_from_db()
         timeline = self.quick_costing.factory_timeline
         self.assertEqual(production.source_record.variance, Decimal("20.00"))
+        self.assertEqual(timeline.estimated_production_days, 5)
         self.assertEqual(timeline.daily_factory_cost, Decimal("10000.00"))
         timeline.refresh_from_db()
         self.assertEqual(timeline.actual_timeline_cost, Decimal("70000.00"))
+        self.assertEqual(timeline.actual_profit, Decimal("-10000.00"))
 
     def test_bank_cash_owner_loan_asset_inventory_previews_cover_every_mapping(self):
         types_and_fields = (

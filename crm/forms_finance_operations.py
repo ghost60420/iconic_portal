@@ -1017,35 +1017,32 @@ class FactoryDailyCostOperationForm(FinanceOperationForm):
         sides = self.allowed_sides
         quick_costings = QuickCosting.objects.exclude(
             status__in=QuickCosting.INACTIVE_REPORTING_STATUSES
+        ).filter(
+            Q(production_order__factory_location__iexact="bd") | Q(production_order__isnull=True)
         )
-        if sides != {"CA", "BD"}:
-            side_query = Q(pk__in=[])
-            if "BD" in sides:
-                side_query |= Q(production_order__factory_location__iexact="bd") | Q(
-                    production_order__isnull=True,
-                    currency="BDT",
-                )
-            if "CA" in sides:
-                side_query |= Q(production_order__factory_location__iexact="ca") | Q(
-                    production_order__isnull=True,
-                    currency__in=("CAD", "USD"),
-                )
-            quick_costings = quick_costings.filter(side_query)
+        if "BD" not in sides:
+            quick_costings = quick_costings.none()
         self.fields["quick_costing"].queryset = quick_costings.select_related("opportunity").distinct()
-        self.fields["daily_default"].queryset = FactoryRunningCostDefault.objects.filter(is_active=True, side__in=sides)
+        self.fields["daily_default"].queryset = FactoryRunningCostDefault.objects.filter(
+            is_active=True,
+            side="BD",
+            currency="BDT",
+        )
 
     def clean(self):
         cleaned = super().clean()
-        costing = cleaned.get("quick_costing")
         default = cleaned.get("daily_default")
-        if costing and default and costing.currency != default.currency:
-            self.add_error("daily_default", "Daily rate and Quick Costing currencies must match.")
         if default and cleaned.get("currency") != default.currency:
             self.add_error("currency", "Operation currency must match the saved daily rate.")
         if default and cleaned.get("side") != default.side:
             self.add_error("side", "Business side must match the daily rate.")
-        if cleaned.get("actual_days") and cleaned.get("actual_revenue") is None:
-            self.add_error("actual_revenue", "Actual revenue is required when actual days are entered.")
+        actual_revenue = cleaned.get("actual_revenue")
+        other_actual_cost = cleaned.get("other_actual_cost")
+        if (actual_revenue is None) != (other_actual_cost is None):
+            self.add_error(
+                "actual_revenue" if actual_revenue is None else "other_actual_cost",
+                "Actual revenue and other actual costs must both be entered to calculate actual profit.",
+            )
         return cleaned
 
     def build_operation(self):

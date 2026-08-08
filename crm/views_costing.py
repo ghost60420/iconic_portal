@@ -19,7 +19,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm, QuickCostingForm
-from .forms_financial_core import FactoryTimelineActualForm, FactoryTimelineEstimateForm
+from .forms_financial_core import FactoryTimelineEstimateForm
 from .models import (
     CostingHeader,
     CostingLineItem,
@@ -1460,10 +1460,6 @@ def quick_costing_detail(request, pk):
             "daily_cost_currency": factory_timeline.daily_cost_currency if factory_timeline else getattr(factory_default, "currency", ""),
         },
     )
-    timeline_actual_form = FactoryTimelineActualForm(
-        prefix="actual",
-        initial={"actual_days": factory_timeline.actual_production_days if factory_timeline else None},
-    )
     calc = _quick_costing_calc(quick_costing)
     daily_cost = factory_timeline.daily_factory_cost if factory_timeline else getattr(factory_default, "daily_amount", None)
     daily_currency = factory_timeline.daily_cost_currency if factory_timeline else getattr(factory_default, "currency", "")
@@ -1558,7 +1554,6 @@ def quick_costing_detail(request, pk):
         "factory_timeline": factory_timeline,
         "factory_default": factory_default,
         "timeline_estimate_form": timeline_estimate_form,
-        "timeline_actual_form": timeline_actual_form,
         "timeline_base_profit": calc["net_profit_total"] + calc["factory_timeline_cost"],
         "timeline_daily_cost_in_costing_currency": daily_cost_in_costing_currency,
         "can_edit_timeline_estimate": bool(

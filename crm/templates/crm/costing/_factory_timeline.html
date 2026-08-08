@@ -1,3 +1,4 @@
+{% load humanize %}
 <details class="quick-detail-card" id="production-timeline" data-base-profit="{{ timeline_base_profit }}" data-costing-currency="{{ calc.currency }}" data-daily-cost-currency="{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }}{% elif factory_default %}{{ factory_default.currency }}{% endif %}" data-daily-cost-source="{% if factory_timeline %}{{ factory_timeline.daily_factory_cost }}{% elif factory_default %}{{ factory_default.daily_amount }}{% endif %}" data-daily-cost-converted="{{ timeline_daily_cost_in_costing_currency|default_if_none:'' }}" open>
   <summary>4. Production Timeline and Factory Cost</summary>
   <div class="quick-detail-body">
@@ -12,43 +13,43 @@
         <input type="hidden" name="action" value="estimate">
         <div class="quick-timeline-fields">
           <div><label for="{{ timeline_estimate_form.estimated_days.id_for_label }}">Estimated Production Days</label>{{ timeline_estimate_form.estimated_days }}{{ timeline_estimate_form.estimated_days.errors }}</div>
-          <div><label for="{{ timeline_estimate_form.daily_factory_cost.id_for_label }}">Daily Factory Operating Cost</label>{{ timeline_estimate_form.daily_factory_cost }}{% if not can_override_factory_rate %}<small>From Finance Settings</small>{% endif %}{{ timeline_estimate_form.daily_factory_cost.errors }}</div>
-          <div><label for="{{ timeline_estimate_form.daily_cost_currency.id_for_label }}">Daily Cost Currency</label>{{ timeline_estimate_form.daily_cost_currency }}{{ timeline_estimate_form.daily_cost_currency.errors }}</div>
+          <div><label for="{{ timeline_estimate_form.daily_factory_cost.id_for_label }}">Daily Factory Operating Cost</label>{{ timeline_estimate_form.daily_factory_cost }}{% if not can_override_factory_rate %}<small>From Finance Settings</small>{% else %}<small>Saved only for this costing</small>{% endif %}{{ timeline_estimate_form.daily_factory_cost.errors }}</div>
+          <div>
+            <label>Currency</label>
+            <span class="quick-timeline-currency">{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }}{% elif factory_default %}{{ factory_default.currency }}{% else %}BDT{% endif %}</span>
+          </div>
         </div>
         <button class="quick-btn quick-btn-primary" type="submit">Save Timeline Estimate</button>
       </form>
     {% endif %}
+
+    <h3 class="quick-timeline-heading">Estimated Result</h3>
     <div class="quick-summary-grid">
-      <div class="quick-summary-row"><span>Estimated Production Days</span><strong>{% if factory_timeline %}{{ factory_timeline.estimated_production_days }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Daily Factory Operating Cost</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost|floatformat:2 }}{% elif factory_default %}{{ factory_default.currency }} {{ factory_default.daily_amount|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Daily Cost Currency</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }}{% elif factory_default %}{{ factory_default.currency }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Estimated Factory Timeline Cost</span><strong data-timeline-estimated-cost>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.estimated_timeline_cost|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Production Days</span><strong>{% if factory_timeline %}{{ factory_timeline.estimated_production_days }} days{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Daily Factory Operating Cost</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost|floatformat:2|intcomma }} / day{% elif factory_default %}{{ factory_default.currency }} {{ factory_default.daily_amount|floatformat:2|intcomma }} / day{% else %}Pending Finance Setup{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Factory Timeline Cost</span><strong data-timeline-estimated-cost>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.estimated_timeline_cost|floatformat:2|intcomma }}{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Rate Snapshot</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost|floatformat:2|intcomma }} / day{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Snapshot State</span><strong>{% if factory_timeline.locked_at %}Approved and Locked{% elif factory_timeline %}Saved Draft{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.display.sales_value_pair }}</strong></div>
+      <div class="quick-summary-row"><span>Material Cost</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
+      <div class="quick-summary-row"><span>Production Cost</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
+      <div class="quick-summary-row"><span>Shipping</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+      <div class="quick-summary-row"><span>Other Expenses</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Profit</span><strong data-timeline-estimated-profit>{% if factory_timeline %}{{ calc.display.net_profit_total_pair }}{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Estimated Margin</span><strong>{% if factory_timeline %}{{ calc.display.net_profit_margin_percent }}%{% else %}Pending Estimate{% endif %}</strong></div>
     </div>
 
     <h3 class="quick-timeline-heading">After Production</h3>
     {% if can_record_timeline_actual %}
-      <form method="post" action="{% url 'financial_quick_costing_timeline' quick_costing.pk %}" class="quick-timeline-form">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="actual">
-        <div class="quick-timeline-fields">
-          <div><label for="{{ timeline_actual_form.actual_days.id_for_label }}">Actual Production Days</label>{{ timeline_actual_form.actual_days }}{{ timeline_actual_form.actual_days.errors }}</div>
-        </div>
-        <button class="quick-btn" type="submit">Save Actual Production Days</button>
-      </form>
+      <div class="quick-timeline-notice">Actual production days and approved actual costs are recorded through the existing Factory Daily Cost Finance workflow. <a href="{% url 'finance_operation_create' 'factory-daily-cost' %}?side=BD">Open Factory Daily Cost</a></div>
     {% endif %}
     <div class="quick-summary-grid">
-      <div class="quick-summary-row"><span>Actual Production Days</span><strong>{% if factory_timeline.actual_production_days != None %}{{ factory_timeline.actual_production_days }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Actual Factory Timeline Cost</span><strong data-timeline-actual-cost>{% if factory_timeline.actual_timeline_cost != None %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.actual_timeline_cost|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
-    </div>
-
-    <h3 class="quick-timeline-heading">Profit Analysis</h3>
-    <div class="quick-summary-grid">
-      <div class="quick-summary-row"><span>Estimated Profit</span><strong data-timeline-estimated-profit>{% if factory_timeline %}{{ calc.currency }} {{ factory_timeline.estimated_profit|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Actual Profit</span><strong>{% if factory_timeline.actual_profit != None %}{{ calc.currency }} {{ factory_timeline.actual_profit|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Profit Difference</span><strong>{% if factory_timeline.profit_variance != None %}{{ calc.currency }} {{ factory_timeline.profit_variance|floatformat:2 }}{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Timeline Difference</span><strong>{% if factory_timeline.timeline_variance != None %}{{ factory_timeline.timeline_variance }} days{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Timeline Status</span><strong>{% if factory_timeline %}<span class="quick-timeline-status timeline-{{ factory_timeline.status|lower }}">{{ factory_timeline.get_status_display }}</span>{% else %}Not Available{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Rate Snapshot</span><strong>{% if factory_timeline.locked_at %}Locked {{ factory_timeline.locked_at|date:"M j, Y H:i" }}{% elif factory_timeline %}Draft{% else %}Not Available{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Actual Production Days</span><strong>{% if factory_timeline.actual_production_days != None %}{{ factory_timeline.actual_production_days }} days{% else %}Pending Production{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Actual Factory Timeline Cost</span><strong>{% if factory_timeline.actual_timeline_cost != None %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.actual_timeline_cost|floatformat:2|intcomma }}{% else %}Pending Production{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Actual Profit</span><strong>{% if factory_timeline.actual_profit != None %}{{ calc.currency }} {{ factory_timeline.actual_profit|floatformat:2|intcomma }}{% else %}Pending Approved Actual Costs{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Timeline Difference</span><strong>{% if factory_timeline.timeline_variance != None %}{% if factory_timeline.timeline_variance > 0 %}+{% endif %}{{ factory_timeline.timeline_variance }} days{% else %}Pending Production{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Timeline Status</span><strong>{% if factory_timeline.timeline_variance != None %}<span class="quick-timeline-status timeline-{{ factory_timeline.status|lower }}">{% if factory_timeline.timeline_variance == 0 %}On Target{% elif factory_timeline.timeline_variance < 0 %}Faster Than Estimate{% else %}Over Estimate{% endif %}</span>{% else %}<span class="quick-timeline-status timeline-yellow">Pending Production</span>{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>Profit Difference</span><strong>{% if factory_timeline.profit_variance != None %}{{ calc.currency }} {% if factory_timeline.profit_variance > 0 %}+{% endif %}{{ factory_timeline.profit_variance|floatformat:2|intcomma }}{% else %}Pending Approved Actual Costs{% endif %}</strong></div>
     </div>
   </div>
 </details>
@@ -58,21 +59,18 @@
     if (!section) return;
     const estimatedDays = section.querySelector("[name='estimate-estimated_days']");
     const dailyCost = section.querySelector("[name='estimate-daily_factory_cost']");
-    const dailyCurrency = section.querySelector("[name='estimate-daily_cost_currency']");
-    const actualDays = section.querySelector("[name='actual-actual_days']");
     const estimatedCost = section.querySelector("[data-timeline-estimated-cost]");
     const estimatedProfit = section.querySelector("[data-timeline-estimated-profit]");
-    const actualCost = section.querySelector("[data-timeline-actual-cost]");
     const baseProfit = Number(section.dataset.baseProfit || 0);
     const configuredDaily = Number(section.dataset.dailyCostSource || 0);
     const convertedDaily = Number(section.dataset.dailyCostConverted || 0);
+    const sourceCurrency = section.dataset.dailyCostCurrency || "BDT";
     const costingCurrency = section.dataset.costingCurrency || "BDT";
     const money = value => Number(value).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const updateEstimate = () => {
       if (!estimatedDays || !dailyCost) return;
       const days = Number(estimatedDays.value || 0);
       const sourceDaily = Number(dailyCost.value || 0);
-      const sourceCurrency = dailyCurrency ? dailyCurrency.value : "";
       if (days <= 0 || sourceDaily <= 0) return;
       estimatedCost.textContent = `${sourceCurrency} ${money(days * sourceDaily)}`;
       if (convertedDaily > 0 && configuredDaily > 0) {
@@ -80,15 +78,7 @@
         estimatedProfit.textContent = `${costingCurrency} ${money(baseProfit - (days * sourceDaily * conversionRatio))}`;
       }
     };
-    const updateActual = () => {
-      if (!actualDays || !actualCost) return;
-      const days = Number(actualDays.value || 0);
-      const sourceDaily = Number(dailyCost?.value || configuredDaily || 0);
-      const sourceCurrency = dailyCurrency?.value || section.dataset.dailyCostCurrency || "";
-      if (days > 0 && sourceDaily > 0) actualCost.textContent = `${sourceCurrency} ${money(days * sourceDaily)}`;
-    };
     estimatedDays?.addEventListener("input", updateEstimate);
-    dailyCost?.addEventListener("input", () => { updateEstimate(); updateActual(); });
-    actualDays?.addEventListener("input", updateActual);
+    dailyCost?.addEventListener("input", updateEstimate);
   })();
 </script>

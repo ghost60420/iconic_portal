@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.models import (
+    ExchangeRate,
     FactoryRunningCostDefault,
     JournalEntry,
     Opportunity,
@@ -147,7 +148,100 @@ class QuickCostingFactoryTimelineTests(TestCase):
         self.assertContains(response, "7. Live Order Summary")
         self.assertContains(response, "Estimated Production Days")
         self.assertContains(response, "Actual Profit")
-        self.assertContains(response, "Not Available")
+        self.assertContains(response, "Pending Production")
+        self.assertContains(response, "Pending Approved Actual Costs")
+        self.assertNotContains(response, "Not Available")
+
+    def test_cad_post_snapshots_finance_rate_and_persists_after_refresh(self):
+        ExchangeRate.objects.create(cad_to_bdt=Decimal("87"))
+        quick = self.quick_costing(
+            currency="CAD",
+            exchange_rate_bdt_per_cad=None,
+            material_cost=Decimal("100"),
+            production_cost=Decimal("100"),
+            other_expenses=Decimal("50"),
+            shipping_cost=Decimal("50"),
+            selling_price_per_piece=Decimal("10"),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("financial_quick_costing_timeline", args=[quick.pk]),
+            {
+                "action": "estimate",
+                "estimate-estimated_days": "5",
+                "estimate-daily_factory_cost": "10000",
+            },
+        )
+
+        self.assertRedirects(response, reverse("quick_costing_detail", args=[quick.pk]))
+        quick.refresh_from_db()
+        snapshot = quick.factory_timeline
+        self.assertEqual(quick.exchange_rate_bdt_per_cad, Decimal("87.0000"))
+        self.assertEqual(snapshot.estimated_production_days, 5)
+        self.assertEqual(snapshot.daily_factory_cost, Decimal("10000.00"))
+        self.assertEqual(snapshot.estimated_timeline_cost, Decimal("50000.00"))
+
+        base = quick.calculation_summary()
+        adjusted = apply_factory_timeline_to_summary(quick, base, snapshot=snapshot)
+        self.assertEqual(adjusted["factory_timeline_cost"], Decimal("574.71"))
+        self.assertEqual(adjusted["total_cost"] - base["total_cost"], Decimal("574.71"))
+        self.assertEqual(
+            base["final_profit_after_commission"] - adjusted["final_profit_after_commission"],
+            Decimal("574.71"),
+        )
+
+        for _ in range(2):
+            refreshed = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+            self.assertEqual(refreshed.status_code, 200)
+            self.assertContains(refreshed, "5 days")
+            self.assertContains(refreshed, "BDT 10,000.00 / day")
+            self.assertContains(refreshed, "BDT 50,000.00")
+            self.assertContains(refreshed, "Rate Snapshot")
+
+        ExchangeRate.objects.update(cad_to_bdt=Decimal("100"))
+        self.default.daily_amount = Decimal("12000")
+        self.default.save(update_fields=("daily_amount", "modified_at"))
+        quick.refresh_from_db()
+        snapshot.refresh_from_db()
+        self.assertEqual(quick.exchange_rate_bdt_per_cad, Decimal("87.0000"))
+        self.assertEqual(snapshot.daily_factory_cost, Decimal("10000.00"))
+        self.assertEqual(snapshot.estimated_timeline_cost, Decimal("50000.00"))
+
+    def test_authorized_user_can_override_rate_for_one_costing(self):
+        quick = self.quick_costing()
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("financial_quick_costing_timeline", args=[quick.pk]),
+            {
+                "action": "estimate",
+                "estimate-estimated_days": "5",
+                "estimate-daily_factory_cost": "12000",
+            },
+        )
+
+        self.assertRedirects(response, reverse("quick_costing_detail", args=[quick.pk]))
+        snapshot = quick.factory_timeline
+        self.assertEqual(snapshot.daily_factory_cost, Decimal("12000.00"))
+        self.assertEqual(snapshot.estimated_timeline_cost, Decimal("60000.00"))
+        self.default.refresh_from_db()
+        self.assertEqual(self.default.daily_amount, Decimal("10000.00"))
+
+    def test_direct_actual_post_is_rejected_in_favor_of_approved_finance_workflow(self):
+        quick = self.quick_costing()
+        snapshot = self.save_estimate(quick)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("financial_quick_costing_timeline", args=[quick.pk]),
+            {"action": "actual", "actual-actual_days": "7"},
+            follow=True,
+        )
+
+        self.assertContains(response, "approved Factory Daily Cost Finance workflow")
+        snapshot.refresh_from_db()
+        self.assertIsNone(snapshot.actual_production_days)
 
     def test_sales_can_enter_days_but_cannot_override_finance_rate(self):
         sales = get_user_model().objects.create_user(username="timeline-sales", password="test-pass")

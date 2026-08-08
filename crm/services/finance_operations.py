@@ -932,17 +932,24 @@ def _post_production_cost(operation, actor):
 def _post_factory_cost(operation, actor):
     details = operation.details
     quick_costing = operation.source_record
-    snapshot = save_estimated_factory_timeline(
-        quick_costing,
-        estimated_days=int(details["estimated_days"]),
-        daily_default=quick_costing_factory_default(details["daily_default_id"]),
-        estimated_revenue=details["estimated_revenue"],
-        other_estimated_cost=details["other_estimated_cost"],
-        actor=actor,
-        target_margin_percent=details.get("target_margin_percent"),
-        approved_minimum_margin_percent=details.get("approved_minimum_margin_percent"),
-        daily_amount_snapshot=details["daily_factory_cost"],
-    )
+    snapshot = getattr(quick_costing, "factory_timeline", None)
+    if snapshot and snapshot.locked_at:
+        if not details.get("actual_days"):
+            raise FactoryTimelineError(
+                "The approved factory estimate is locked. Record approved actual production days instead."
+            )
+    else:
+        snapshot = save_estimated_factory_timeline(
+            quick_costing,
+            estimated_days=int(details["estimated_days"]),
+            daily_default=quick_costing_factory_default(details["daily_default_id"]),
+            estimated_revenue=details["estimated_revenue"],
+            other_estimated_cost=details["other_estimated_cost"],
+            actor=actor,
+            target_margin_percent=details.get("target_margin_percent"),
+            approved_minimum_margin_percent=details.get("approved_minimum_margin_percent"),
+            daily_amount_snapshot=details["daily_factory_cost"],
+        )
     if details.get("actual_days"):
         snapshot = record_actual_factory_timeline(
             snapshot,

@@ -25,7 +25,6 @@ from crm.forms_financial_core import (
     CustomerReceiptForm,
     ExpenseCategoryForm,
     ExpenseRecordForm,
-    FactoryTimelineActualForm,
     FactoryTimelineEstimateForm,
     FinancialAdjustmentProposalForm,
     FinancialEvidenceUploadForm,
@@ -81,7 +80,6 @@ from crm.services.factory_timeline import (
     configured_factory_default,
     current_estimated_inputs,
     FactoryTimelineError,
-    record_actual_factory_timeline,
     save_estimated_factory_timeline,
 )
 from crm.services.financial_permissions import (
@@ -1153,10 +1151,6 @@ def financial_quick_costing_timeline(request, pk):
         initial=estimate_initial,
         can_override_rate=can_override_rate,
     )
-    actual_form = FactoryTimelineActualForm(
-        prefix="actual",
-        initial={"actual_days": snapshot.actual_production_days if snapshot else None},
-    )
     if request.method == "POST":
         if not getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
             messages.error(request, "Finance posting is disabled.")
@@ -1194,15 +1188,10 @@ def financial_quick_costing_timeline(request, pk):
                     messages.success(request, "Factory timeline estimate saved.")
                     return redirect("quick_costing_detail", pk=pk)
             elif action == "actual":
-                if not can_enter_production_cost(request.user):
-                    return HttpResponseForbidden("Production or Finance permission is required.")
-                actual_form = FactoryTimelineActualForm(request.POST, prefix="actual")
-                if actual_form.is_valid():
-                    if not snapshot:
-                        raise FactoryTimelineError("Save and approve the timeline estimate first.")
-                    record_actual_factory_timeline(snapshot, actor=request.user, **actual_form.cleaned_data)
-                    messages.success(request, "Factory timeline actuals saved.")
-                    return redirect("quick_costing_detail", pk=pk)
+                messages.error(
+                    request,
+                    "Record actual production days through the approved Factory Daily Cost Finance workflow.",
+                )
         except FactoryTimelineError as exc:
             messages.error(request, str(exc))
     return redirect("quick_costing_detail", pk=pk)
