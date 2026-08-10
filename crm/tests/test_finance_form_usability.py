@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from time import perf_counter
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
@@ -17,7 +18,9 @@ from crm.models import (
     Customer,
     ExpenseCategory,
     FactoryRunningCostDefault,
+    FinanceOperation,
     Invoice,
+    JournalEntry,
     Supplier,
 )
 from crm.services.chart_of_accounts import account_by_key, bootstrap_chart_of_accounts
@@ -260,6 +263,70 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertContains(response, "Already Paid")
         self.assertContains(response, "Remaining After Payment")
 
+    def test_money_transfer_page_restores_cross_country_fields_and_summary(self):
+        response = self.client_for_user().get(
+            f"{reverse('finance_operation_create', args=['money-transfer'])}?side=CA"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Canada to Bangladesh")
+        self.assertContains(response, "TapTap Send")
+        self.assertContains(response, "Amount Sent")
+        self.assertContains(response, "Amount Received")
+        self.assertContains(response, "Transfer Fee")
+        self.assertContains(response, "Transfer Summary")
+        self.assertContains(response, "The principal is not revenue or operating expense")
+        self.assertContains(response, 'data-side="CA"')
+        self.assertContains(response, 'data-side="BD"')
+        self.assertNotContains(response, "Bangladesh to Canada")
+
+    def test_canada_to_bangladesh_draft_persists_actual_amount_without_receipt(self):
+        client = self.client_for_user()
+        url = f"{reverse('finance_operation_create', args=['money-transfer'])}?side=CA"
+        response = client.post(
+            url,
+            {
+                "action": "draft",
+                "transaction_date": "2026-08-09",
+                "side": "CA",
+                "transfer_type": "CA_TO_BD",
+                "transfer_service": "TAPTAP_SEND",
+                "other_transfer_service": "",
+                "reference": "LIVE-EXAMPLE-CA-BD",
+                "from_account": self.ca_account.pk,
+                "amount": "1000",
+                "currency": "CAD",
+                "to_account": self.bd_account.pk,
+                "destination_amount": "88000",
+                "receiving_currency": "BDT",
+                "provider_exchange_rate": "88",
+                "transfer_fee": "5",
+                "fee_currency": "CAD",
+                "business_purpose": "FACTORY_FUNDING",
+                "notes": "Exact transfer workflow regression",
+                "rate_to_cad": "",
+                "rate_to_bdt": "",
+                "destination_rate_to_cad": "",
+                "destination_rate_to_bdt": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        operation = FinanceOperation.objects.get(reference="LIVE-EXAMPLE-CA-BD")
+        self.assertEqual(operation.state, FinanceOperation.STATE_DRAFT)
+        self.assertEqual(operation.total_amount, Decimal("1000.00"))
+        self.assertEqual(operation.details["destination_amount"], "88000")
+        self.assertEqual(operation.details["transfer_fee"], "5")
+        self.assertEqual(operation.details["effective_rate_display"], "1 CAD = 88 BDT")
+        self.assertFalse(JournalEntry.objects.filter(source_object_id=operation.pk).exists())
+
+        refreshed = client.get(f"{url}&draft={operation.pk}")
+        self.assertEqual(refreshed.status_code, 200)
+        self.assertEqual(refreshed.context["form"].initial["amount"], "1000")
+        self.assertEqual(refreshed.context["form"].initial["destination_amount"], "88000")
+        self.assertEqual(refreshed.context["form"].initial["transfer_fee"], "5")
+        self.assertContains(refreshed, "Draft saved successfully.")
+
     def test_country_guidance_remains_locked_and_compact(self):
         client = self.client_for_user()
         canada = client.get(f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA")
@@ -334,3 +401,25 @@ class FinanceFormUsabilityTests(TestCase):
             response.content
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(queries), 8)
+
+    def test_money_transfer_page_performance_profile(self):
+        client = self.client_for_user()
+        url = f"{reverse('finance_operation_create', args=['money-transfer'])}?side=CA"
+        cold_start = perf_counter()
+        with CaptureQueriesContext(connection) as cold_queries:
+            cold_response = client.get(url)
+            cold_response.content
+        cold_ms = (perf_counter() - cold_start) * 1000
+        warm_start = perf_counter()
+        with CaptureQueriesContext(connection) as warm_queries:
+            warm_response = client.get(url)
+            warm_response.content
+        warm_ms = (perf_counter() - warm_start) * 1000
+        print(
+            "TRANSFER_PAGE_PERF "
+            f"cold_queries={len(cold_queries)} cold_ms={cold_ms:.2f} "
+            f"warm_queries={len(warm_queries)} warm_ms={warm_ms:.2f}"
+        )
+        self.assertEqual(cold_response.status_code, 200)
+        self.assertEqual(warm_response.status_code, 200)
+        self.assertLessEqual(len(warm_queries), 8)

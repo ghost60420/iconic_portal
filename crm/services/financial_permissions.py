@@ -245,7 +245,14 @@ def scope_finance_operations_for_user(queryset, user):
     if not can_view_finance_operations(user):
         return queryset.none()
     roles = _roles(user)
-    scoped = scope_by_financial_side(queryset, user)
+    sides = accessible_financial_sides(user)
+    if sides == {"CA", "BD"}:
+        scoped = queryset
+    else:
+        scoped = queryset.filter(
+            Q(side__in=sorted(sides))
+            | Q(operation_type="ACCOUNT_TRANSFER", to_account__side__in=sorted(sides))
+        )
     if user.is_superuser or roles & {ROLE_CEO, ROLE_FINANCE, ROLE_ACCOUNTS}:
         return scoped
     creator_scope = Q(created_by=user) | Q(submitted_by=user)

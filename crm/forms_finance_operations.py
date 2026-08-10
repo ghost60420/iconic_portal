@@ -41,11 +41,43 @@ PAYMENT_METHODS = (
     ("other", "Other"),
 )
 
+TRANSFER_TYPE_INTERNAL = "INTERNAL"
+TRANSFER_TYPE_CA_TO_BD = "CA_TO_BD"
+TRANSFER_TYPE_BD_TO_CA = "BD_TO_CA"
+TRANSFER_TYPE_CHOICES = (
+    (TRANSFER_TYPE_INTERNAL, "Internal Account Transfer"),
+    (TRANSFER_TYPE_CA_TO_BD, "Canada to Bangladesh"),
+    (TRANSFER_TYPE_BD_TO_CA, "Bangladesh to Canada"),
+)
+TRANSFER_SERVICE_CHOICES = (
+    ("", "Select transfer service"),
+    ("TAPTAP_SEND", "TapTap Send"),
+    ("WISE", "Wise"),
+    ("BANK_WIRE", "Bank Wire"),
+    ("WESTERN_UNION", "Western Union"),
+    ("REMITLY", "Remitly"),
+    ("OTHER", "Other"),
+)
+TRANSFER_PURPOSE_CHOICES = (
+    ("", "Select purpose (optional)"),
+    ("FACTORY_FUNDING", "Factory Funding"),
+    ("PAYROLL_FUNDING", "Payroll Funding"),
+    ("PRODUCTION_FUNDING", "Production Funding"),
+    ("SUPPLIER_FUNDING", "Supplier Funding"),
+    ("OPERATING_EXPENSES", "Operating Expenses"),
+    ("OWNER_TRANSFER", "Owner Transfer"),
+    ("OTHER", "Other"),
+)
+
 
 def _json_value(value):
     if isinstance(value, (date, Decimal)):
         return str(value)
     return value
+
+
+def _rate_text(value):
+    return format(Decimal(value), ".10f").rstrip("0").rstrip(".")
 
 
 def _production_orders_for_sides(sides):
@@ -1173,10 +1205,14 @@ class BankCashOperationForm(FinanceOperationForm):
             self.add_error("from_account", "The selected source account does not match this workflow.")
         if destination and expected_destination and destination.kind != expected_destination:
             self.add_error("to_account", "The selected destination account does not match this workflow.")
-        if destination and source and destination.currency != source.currency:
+        is_actual_cross_country = (
+            operation_type == FinanceOperation.TYPE_ACCOUNT_TRANSFER
+            and cleaned.get("transfer_type") in {TRANSFER_TYPE_CA_TO_BD, TRANSFER_TYPE_BD_TO_CA}
+        )
+        if destination and source and destination.currency != source.currency and not is_actual_cross_country:
             if not cleaned.get("destination_amount"):
                 self.add_error("destination_amount", "Cross-currency transfers require the evidenced destination amount.")
-            else:
+            elif cleaned.get("amount") and cleaned.get("transaction_date"):
                 try:
                     source_snapshot = resolve_currency_snapshot(
                         native_amount=cleaned["amount"],
@@ -1217,6 +1253,241 @@ class BankCashOperationForm(FinanceOperationForm):
                 "destination_rate_to_bdt": cleaned.get("destination_rate_to_bdt"),
             },
         )
+
+
+class MoneyTransferOperationForm(BankCashOperationForm):
+    transfer_type = forms.ChoiceField(choices=TRANSFER_TYPE_CHOICES)
+    transfer_service = forms.ChoiceField(choices=TRANSFER_SERVICE_CHOICES, required=False)
+    other_transfer_service = forms.CharField(max_length=120, required=False)
+    receiving_currency = forms.ChoiceField(choices=CURRENCIES)
+    provider_exchange_rate = forms.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        min_value=Decimal("0.0000000001"),
+        required=False,
+        help_text="Optional provider-approved quoted rate. The effective rate is calculated from the actual amounts.",
+    )
+    transfer_fee = forms.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    fee_currency = forms.ChoiceField(choices=CURRENCIES, required=False)
+    business_purpose = forms.ChoiceField(choices=TRANSFER_PURPOSE_CHOICES, required=False, label="Purpose")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        accessible_sides = accessible_financial_sides(self.user)
+        accounts = scope_bank_accounts_for_user(
+            CashBankAccount.objects.filter(is_active=True).select_related("gl_account"), self.user
+        ).filter(side__in=accessible_sides).order_by("side", "name")
+        self.fields["from_account"].queryset = accounts
+        self.fields["to_account"].queryset = accounts
+        self.fields["transaction_date"].label = "Transaction Date"
+        self.fields["from_account"].label = "From Account"
+        self.fields["to_account"].label = "Destination Account"
+        self.fields["amount"].label = "Amount Sent"
+        self.fields["currency"].label = "Sending Currency"
+        self.fields["destination_amount"].label = "Amount Received"
+        self.fields["provider_exchange_rate"].label = "Exchange Rate (Provider)"
+        self.fields["transfer_fee"].label = "Transfer Fee"
+        self.fields["fee_currency"].label = "Transfer Fee Currency"
+        self.fields["other_transfer_service"].label = "Other Service Name"
+        self.fields["destination_amount"].help_text = "Enter the actual amount delivered by the transfer provider."
+        self.fields["currency"].help_text = "Defaults by direction and must match the selected source account."
+        self.fields["receiving_currency"].help_text = "Defaults by direction and must match the destination account."
+        if self.locked_side == "CA":
+            self.fields["transfer_type"].choices = (
+                TRANSFER_TYPE_CHOICES[0], TRANSFER_TYPE_CHOICES[1]
+            )
+        elif self.locked_side == "BD":
+            self.fields["transfer_type"].choices = (
+                TRANSFER_TYPE_CHOICES[0], TRANSFER_TYPE_CHOICES[2]
+            )
+        if not self.is_bound:
+            transfer_type = self.initial.get("transfer_type") or TRANSFER_TYPE_INTERNAL
+            if self.locked_side == "CA":
+                default_sending, default_receiving = "CAD", "CAD"
+            elif self.locked_side == "BD":
+                default_sending, default_receiving = "BDT", "BDT"
+            else:
+                default_sending, default_receiving = "CAD", "CAD"
+            if transfer_type == TRANSFER_TYPE_CA_TO_BD:
+                default_sending, default_receiving = "CAD", "BDT"
+            elif transfer_type == TRANSFER_TYPE_BD_TO_CA:
+                default_sending, default_receiving = "BDT", "CAD"
+            self.fields["transfer_type"].initial = transfer_type
+            self.fields["currency"].initial = self.initial.get("currency") or default_sending
+            self.fields["receiving_currency"].initial = (
+                self.initial.get("receiving_currency") or default_receiving
+            )
+            self.fields["fee_currency"].initial = self.initial.get("fee_currency") or default_sending
+
+    def _derive_cross_country_snapshots(self, cleaned, source, destination):
+        amount_sent = cleaned["amount"]
+        amount_received = cleaned["destination_amount"]
+        source_currency = source.currency
+        destination_currency = destination.currency
+        if source_currency == destination_currency:
+            if money(amount_sent) != money(amount_received):
+                self.add_error(
+                    "destination_amount",
+                    "Same-currency transfers must record the same principal amount on both sides.",
+                )
+                return
+        else:
+            if source_currency == "CAD":
+                cleaned["destination_rate_to_cad"] = amount_sent / amount_received
+            elif destination_currency == "CAD":
+                cleaned["rate_to_cad"] = amount_received / amount_sent
+            if source_currency == "BDT":
+                cleaned["destination_rate_to_bdt"] = amount_sent / amount_received
+            elif destination_currency == "BDT":
+                cleaned["rate_to_bdt"] = amount_received / amount_sent
+        try:
+            source_snapshot = resolve_currency_snapshot(
+                native_amount=amount_sent,
+                currency=source_currency,
+                transaction_date=cleaned["transaction_date"],
+                rate_to_cad=cleaned.get("rate_to_cad"),
+                rate_to_bdt=cleaned.get("rate_to_bdt"),
+                create_review=False,
+            )
+            destination_snapshot = resolve_currency_snapshot(
+                native_amount=amount_received,
+                currency=destination_currency,
+                transaction_date=cleaned["transaction_date"],
+                rate_to_cad=cleaned.get("destination_rate_to_cad"),
+                rate_to_bdt=cleaned.get("destination_rate_to_bdt"),
+                create_review=False,
+            )
+            if (
+                abs(source_snapshot.amount_cad - destination_snapshot.amount_cad) > Decimal("0.01")
+                or abs(source_snapshot.amount_bdt - destination_snapshot.amount_bdt) > Decimal("0.01")
+            ):
+                self.add_error(
+                    "destination_amount",
+                    "The saved transfer snapshots do not reconcile. Review the actual amounts and exchange rate.",
+                )
+                return
+            cleaned["rate_to_cad"] = source_snapshot.rate_to_cad
+            cleaned["rate_to_bdt"] = source_snapshot.rate_to_bdt
+            cleaned["destination_rate_to_cad"] = destination_snapshot.rate_to_cad
+            cleaned["destination_rate_to_bdt"] = destination_snapshot.rate_to_bdt
+        except MissingExchangeRate as exc:
+            self.add_error("provider_exchange_rate", str(exc))
+
+    def clean(self):
+        cleaned = super().clean()
+        transfer_type = cleaned.get("transfer_type")
+        source = cleaned.get("from_account")
+        destination = cleaned.get("to_account")
+        if not source or not destination or not transfer_type:
+            return cleaned
+
+        expected_sides = {
+            TRANSFER_TYPE_CA_TO_BD: ("CA", "BD"),
+            TRANSFER_TYPE_BD_TO_CA: ("BD", "CA"),
+        }
+        cross_country = transfer_type in expected_sides
+        if cross_country:
+            source_side, destination_side = expected_sides[transfer_type]
+            if not {source_side, destination_side}.issubset(accessible_financial_sides(self.user)):
+                self.add_error("transfer_type", "You need access to both business sides for this transfer.")
+            if source.side != source_side:
+                source_country = "Canada" if source_side == "CA" else "Bangladesh"
+                self.add_error("from_account", f"Select a {source_country} source account for this direction.")
+            if destination.side != destination_side:
+                destination_country = "Canada" if destination_side == "CA" else "Bangladesh"
+                self.add_error(
+                    "to_account", f"Select a {destination_country} destination account."
+                )
+            if self.locked_side and self.locked_side != source_side:
+                self.add_error("transfer_type", "This direction must start from the selected country Finance page.")
+            if not cleaned.get("destination_amount"):
+                self.add_error("destination_amount", "Please enter the actual amount received.")
+            if not cleaned.get("transfer_service"):
+                self.add_error("transfer_service", "Please select the transfer service.")
+            if (
+                cleaned.get("transfer_service") == "OTHER"
+                and not (cleaned.get("other_transfer_service") or "").strip()
+            ):
+                self.add_error("other_transfer_service", "Please enter the approved transfer service name.")
+        elif source.side != destination.side:
+            self.add_error("transfer_type", "Use a cross-country transfer type when accounts belong to different countries.")
+
+        if cleaned.get("currency") != source.currency:
+            self.add_error("currency", "Sending currency must match the source account.")
+        if cleaned.get("receiving_currency") != destination.currency:
+            self.add_error("receiving_currency", "Receiving currency must match the destination account.")
+
+        fee = cleaned.get("transfer_fee") or Decimal("0")
+        fee_currency = cleaned.get("fee_currency") or source.currency
+        cleaned["fee_currency"] = fee_currency
+        if fee and fee_currency != source.currency:
+            self.add_error("fee_currency", "Transfer fee currency must match the charged source account.")
+
+        if (
+            cross_country
+            and cleaned.get("amount")
+            and cleaned.get("destination_amount")
+            and cleaned.get("transaction_date")
+        ):
+            self._derive_cross_country_snapshots(cleaned, source, destination)
+        return cleaned
+
+    def build_operation(self):
+        cleaned = self.cleaned_data
+        source = cleaned["from_account"]
+        destination = cleaned["to_account"]
+        transfer_type = cleaned["transfer_type"]
+        destination_amount = cleaned.get("destination_amount") or cleaned["amount"]
+        effective_rate = destination_amount / cleaned["amount"]
+        transfer_type_display = dict(TRANSFER_TYPE_CHOICES)[transfer_type]
+        service_code = cleaned.get("transfer_service") or ""
+        service_display = dict(TRANSFER_SERVICE_CHOICES).get(service_code, "")
+        if service_code == "OTHER":
+            service_display = (cleaned.get("other_transfer_service") or "").strip()
+        purpose_code = cleaned.get("business_purpose") or ""
+        purpose_display = dict(TRANSFER_PURPOSE_CHOICES).get(purpose_code, "")
+        if source.currency == "CAD" and destination.currency == "BDT":
+            effective_rate_display = f"1 CAD = {_rate_text(effective_rate)} BDT"
+        elif source.currency == "BDT" and destination.currency == "CAD":
+            cad_to_bdt = cleaned["amount"] / destination_amount
+            effective_rate_display = f"1 CAD = {_rate_text(cad_to_bdt)} BDT"
+        else:
+            effective_rate_display = (
+                f"1 {source.currency} = {_rate_text(effective_rate)} {destination.currency}"
+            )
+        operation = self._operation(
+            total_amount=cleaned["amount"],
+            from_account=source,
+            to_account=destination,
+            details={
+                "transfer_type": transfer_type,
+                "transfer_type_display": transfer_type_display,
+                "transfer_service": service_code,
+                "transfer_service_display": service_display,
+                "other_transfer_service": (cleaned.get("other_transfer_service") or "").strip(),
+                "destination_amount": destination_amount,
+                "destination_currency": destination.currency,
+                "destination_rate_to_cad": cleaned.get("destination_rate_to_cad"),
+                "destination_rate_to_bdt": cleaned.get("destination_rate_to_bdt"),
+                "effective_rate": effective_rate,
+                "effective_rate_display": effective_rate_display,
+                "provider_exchange_rate": cleaned.get("provider_exchange_rate"),
+                "transfer_fee": cleaned.get("transfer_fee") or Decimal("0"),
+                "fee_currency": cleaned.get("fee_currency") or source.currency,
+                "fee_account_key": "BANK_FEES",
+                "purpose_code": purpose_code,
+                "purpose_display": purpose_display,
+                "source_side": source.side,
+                "destination_side": destination.side,
+            },
+        )
+        operation.business_purpose = purpose_display
+        return operation
 
 
 class OwnerLoanOperationForm(FinanceOperationForm):
@@ -1380,7 +1651,7 @@ FORM_BY_TYPE = {
     FinanceOperation.TYPE_BANK_WITHDRAWAL: BankCashOperationForm,
     FinanceOperation.TYPE_CASH_DEPOSIT: BankCashOperationForm,
     FinanceOperation.TYPE_CASH_WITHDRAWAL: BankCashOperationForm,
-    FinanceOperation.TYPE_ACCOUNT_TRANSFER: BankCashOperationForm,
+    FinanceOperation.TYPE_ACCOUNT_TRANSFER: MoneyTransferOperationForm,
     FinanceOperation.TYPE_BANK_FEE: BankCashOperationForm,
     FinanceOperation.TYPE_PROCESSOR_FEE: BankCashOperationForm,
     FinanceOperation.TYPE_OWNER_INVESTMENT: OwnerLoanOperationForm,

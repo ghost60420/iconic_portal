@@ -13,7 +13,13 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from crm.forms_finance_operations import CustomerPaymentOperationForm
+from crm.forms_finance_operations import (
+    CustomerPaymentOperationForm,
+    MoneyTransferOperationForm,
+    TRANSFER_TYPE_BD_TO_CA,
+    TRANSFER_TYPE_CA_TO_BD,
+    TRANSFER_TYPE_INTERNAL,
+)
 from crm.models import (
     CashBankAccount,
     Customer,
@@ -46,6 +52,7 @@ from crm.services.finance_operations import (
     post_operation,
     review_operation,
     submit_operation,
+    workflow_definition,
 )
 from crm.services.financial_permissions import (
     can_submit_finance_operation,
@@ -993,6 +1000,173 @@ class FinanceOperationsTests(TestCase):
                 account__account_type__in=(FinancialAccount.TYPE_REVENUE, FinancialAccount.TYPE_OPERATING_EXPENSE)
             ).exists()
         )
+
+    def transfer_form(self, *, direction, source, destination, amount_sent, amount_received, fee="0"):
+        return MoneyTransferOperationForm(
+            data={
+                "transaction_date": "2026-02-15",
+                "side": source.side,
+                "currency": source.currency,
+                "reference": f"TRANSFER-{direction}",
+                "business_purpose": "FACTORY_FUNDING",
+                "notes": "Verified cross-country transfer",
+                "transfer_type": direction,
+                "transfer_service": "TAPTAP_SEND",
+                "other_transfer_service": "",
+                "from_account": source.pk,
+                "amount": amount_sent,
+                "to_account": destination.pk,
+                "destination_amount": amount_received,
+                "receiving_currency": destination.currency,
+                "provider_exchange_rate": "88",
+                "transfer_fee": fee,
+                "fee_currency": source.currency,
+                "rate_to_cad": "",
+                "rate_to_bdt": "",
+                "destination_rate_to_cad": "",
+                "destination_rate_to_bdt": "",
+            },
+            user=self.submitter,
+            workflow=workflow_definition("money-transfer"),
+            locked_side=source.side,
+        )
+
+    def test_canada_to_bangladesh_actual_amount_and_fee_post_once(self):
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_CA_TO_BD,
+            source=self.bank,
+            destination=self.bd_bank,
+            amount_sent="1000",
+            amount_received="88000",
+            fee="5",
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        operation = submit_operation(form.build_operation(), actor=self.submitter)
+
+        self.assertEqual(operation.total_amount, Decimal("1000.00"))
+        self.assertEqual(operation.amount_cad, Decimal("1000.00"))
+        self.assertEqual(operation.amount_bdt, Decimal("88000.00"))
+        self.assertEqual(operation.details["destination_amount"], "88000")
+        self.assertEqual(operation.details["effective_rate_display"], "1 CAD = 88 BDT")
+        self.assertEqual(operation.details["transfer_service_display"], "TapTap Send")
+        self.assertEqual(operation.details["transfer_fee"], "5")
+
+        preview = build_posting_preview(operation)
+        self.assertEqual(len(preview["entries"]), 3)
+        self.assertEqual([entry["side"] for entry in preview["entries"]], ["CA", "BD", "CA"])
+        self.assertEqual(
+            {line["account_key"] for entry in preview["entries"] for line in entry["lines"]}
+            & {"PRODUCT_SALES", "OTHER_REVENUE", "OTHER_EXPENSE"},
+            set(),
+        )
+
+        operation = review_operation(
+            operation,
+            actor=self.approver,
+            action="APPROVE",
+            notes="Cross-country amounts and transfer fee verified.",
+        )
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            operation = post_operation(operation, actor=self.approver)
+
+        journals = JournalEntry.objects.filter(source_key__startswith=f"FINANCE-OPERATION:{operation.pk}")
+        self.assertEqual(journals.count(), 3)
+        self.assertEqual(set(journals.values_list("side", flat=True)), {"CA", "BD"})
+        lines = JournalLine.objects.filter(journal__in=journals)
+        self.assertEqual(
+            sum(lines.filter(account=self.bank.gl_account).values_list("native_credit", flat=True)),
+            Decimal("1005.00"),
+        )
+        self.assertEqual(
+            sum(lines.filter(account=self.bd_bank.gl_account).values_list("native_debit", flat=True)),
+            Decimal("88000.00"),
+        )
+        self.assertEqual(
+            sum(lines.filter(account__system_key="BANK_FEES").values_list("cad_debit", flat=True)),
+            Decimal("5.00"),
+        )
+        self.assertFalse(lines.filter(account__account_type=FinancialAccount.TYPE_REVENUE).exists())
+        self.assertEqual(
+            lines.filter(account__account_type=FinancialAccount.TYPE_OPERATING_EXPENSE)
+            .exclude(account__system_key="BANK_FEES")
+            .count(),
+            0,
+        )
+        clearing = lines.filter(account__system_key="FX_CLEARING")
+        self.assertEqual(
+            sum(clearing.values_list("cad_debit", flat=True)),
+            sum(clearing.values_list("cad_credit", flat=True)),
+        )
+        self.assertEqual(
+            sum(clearing.values_list("bdt_debit", flat=True)),
+            sum(clearing.values_list("bdt_credit", flat=True)),
+        )
+        client = Client()
+        client.force_login(self.approver)
+        detail = client.get(reverse("finance_operation_detail", args=[operation.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Canada to Bangladesh")
+        self.assertContains(detail, "1 CAD = 88 BDT")
+        self.assertContains(detail, "CAD 5.00")
+
+    def test_bangladesh_to_canada_preserves_reverse_effective_rate(self):
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_BD_TO_CA,
+            source=self.bd_bank,
+            destination=self.bank,
+            amount_sent="88000",
+            amount_received="1000",
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        operation = submit_operation(form.build_operation(), actor=self.submitter)
+
+        self.assertEqual(operation.amount_cad, Decimal("1000.00"))
+        self.assertEqual(operation.amount_bdt, Decimal("88000.00"))
+        self.assertEqual(operation.details["effective_rate_display"], "1 CAD = 88 BDT")
+        self.assertEqual(operation.details["destination_rate_to_cad"], "1.0000000000")
+        self.assertEqual(operation.details["destination_rate_to_bdt"], "88.0000000000")
+
+    def test_cross_country_transfer_is_visible_from_destination_country_scope(self):
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_CA_TO_BD,
+            source=self.bank,
+            destination=self.bd_bank,
+            amount_sent="1000",
+            amount_received="88000",
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        operation = submit_operation(form.build_operation(), actor=self.submitter)
+        bangladesh_finance = self.user("bd-transfer-view", "Finance", side="BD", ca=False, bd=True)
+
+        self.assertTrue(
+            scope_finance_operations_for_user(
+                FinanceOperation.objects.filter(pk=operation.pk), bangladesh_finance
+            ).exists()
+        )
+        client = Client()
+        client.force_login(self.submitter)
+        response = client.get(
+            f"{reverse('finance_operation_create', args=['money-transfer'])}?side=BD"
+        )
+        self.assertContains(response, operation.operation_number)
+
+    def test_internal_transfer_preview_remains_single_balanced_entry(self):
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_INTERNAL,
+            source=self.bank,
+            destination=self.cash,
+            amount_sent="250",
+            amount_received="250",
+        )
+        form.data = form.data.copy()
+        form.data["transfer_service"] = ""
+        form.data["provider_exchange_rate"] = ""
+        form.data["rate_to_cad"] = "1"
+        form.data["rate_to_bdt"] = "100"
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        preview = build_posting_preview(submit_operation(form.build_operation(), actor=self.submitter))
+        self.assertEqual(len(preview["entries"]), 1)
+        self.assertEqual(preview["entries"][0]["side"], "CA")
 
     def test_inventory_purchase_creates_payable_subledger_source(self):
         operation = self.operation(

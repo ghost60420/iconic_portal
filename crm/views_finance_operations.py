@@ -134,6 +134,33 @@ FORM_SECTION_LAYOUTS = {
         ("Payment", "Record payment status, method, and account.", ("payment_status", "payment_method", "payment_account")),
         ("Evidence", "Add the receipt, purpose, or review notes when available.", ("supporting_document", "business_purpose", "notes")),
     ),
+    FinanceOperation.TYPE_ACCOUNT_TRANSFER: (
+        (
+            "Transfer Details",
+            "Choose the direction, provider, date, and reference.",
+            ("transfer_type", "transaction_date", "transfer_service", "other_transfer_service", "reference"),
+        ),
+        (
+            "Money Sent",
+            "Record the exact principal leaving the source company account.",
+            ("from_account", "amount", "currency"),
+        ),
+        (
+            "Money Received",
+            "Record the exact amount delivered to the destination company account.",
+            ("to_account", "destination_amount", "receiving_currency", "provider_exchange_rate"),
+        ),
+        (
+            "Fees",
+            "Record only the separate provider fee; the transfer principal is not an expense.",
+            ("transfer_fee", "fee_currency"),
+        ),
+        (
+            "Evidence and Notes",
+            "Receipt is optional. Add the purpose and any useful review notes.",
+            ("supporting_document", "business_purpose", "notes"),
+        ),
+    ),
 }
 
 
@@ -250,6 +277,15 @@ def _operation_queryset(request):
     return scope_finance_operations_for_user(queryset, request.user)
 
 
+def _operations_for_side(queryset, side):
+    if not side:
+        return queryset
+    return queryset.filter(
+        Q(side=side)
+        | Q(operation_type=FinanceOperation.TYPE_ACCOUNT_TRANSFER, to_account__side=side)
+    )
+
+
 def _get_operation(request, pk):
     return get_object_or_404(_operation_queryset(request), pk=pk)
 
@@ -284,7 +320,7 @@ def finance_operations_center(request):
     locked_side = _requested_side(request)
     scoped = scope_finance_operations_for_user(FinanceOperation.objects.all(), request.user)
     if locked_side:
-        scoped = scoped.filter(side=locked_side)
+        scoped = _operations_for_side(scoped, locked_side)
     today = timezone.localdate()
     counts = scoped.aggregate(
         pending=Count("id", filter=Q(state=FinanceOperation.STATE_PENDING)),
@@ -300,7 +336,7 @@ def finance_operations_center(request):
     ]
     recent = _operation_queryset(request)
     if locked_side:
-        recent = recent.filter(side=locked_side)
+        recent = _operations_for_side(recent, locked_side)
     recent = recent.order_by("-created_at")[:8]
     setup = _setup_snapshot()
     return render(
@@ -491,7 +527,7 @@ def finance_operation_create(request, workflow_slug):
                     form.add_error(None, str(exc))
     recent = _operation_queryset(request).filter(operation_type=workflow["operation_type"])
     if locked_side:
-        recent = recent.filter(side=locked_side)
+        recent = _operations_for_side(recent, locked_side)
     recent = recent.order_by("-created_at")[:10]
     context = (
         _utility_context(request, form, locked_side=locked_side)

@@ -42,7 +42,7 @@
         {% elif guidance_key == 'FACTORY_DAILY_COST' %}Track production days used and the factory operating cost for those days.
         {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' %}Record money entering a company bank or cash account.
         {% elif guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}Record money leaving a company bank or cash account.
-        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Move money between company accounts.
+        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Move money between company accounts in Canada, Bangladesh, or across both countries.
         {% elif guidance_key == 'BANK_FEE' %}Record a fee charged directly by a company bank.
         {% elif guidance_key == 'PROCESSOR_FEE' %}Record a fee deducted by an approved payment processor.
         {% elif guidance_key == 'OWNER_INVESTMENT' %}Record capital contributed to the company by an owner.
@@ -107,7 +107,7 @@
         {% elif guidance_key == 'FACTORY_DAILY_COST' %}Use this to record actual production time and factory daily overhead.
         {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' %}Use this when company money is deposited and the source is not an internal transfer.
         {% elif guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}Use this when company money is withdrawn and the destination is not another company account.
-        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Use this only when both the source and destination are company accounts.
+        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Use this when both accounts belong to the company, including Canada-to-Bangladesh and Bangladesh-to-Canada transfers.
         {% elif guidance_key == 'BANK_FEE' %}Use this when a bank statement shows a direct bank service charge.
         {% elif guidance_key == 'PROCESSOR_FEE' %}Use this when a payment processor deducts an approved transaction fee.
         {% elif guidance_key == 'OWNER_INVESTMENT' %}Use this when an owner adds verified capital to a company account.
@@ -170,7 +170,7 @@
         {% elif guidance_key == 'PAYROLL' %}Pay period, staff or department, approved amounts, and payment details. Reference and evidence are optional.
         {% elif guidance_key == 'PRODUCTION_COST' %}Production order, cost category, supplier, date, and actual amount. Purpose and evidence are optional.
         {% elif guidance_key == 'FACTORY_DAILY_COST' %}Production order, actual days, saved daily rate, and date. Purpose and evidence are optional.
-        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Transfer date, source account, destination account, and amount. Reference, purpose, and evidence are optional.
+        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}Transfer type, date, company accounts, sent amount, and actual received amount. For cross-country transfers, add the provider and any separate fee. Reference, purpose, and evidence are optional.
         {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' or guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}Date, company account, and amount. Source, purpose, reference, and evidence are optional where the workflow permits.
         {% elif guidance_key == 'BANK_FEE' or guidance_key == 'PROCESSOR_FEE' %}Date, company account, and fee amount. Reference, purpose, and statement evidence are optional.
         {% elif guidance_key == 'OWNER_INVESTMENT' or guidance_key == 'OWNER_WITHDRAWAL' %}Date, company account, owner, and amount. Reference, purpose, and supporting evidence are optional.
@@ -220,7 +220,7 @@
         {% elif guidance_key == 'PRODUCTION_COST' %}The cost is connected to the production order and affects actual production profit.
         {% elif guidance_key == 'FACTORY_DAILY_COST' %}Actual factory cost is compared with the Quick Costing estimate and updates production profitability.
         {% elif guidance_key == 'BANK_DEPOSIT' or guidance_key == 'CASH_DEPOSIT' or guidance_key == 'BANK_WITHDRAWAL' or guidance_key == 'CASH_WITHDRAWAL' %}After approval, the selected account balance and cash reporting are updated.
-        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}After approval, both company accounts update without creating revenue or expense.
+        {% elif guidance_key == 'ACCOUNT_TRANSFER' %}After approval and posting, both company accounts update. The principal is not revenue or expense; only a separate transfer fee is expensed.
         {% elif guidance_key == 'BANK_FEE' or guidance_key == 'PROCESSOR_FEE' %}After approval, the fee and selected account activity update in Finance reports.
         {% elif guidance_key == 'OWNER_INVESTMENT' or guidance_key == 'OWNER_WITHDRAWAL' or guidance_key == 'LOAN_RECEIVED' or guidance_key == 'LOAN_PRINCIPAL' or guidance_key == 'LOAN_INTEREST' or guidance_key == 'SHAREHOLDER_ADVANCE' or guidance_key == 'SHAREHOLDER_REPAYMENT' %}After approval, the selected company account and the correct equity, liability, or expense balance update.
         {% elif guidance_key == 'ASSET_PURCHASE' %}After approval, the asset and payment account activity update through the existing posting controls.

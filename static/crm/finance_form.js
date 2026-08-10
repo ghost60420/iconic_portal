@@ -46,7 +46,22 @@
       if (relatedId && relatedId !== parent.value) return false;
     }
     if (kind === "account") {
-      const currency = form.elements.currency;
+      const transferType = form.elements.transfer_type;
+      if (transferType) {
+        const directionSides = {
+          CA_TO_BD: {from: "CA", to: "BD"},
+          BD_TO_CA: {from: "BD", to: "CA"}
+        };
+        const direction = directionSides[transferType.value];
+        let expectedSide = direction ? direction[select.name === "to_account" ? "to" : "from"] : "";
+        if (!expectedSide && transferType.value === "INTERNAL") {
+          const sourceOption = selectedOption(form.elements.from_account);
+          expectedSide = page.dataset.country || (sourceOption ? sourceOption.dataset.side : "");
+        }
+        if (expectedSide && option.dataset.side && option.dataset.side !== expectedSide) return false;
+      }
+      const currency = select.name === "to_account" && form.elements.receiving_currency ?
+        form.elements.receiving_currency : form.elements.currency;
       if (currency && currency.value && option.dataset.currency && option.dataset.currency !== currency.value) {
         return false;
       }
@@ -305,19 +320,23 @@
   });
 
   const currencySelect = form.elements.currency;
-  if (currencySelect) {
-    currencySelect.addEventListener("change", function () {
-      registry.forEach(function (controller) {
-        if (controller.select.dataset.financeSearch !== "account") return;
-        const option = selectedOption(controller.select);
-        if (option && !optionMatchesDependency(controller.select, option)) {
-          controller.select.value = "";
-          controller.select.dispatchEvent(new Event("change", {bubbles: true}));
-        }
-        controller.syncInput();
-      });
+  const receivingCurrencySelect = form.elements.receiving_currency;
+  function refreshAccountSelectors() {
+    registry.forEach(function (controller) {
+      if (controller.select.dataset.financeSearch !== "account") return;
+      const option = selectedOption(controller.select);
+      if (option && !optionMatchesDependency(controller.select, option)) {
+        controller.select.value = "";
+        controller.select.dispatchEvent(new Event("change", {bubbles: true}));
+      }
+      controller.syncInput();
+      if (document.activeElement === controller.input) controller.renderResults();
     });
   }
+  if (currencySelect) {
+    currencySelect.addEventListener("change", refreshAccountSelectors);
+  }
+  if (receivingCurrencySelect) receivingCurrencySelect.addEventListener("change", refreshAccountSelectors);
 
   registry.forEach(function (controller) {
     const select = controller.select;
@@ -329,6 +348,14 @@
       if (shouldSetCurrency && option.dataset.currency) {
         currencySelect.value = option.dataset.currency;
         currencySelect.dispatchEvent(new Event("change", {bubbles: true}));
+      }
+      if (select.name === "from_account" && option.dataset.currency) {
+        currencySelect.value = option.dataset.currency;
+        currencySelect.dispatchEvent(new Event("change", {bubbles: true}));
+      }
+      if (select.name === "to_account" && receivingCurrencySelect && option.dataset.currency) {
+        receivingCurrencySelect.value = option.dataset.currency;
+        receivingCurrencySelect.dispatchEvent(new Event("change", {bubbles: true}));
       }
     });
   });
@@ -346,7 +373,7 @@
   }
 
   function updatePaymentSummary() {
-    const summary = form.parentElement.querySelector(".ops-payment-summary");
+    const summary = form.parentElement.querySelector("[data-payment-summary]");
     if (!summary) return;
     const summaryKind = summary.dataset.paymentSummary;
     const amountInput = form.elements.amount;
@@ -390,6 +417,111 @@
     field.addEventListener(field.tagName === "INPUT" ? "input" : "change", updatePaymentSummary);
   });
   updatePaymentSummary();
+
+  const transferSummary = form.parentElement.querySelector("[data-transfer-summary]");
+  const transferType = form.elements.transfer_type;
+  function transferField(name) {
+    return form.querySelector(`.field-${name}`);
+  }
+
+  function setTransferFieldVisible(name, visible) {
+    const field = transferField(name);
+    if (field) field.classList.toggle("ops-transfer-hidden", !visible);
+  }
+
+  function refreshTransferSections() {
+    form.querySelectorAll(".ops-form-section").forEach(function (section) {
+      const fields = Array.from(section.querySelectorAll(".ops-field"));
+      if (!fields.length) return;
+      section.classList.toggle("ops-transfer-hidden", fields.every((field) => field.classList.contains("ops-transfer-hidden")));
+    });
+  }
+
+  function transferChoiceLabel(field) {
+    if (!field || !field.value) return "";
+    const option = field.options[field.selectedIndex];
+    return option ? option.textContent.trim() : "";
+  }
+
+  function updateTransferSummary() {
+    if (!transferSummary || !transferType) return;
+    const setValue = function (key, value) {
+      const node = transferSummary.querySelector(`[data-transfer-summary-value="${key}"]`);
+      if (node) node.textContent = value;
+    };
+    const source = selectedOption(form.elements.from_account);
+    const destination = selectedOption(form.elements.to_account);
+    const amountSent = form.elements.amount ? form.elements.amount.value : "";
+    const amountReceived = form.elements.destination_amount ? form.elements.destination_amount.value : "";
+    const sendingCurrency = currencySelect ? currencySelect.value : "";
+    const receivingCurrency = receivingCurrencySelect ? receivingCurrencySelect.value : "";
+    const fee = form.elements.transfer_fee ? form.elements.transfer_fee.value : "";
+    const feeCurrency = form.elements.fee_currency ? form.elements.fee_currency.value : sendingCurrency;
+    const service = form.elements.transfer_service;
+    const otherService = form.elements.other_transfer_service;
+    let serviceLabel = transferChoiceLabel(service) || "Internal";
+    if (service && service.value === "OTHER" && otherService && otherService.value.trim()) {
+      serviceLabel = otherService.value.trim();
+    }
+    let rate = "-";
+    const sentNumber = Number(amountSent);
+    const receivedNumber = Number(amountReceived);
+    if (sentNumber > 0 && receivedNumber > 0) {
+      if (sendingCurrency === "BDT" && receivingCurrency === "CAD") {
+        rate = `1 CAD = ${(sentNumber / receivedNumber).toLocaleString(undefined, {maximumFractionDigits: 6})} BDT`;
+      } else {
+        rate = `1 ${sendingCurrency} = ${(receivedNumber / sentNumber).toLocaleString(undefined, {maximumFractionDigits: 6})} ${receivingCurrency}`;
+      }
+    }
+    setValue("direction", transferChoiceLabel(transferType) || "Internal Account Transfer");
+    setValue("from", optionPrimary(source) || "Not selected");
+    setValue("sent", amountSent ? formatMoney(sendingCurrency, amountSent) : "-");
+    setValue("service", serviceLabel);
+    setValue("fee", Number(fee) > 0 ? formatMoney(feeCurrency, fee) : `${feeCurrency || sendingCurrency} 0.00`);
+    setValue("to", optionPrimary(destination) || "Not selected");
+    setValue("received", amountReceived ? formatMoney(receivingCurrency, amountReceived) : "-");
+    setValue("rate", rate);
+    setValue("purpose", transferChoiceLabel(form.elements.business_purpose) || "Not selected");
+  }
+
+  function updateTransferUI() {
+    if (!transferType) return;
+    const crossCountry = transferType.value === "CA_TO_BD" || transferType.value === "BD_TO_CA";
+    if (transferType.value === "CA_TO_BD") {
+      currencySelect.value = "CAD";
+      receivingCurrencySelect.value = "BDT";
+      if (form.elements.fee_currency) form.elements.fee_currency.value = "CAD";
+    } else if (transferType.value === "BD_TO_CA") {
+      currencySelect.value = "BDT";
+      receivingCurrencySelect.value = "CAD";
+      if (form.elements.fee_currency) form.elements.fee_currency.value = "BDT";
+    }
+    setTransferFieldVisible("transfer_service", crossCountry);
+    setTransferFieldVisible(
+      "other_transfer_service",
+      crossCountry && form.elements.transfer_service && form.elements.transfer_service.value === "OTHER"
+    );
+    setTransferFieldVisible("provider_exchange_rate", crossCountry);
+    setTransferFieldVisible("transfer_fee", crossCountry);
+    setTransferFieldVisible("fee_currency", crossCountry);
+    refreshTransferSections();
+    refreshAccountSelectors();
+    updateTransferSummary();
+  }
+
+  if (transferType) {
+    transferType.addEventListener("change", updateTransferUI);
+    if (form.elements.transfer_service) form.elements.transfer_service.addEventListener("change", updateTransferUI);
+    [
+      form.elements.from_account, form.elements.to_account, form.elements.amount,
+      form.elements.destination_amount, currencySelect, receivingCurrencySelect,
+      form.elements.transfer_fee, form.elements.fee_currency, form.elements.other_transfer_service,
+      form.elements.business_purpose
+    ].filter(Boolean).forEach(function (field) {
+      field.addEventListener(field.tagName === "INPUT" ? "input" : "change", updateTransferSummary);
+    });
+    updateTransferUI();
+  }
 
   form.addEventListener("submit", function (event) {
     let invalidController = null;

@@ -19,6 +19,26 @@
     </div>
   {% endif %}
 
+  {% if operation.operation_type == 'ACCOUNT_TRANSFER' %}
+    <section class="fc-band ops-transfer-detail" aria-labelledby="transfer-detail-title">
+      <div class="ops-summary-head">
+        <div><span>Linked Company Transfer</span><h2 id="transfer-detail-title">{{ operation.details.transfer_type_display|default:"Internal Account Transfer" }}</h2></div>
+        <i data-lucide="arrow-left-right"></i>
+      </div>
+      <div class="ops-transfer-detail-grid">
+        <div><small>From</small><strong>{% if can_view_bank_accounts %}{{ operation.from_account|default:"-" }}{% else %}Restricted{% endif %}</strong></div>
+        <div><small>Sent</small><strong>{{ operation.currency }} {{ operation.total_amount|floatformat:2|intcomma }}</strong></div>
+        <div><small>Service</small><strong>{{ operation.details.transfer_service_display|default:"Internal" }}</strong></div>
+        <div><small>Fee</small><strong>{{ operation.details.fee_currency|default:operation.currency }} {{ operation.details.transfer_fee|default:"0"|floatformat:2|intcomma }}</strong></div>
+        <div><small>To</small><strong>{% if can_view_bank_accounts %}{{ operation.to_account|default:"-" }}{% else %}Restricted{% endif %}</strong></div>
+        <div><small>Received</small><strong>{{ operation.details.destination_currency|default:operation.currency }} {{ operation.details.destination_amount|default:operation.total_amount|floatformat:2|intcomma }}</strong></div>
+        <div><small>Effective Rate</small><strong>{{ operation.details.effective_rate_display|default:"Same-currency transfer" }}</strong></div>
+        <div><small>Purpose</small><strong>{{ operation.details.purpose_display|default:"Not entered" }}</strong></div>
+      </div>
+      <p class="ops-transfer-disclaimer"><i data-lucide="shield-check"></i>The principal moves between company accounts and is not revenue or operating expense. Only the separate fee is expensed.</p>
+    </section>
+  {% endif %}
+
   <section class="fc-band">
     <div class="ops-meta">
       <div><small>Date</small><strong>{{ operation.transaction_date }}</strong></div>

@@ -213,11 +213,12 @@ def _line(account_key, *, debit=0, credit=0, description=""):
     }
 
 
-def _entry(description, lines, *, posting_date=None, currency=""):
+def _entry(description, lines, *, posting_date=None, currency="", side=""):
     return {
         "description": description,
         "posting_date": str(posting_date or ""),
         "currency": currency,
+        "side": side,
         "lines": lines,
     }
 
@@ -236,8 +237,11 @@ def _transfer_preview(operation):
         raise FinanceOperationError("A company transfer requires both source and destination accounts.")
     destination_amount = money(operation.details.get("destination_amount") or operation.total_amount)
     destination_currency = operation.details.get("destination_currency") or operation.to_account.currency
-    if operation.from_account.currency == operation.to_account.currency:
-        return [
+    if destination_currency != operation.to_account.currency:
+        raise FinanceOperationError("Destination currency must match the destination company account.")
+    is_cross_country = operation.from_account.side != operation.to_account.side
+    if operation.from_account.currency == operation.to_account.currency and not is_cross_country:
+        entries = [
             _entry(
                 "Company account transfer",
                 [
@@ -246,28 +250,53 @@ def _transfer_preview(operation):
                 ],
                 posting_date=operation.transaction_date,
                 currency=operation.currency,
+                side=operation.side,
             )
         ]
-    return [
-        _entry(
-            "Transfer out through foreign exchange clearing",
-            [
-                _line("FX_CLEARING", debit=operation.total_amount),
-                _line(operation.from_account.gl_account.system_key, credit=operation.total_amount),
-            ],
-            posting_date=operation.transaction_date,
-            currency=operation.currency,
-        ),
-        _entry(
-            "Transfer in through foreign exchange clearing",
-            [
-                _line(operation.to_account.gl_account.system_key, debit=destination_amount),
-                _line("FX_CLEARING", credit=destination_amount),
-            ],
-            posting_date=operation.transaction_date,
-            currency=destination_currency,
-        ),
-    ]
+    else:
+        entries = [
+            _entry(
+                "Transfer out through foreign exchange clearing",
+                [
+                    _line("FX_CLEARING", debit=operation.total_amount),
+                    _line(operation.from_account.gl_account.system_key, credit=operation.total_amount),
+                ],
+                posting_date=operation.transaction_date,
+                currency=operation.currency,
+                side=operation.from_account.side,
+            ),
+            _entry(
+                "Transfer in through foreign exchange clearing",
+                [
+                    _line(operation.to_account.gl_account.system_key, debit=destination_amount),
+                    _line("FX_CLEARING", credit=destination_amount),
+                ],
+                posting_date=operation.transaction_date,
+                currency=destination_currency,
+                side=operation.to_account.side,
+            ),
+        ]
+    transfer_fee_value = _decimal(operation.details.get("transfer_fee") or 0)
+    if transfer_fee_value < 0:
+        raise FinanceOperationError("Transfer fee cannot be negative.")
+    transfer_fee = money(transfer_fee_value)
+    if transfer_fee:
+        fee_currency = operation.details.get("fee_currency") or operation.currency
+        if fee_currency != operation.currency:
+            raise FinanceOperationError("Transfer fee currency must match the charged source account.")
+        entries.append(
+            _entry(
+                "Transfer service fee",
+                [
+                    _line(operation.details.get("fee_account_key") or "BANK_FEES", debit=transfer_fee),
+                    _line(operation.from_account.gl_account.system_key, credit=transfer_fee),
+                ],
+                posting_date=operation.transaction_date,
+                currency=fee_currency,
+                side=operation.from_account.side,
+            )
+        )
+    return entries
 
 
 def build_posting_preview(operation):
@@ -383,7 +412,10 @@ def build_posting_preview(operation):
         FinanceOperation.TYPE_ACCOUNT_TRANSFER,
     }:
         entries = _transfer_preview(operation)
-        explanation = "Move company money between controlled accounts without recording revenue or expense."
+        explanation = (
+            "Move the transfer principal between controlled company accounts without recording revenue or expense. "
+            "Only a separately entered transfer service fee is recorded as bank-fee expense."
+        )
     elif operation_type in {FinanceOperation.TYPE_BANK_FEE, FinanceOperation.TYPE_PROCESSOR_FEE}:
         entries.append(_entry(
             operation.get_operation_type_display(),
@@ -736,7 +768,7 @@ def _create_generic_journal(operation, *, actor, entry, suffix=""):
             journal_date=operation.transaction_date,
             reference=f"FIN-{operation.operation_number}{('-' + suffix) if suffix else ''}",
             description=entry["description"],
-            side=operation.side if not suffix else operation.to_account.side,
+            side=entry.get("side") or (operation.side if not suffix else operation.to_account.side),
             snapshot=snapshot,
             source_key=f"FINANCE-OPERATION:{operation.pk}{key_suffix}",
             source_record=operation,

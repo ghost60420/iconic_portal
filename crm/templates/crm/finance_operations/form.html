@@ -143,6 +143,25 @@
           <div class="ops-summary-remaining"><dt>Remaining After Payment</dt><dd data-summary="remaining">-</dd></div>
         </dl>
       </aside>
+    {% elif workflow.operation_type == 'ACCOUNT_TRANSFER' %}
+      <aside class="ops-payment-summary ops-transfer-summary" data-transfer-summary aria-labelledby="transfer-summary-title">
+        <div class="ops-summary-head">
+          <div><span>6 · Review</span><h2 id="transfer-summary-title">Transfer Summary</h2></div>
+          <i data-lucide="arrow-left-right"></i>
+        </div>
+        <strong class="ops-transfer-direction" data-transfer-summary-value="direction">Internal Account Transfer</strong>
+        <dl>
+          <div><dt>From</dt><dd data-transfer-summary-value="from">Not selected</dd></div>
+          <div><dt>Sent</dt><dd data-transfer-summary-value="sent">-</dd></div>
+          <div><dt>Service</dt><dd data-transfer-summary-value="service">Not selected</dd></div>
+          <div><dt>Fee</dt><dd data-transfer-summary-value="fee">-</dd></div>
+          <div><dt>To</dt><dd data-transfer-summary-value="to">Not selected</dd></div>
+          <div><dt>Received</dt><dd data-transfer-summary-value="received">-</dd></div>
+          <div><dt>Effective Rate</dt><dd data-transfer-summary-value="rate">-</dd></div>
+          <div><dt>Purpose</dt><dd data-transfer-summary-value="purpose">Not selected</dd></div>
+        </dl>
+        <p class="ops-transfer-disclaimer"><i data-lucide="shield-check"></i>This is an internal company transfer. The principal is not revenue or operating expense.</p>
+      </aside>
     {% endif %}
 
     {% if can_view_form_advanced %}
