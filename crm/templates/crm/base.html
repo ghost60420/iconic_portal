@@ -354,6 +354,22 @@
 
     .crm-dd-item:last-child{ margin-bottom:0; }
 
+    .crm-dd-badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:24px;
+      min-height:20px;
+      margin-left:auto;
+      padding:2px 6px;
+      border:1px solid rgba(245, 213, 128, 0.42);
+      border-radius:999px;
+      background:#2a210c;
+      color:#f5d580;
+      font-size:11px;
+      line-height:1;
+    }
+
     .crm-nested-submenu{
       position:relative;
       margin-bottom:8px;
@@ -664,6 +680,7 @@
             </a>
             <div class="crm-dropdown-menu" role="menu" data-finance-menu="production">
               <div class="crm-dd-title">Finance</div>
+              {% if finance_ops_menu.approvals %}<a class="crm-dd-item" href="{% url 'finance_approval_center' %}">Pending Approvals{% if show_finance_pending_approval_count %} <span class="crm-dd-badge">{{ finance_pending_approval_count }}</span>{% endif %}</a>{% endif %}
               {% if finance_ops_menu.canada and current_url != 'quick_costing_client_quotation' %}
                 <div class="crm-nested-submenu">
                   <button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Canada Finance</span><span class="crm-submenu-caret">›</span></button>

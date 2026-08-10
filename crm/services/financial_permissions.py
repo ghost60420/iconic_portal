@@ -226,6 +226,12 @@ def can_review_finance_operation(user, operation=None):
     return bool(department_id and operation.department_id == department_id)
 
 
+def can_self_approve_high_risk_finance(user):
+    if not _authenticated(user):
+        return False
+    return bool(user.is_superuser or ROLE_CEO in _roles(user))
+
+
 def can_post_finance_operation(user):
     return bool(
         _authenticated(user)

@@ -53,6 +53,7 @@ from crm.services.financial_permissions import (
     can_manage_financial_transactions,
     can_post_finance_operation,
     can_review_finance_operation,
+    can_self_approve_high_risk_finance,
     can_submit_finance_operation,
     can_view_bank_details,
     can_view_finance_approval_center,
@@ -86,6 +87,18 @@ PRIMARY_CENTER_SLUGS = (
     "asset-purchase",
     "inventory-adjustment",
 )
+
+AUDIT_ACTION_LABELS = {
+    "TRANSACTION_CREATED": "Transaction Created",
+    "DRAFT_SAVED": "Draft Saved",
+    "EVIDENCE_ATTACHED": "Evidence Attached",
+    "SUBMITTED": "Submitted for Approval",
+    "EVIDENCE_REQUIRED": "Returned for Information",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "POSTED": "Posted",
+    "POST_BLOCKED": "Posting Blocked",
+}
 
 COUNTRY_CENTER_SLUGS = {
     "CA": (
@@ -245,13 +258,25 @@ def _query_without(request, *keys):
 
 
 def _common(request, **context):
+    can_view_approvals = can_view_finance_approval_center(request.user)
+    if can_view_approvals:
+        pending_approval_count = context.get("pending_count")
+        if pending_approval_count is None:
+            pending_approval_count = scope_finance_operations_for_approval(
+                FinanceOperation.objects.filter(state=FinanceOperation.STATE_PENDING),
+                request.user,
+            ).count()
+    else:
+        pending_approval_count = 0
     context.update(
         financial_core_writes_enabled=bool(getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)),
         financial_core_reporting_active=bool(getattr(settings, "FINANCIAL_CORE_REPORTING_ACTIVE", False)),
         can_view_full_posting=can_view_full_posting_preview(request.user),
         can_post_operations=can_post_finance_operation(request.user),
         can_view_bank_accounts=can_view_bank_details(request.user),
-        can_view_approvals=can_view_finance_approval_center(request.user),
+        can_view_approvals=can_view_approvals,
+        finance_pending_approval_count=pending_approval_count,
+        show_finance_pending_approval_count=can_view_approvals,
     )
     return context
 
@@ -563,6 +588,8 @@ def finance_operation_detail(request, pk):
     audit_events = FinancialAuditEvent.objects.filter(
         content_type=content_type, object_id=operation.pk
     ).select_related("actor").order_by("-created_at")
+    for event in audit_events:
+        event.display_action = AUDIT_ACTION_LABELS.get(event.action, event.action.replace("_", " ").title())
     can_edit_draft = bool(
         operation.state == FinanceOperation.STATE_DRAFT
         and can_submit_finance_operation(request.user, operation.operation_type)
@@ -580,6 +607,10 @@ def finance_operation_detail(request, pk):
             audit_events=audit_events,
             evidence_form=FinancialEvidenceUploadForm(),
             can_review=can_review_finance_operation(request.user, operation),
+            is_self_approved=bool(
+                operation.approved_by_id
+                and operation.approved_by_id in {operation.created_by_id, operation.submitted_by_id}
+            ),
             can_edit_draft=can_edit_draft,
             operation_workflow=WORKFLOW_BY_TYPE[operation.operation_type],
             can_attach=(
@@ -632,12 +663,18 @@ def finance_operation_evidence(request, pk):
 
 @require_financial_permission("operations")
 def finance_approval_center(request):
+    if not can_view_finance_approval_center(request.user):
+        raise Http404("Finance approval center not found.")
     rows = scope_finance_operations_for_approval(
         FinanceOperation.objects.select_related(
-            "department", "submitted_by", "customer", "supplier"
+            "department", "created_by", "submitted_by", "customer", "supplier"
         ).annotate(document_count=Count("documents")),
         request.user,
     ).filter(state__in=(FinanceOperation.STATE_PENDING, FinanceOperation.STATE_EVIDENCE_REQUIRED))
+    status_counts = rows.aggregate(
+        pending=Count("id", filter=Q(state=FinanceOperation.STATE_PENDING)),
+        returned=Count("id", filter=Q(state=FinanceOperation.STATE_EVIDENCE_REQUIRED)),
+    )
     filters = {
         "side": "side",
         "currency": "currency",
@@ -664,6 +701,8 @@ def finance_approval_center(request):
             departments=departments,
             selected_filters=request.GET,
             page_query=_query_without(request, "page"),
+            pending_count=status_counts["pending"],
+            returned_count=status_counts["returned"],
         ),
     )
 
@@ -677,18 +716,41 @@ def finance_operation_review(request, pk, action):
     action = action.upper()
     if action not in {"APPROVE", "REJECT", "EVIDENCE_REQUIRED"}:
         raise Http404("Unknown review action.")
+    requires_self_approval_confirmation = bool(
+        action == "APPROVE"
+        and operation.risk_level == FinanceOperation.RISK_HIGH
+        and request.user.pk in {operation.created_by_id, operation.submitted_by_id}
+        and can_self_approve_high_risk_finance(request.user)
+    )
     if request.method == "POST":
         notes = (request.POST.get("notes") or "").strip()
         try:
-            operation = review_operation(operation, actor=request.user, action=action, notes=notes)
-            messages.success(request, f"{operation.operation_number} marked {operation.get_state_display().lower()}.")
+            operation = review_operation(
+                operation,
+                actor=request.user,
+                action=action,
+                notes=notes,
+                confirm_self_approval=request.POST.get("confirm_self_approval") == "yes",
+            )
+            if action == "APPROVE":
+                messages.success(request, "Transaction approved successfully.")
+            elif action == "EVIDENCE_REQUIRED":
+                messages.success(request, "Transaction returned for more information.")
+            else:
+                messages.success(request, "Transaction rejected.")
             return redirect("finance_operation_detail", pk=operation.pk)
         except FinanceOperationError as exc:
             messages.error(request, str(exc))
     return render(
         request,
         "crm/finance_operations/confirm.html",
-        _common(request, operation=operation, action=action, mode="review"),
+        _common(
+            request,
+            operation=operation,
+            action=action,
+            mode="review",
+            requires_self_approval_confirmation=requires_self_approval_confirmation,
+        ),
     )
 
 

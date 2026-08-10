@@ -643,9 +643,9 @@ def save_draft_operation(operation, *, actor, existing=None):
     draft.save()
     audit_operation(
         draft,
-        "DRAFT_SAVED",
+        "DRAFT_SAVED" if before is not None else "TRANSACTION_CREATED",
         editor,
-        reason="Finance draft saved.",
+        reason="Finance draft saved." if before is not None else "Finance transaction created as draft.",
         before=before,
         after={"state": draft.state, "type": draft.operation_type, "amount": str(draft.total_amount)},
     )
@@ -655,6 +655,7 @@ def save_draft_operation(operation, *, actor, existing=None):
 @transaction.atomic
 def submit_operation(operation, *, actor):
     submitter = _actor(actor)
+    is_new = not operation.pk
     if operation.pk:
         from crm.services.financial_permissions import can_access_finance_operation
 
@@ -678,6 +679,14 @@ def submit_operation(operation, *, actor):
     preview = build_posting_preview(operation)
     FinanceOperation.objects.filter(pk=operation.pk).update(posting_preview=preview)
     operation.posting_preview = preview
+    if is_new:
+        audit_operation(
+            operation,
+            "TRANSACTION_CREATED",
+            submitter,
+            reason="Finance transaction created for approval.",
+            after={"state": operation.state, "type": operation.operation_type, "amount": str(operation.total_amount)},
+        )
     audit_operation(
         operation,
         "SUBMITTED",
@@ -689,10 +698,13 @@ def submit_operation(operation, *, actor):
 
 
 @transaction.atomic
-def review_operation(operation, *, actor, action, notes):
+def review_operation(operation, *, actor, action, notes, confirm_self_approval=False):
     reviewer = _actor(actor)
     locked = FinanceOperation.objects.select_for_update().get(pk=operation.pk)
-    from crm.services.financial_permissions import can_review_finance_operation
+    from crm.services.financial_permissions import (
+        can_review_finance_operation,
+        can_self_approve_high_risk_finance,
+    )
 
     if not can_review_finance_operation(reviewer, locked):
         raise FinanceOperationError("You do not have permission to review this finance operation.")
@@ -701,9 +713,17 @@ def review_operation(operation, *, actor, action, notes):
     notes = (notes or "").strip()
     if len(notes) < 5:
         raise FinanceOperationError("Review notes must explain the decision.")
+    is_self_approval = bool(
+        action == "APPROVE"
+        and locked.risk_level == FinanceOperation.RISK_HIGH
+        and reviewer.pk in {locked.created_by_id, locked.submitted_by_id}
+    )
     if action == "APPROVE":
-        if locked.risk_level == FinanceOperation.RISK_HIGH and locked.submitted_by_id == reviewer.pk:
-            raise FinanceOperationError("A user cannot approve their own high-risk finance operation.")
+        if is_self_approval:
+            if not can_self_approve_high_risk_finance(reviewer):
+                raise FinanceOperationError("A user cannot approve their own high-risk finance operation.")
+            if not confirm_self_approval:
+                raise FinanceOperationError("Second confirmation is required for CEO or Super Admin self-approval.")
         preview = build_posting_preview(locked)
         if preview["missing_accounts"]:
             raise FinanceOperationError("Posting accounts are incomplete: " + ", ".join(preview["missing_accounts"]))
@@ -731,7 +751,17 @@ def review_operation(operation, *, actor, action, notes):
         reviewer,
         reason=notes,
         before={"state": operation.state},
-        after={"state": next_state},
+        after={
+            "state": next_state,
+            "created_by_id": locked.created_by_id,
+            "submitted_by_id": locked.submitted_by_id,
+            "approved_by_id": reviewer.pk if next_state == FinanceOperation.STATE_APPROVED else None,
+            "approval_date_time": now.isoformat() if next_state == FinanceOperation.STATE_APPROVED else "",
+            "self_approval": is_self_approval,
+            "decision_notes": notes,
+            "user_id": reviewer.pk,
+            "operation_id": locked.pk,
+        },
     )
     return locked
 

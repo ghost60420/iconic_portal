@@ -1326,6 +1326,18 @@ class FinanceOperation(FinancialAuditFields):
             models.CheckConstraint(condition=models.Q(rate_to_bdt__gt=0), name="finance_operation_bdt_rate_positive"),
         ]
 
+    @property
+    def finance_status_label(self):
+        return {
+            self.STATE_DRAFT: "Draft",
+            self.STATE_PENDING: "Pending Approval",
+            self.STATE_EVIDENCE_REQUIRED: "Returned",
+            self.STATE_REJECTED: "Rejected",
+            self.STATE_APPROVED: "Approved - Awaiting Posting",
+            self.STATE_POSTED: "Posted",
+            self.STATE_REVERSED: "Reversed",
+        }.get(self.state, self.get_state_display())
+
     def clean(self):
         if self.operation_type in {
             self.TYPE_SUPPLIER_BILL,

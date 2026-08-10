@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 import shutil
 import tempfile
+import time
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -29,6 +30,7 @@ from crm.models import (
     FactoryRunningCostDefault,
     FinanceOperation,
     FinancialAccount,
+    FinancialAuditEvent,
     FinancialDocument,
     FinancialPeriod,
     Invoice,
@@ -192,6 +194,7 @@ class FinanceOperationsTests(TestCase):
 
     def operation(self, operation_type, amount="100.00", reference=None, **fields):
         number = FinanceOperation.objects.count() + 1
+        actor = fields.pop("actor", self.submitter)
         operation = FinanceOperation(
             operation_type=operation_type,
             transaction_date=fields.pop("transaction_date", date(2026, 2, 15)),
@@ -208,7 +211,7 @@ class FinanceOperationsTests(TestCase):
             business_purpose=fields.pop("business_purpose", "Verified business purpose"),
             **fields,
         )
-        return submit_operation(operation, actor=self.submitter)
+        return submit_operation(operation, actor=actor)
 
     def evidence(self, operation, name="evidence.txt"):
         document = FinancialDocument(
@@ -1143,6 +1146,196 @@ class FinanceOperationsTests(TestCase):
                 FinanceOperation.objects.filter(pk=operation.pk), bangladesh_finance
             ).exists()
         )
+
+    def test_super_admin_self_approval_requires_confirmation_and_records_full_audit(self):
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_CA_TO_BD,
+            source=self.bank,
+            destination=self.bd_bank,
+            amount_sent="1000",
+            amount_received="88000",
+            fee="5",
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        operation = submit_operation(form.build_operation(), actor=self.submitter)
+        self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+
+        client = Client()
+        client.force_login(self.submitter)
+        evidence_response = client.post(
+            reverse("finance_operation_evidence", args=[operation.pk]),
+            {
+                "description": "Transfer provider confirmation",
+                "evidence": SimpleUploadedFile("transfer-confirmation.txt", b"verified transfer evidence"),
+            },
+        )
+        self.assertEqual(evidence_response.status_code, 302)
+
+        queue = client.get(reverse("finance_approval_center"))
+        self.assertEqual(queue.status_code, 200)
+        self.assertContains(queue, "Pending Approvals")
+        self.assertContains(queue, operation.operation_number)
+        self.assertContains(queue, "Operation ID")
+        self.assertContains(queue, "Created By")
+        self.assertContains(queue, "Supporting Document")
+        self.assertContains(queue, "Current Status")
+        self.assertContains(queue, "Approve")
+        self.assertContains(queue, "Return")
+        self.assertContains(queue, "Reject")
+        self.assertContains(queue, 'crm-dd-badge">1')
+
+        approve_url = reverse("finance_operation_review", args=[operation.pk, "approve"])
+        confirmation = client.get(approve_url)
+        self.assertEqual(confirmation.status_code, 200)
+        self.assertContains(
+            confirmation,
+            "You created this transaction. As CEO / Super Admin you are authorized to approve it.",
+        )
+        self.assertContains(confirmation, 'name="confirm_self_approval"')
+
+        missing_confirmation = client.post(approve_url, {"notes": "Amounts and provider evidence verified."})
+        self.assertEqual(missing_confirmation.status_code, 200)
+        self.assertContains(missing_confirmation, "Second confirmation is required")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+
+        approved_response = client.post(
+            approve_url,
+            {
+                "notes": "Amounts and provider evidence verified.",
+                "confirm_self_approval": "yes",
+            },
+            follow=True,
+        )
+        self.assertEqual(approved_response.status_code, 200)
+        self.assertContains(approved_response, "Transaction approved successfully.")
+        self.assertContains(approved_response, "APPROVED - AWAITING POSTING")
+        self.assertContains(approved_response, "Approved By")
+        self.assertContains(approved_response, "Approved On")
+        self.assertContains(approved_response, "Self Approval")
+
+        detail_url = reverse("finance_operation_detail", args=[operation.pk])
+        client.get(detail_url)
+        detail_started = time.perf_counter()
+        with CaptureQueriesContext(connection) as detail_queries:
+            detail_response = client.get(detail_url)
+        detail_ms = (time.perf_counter() - detail_started) * 1000
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertLessEqual(len(detail_queries), 8)
+        print(f"FINANCE_APPROVAL_DETAIL_PERF queries={len(detail_queries)} warm_ms={detail_ms:.2f}")
+
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(operation.approved_by, self.submitter)
+        self.assertIsNotNone(operation.approved_at)
+        approval_audit = FinancialAuditEvent.objects.get(
+            object_id=operation.pk,
+            action="APPROVED",
+            source_reference=operation.operation_number,
+        )
+        self.assertEqual(approval_audit.actor, self.submitter)
+        self.assertEqual(approval_audit.reason, "Amounts and provider evidence verified.")
+        self.assertEqual(approval_audit.after_value["created_by_id"], self.submitter.pk)
+        self.assertEqual(approval_audit.after_value["submitted_by_id"], self.submitter.pk)
+        self.assertEqual(approval_audit.after_value["approved_by_id"], self.submitter.pk)
+        self.assertEqual(approval_audit.after_value["user_id"], self.submitter.pk)
+        self.assertEqual(approval_audit.after_value["operation_id"], operation.pk)
+        self.assertTrue(approval_audit.after_value["self_approval"])
+        self.assertTrue(approval_audit.after_value["approval_date_time"])
+
+        post_url = reverse("finance_operation_post", args=[operation.pk])
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            post_confirmation = client.get(post_url)
+            self.assertContains(post_confirmation, "Confirm Ledger Posting")
+            posted_response = client.post(post_url, follow=True)
+        self.assertEqual(posted_response.status_code, 200)
+        self.assertContains(posted_response, "POSTED")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_POSTED)
+
+        journals = JournalEntry.objects.filter(source_key__startswith=f"FINANCE-OPERATION:{operation.pk}")
+        self.assertEqual(journals.count(), 3)
+        self.assertEqual(set(journals.values_list("side", flat=True)), {"CA", "BD"})
+        lines = JournalLine.objects.filter(journal__in=journals)
+        self.assertEqual(
+            sum(lines.filter(account=self.bank.gl_account).values_list("native_credit", flat=True)),
+            Decimal("1005.00"),
+        )
+        self.assertEqual(
+            sum(lines.filter(account=self.bd_bank.gl_account).values_list("native_debit", flat=True)),
+            Decimal("88000.00"),
+        )
+        self.assertEqual(
+            sum(lines.filter(account__system_key="BANK_FEES").values_list("cad_debit", flat=True)),
+            Decimal("5.00"),
+        )
+        journal_count = journals.count()
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            duplicate_response = client.post(post_url)
+        self.assertEqual(duplicate_response.status_code, 302)
+        self.assertEqual(
+            JournalEntry.objects.filter(source_key__startswith=f"FINANCE-OPERATION:{operation.pk}").count(),
+            journal_count,
+        )
+        audit_actions = set(
+            FinancialAuditEvent.objects.filter(
+                object_id=operation.pk,
+                source_reference=operation.operation_number,
+            ).values_list("action", flat=True)
+        )
+        self.assertTrue(
+            {"TRANSACTION_CREATED", "SUBMITTED", "EVIDENCE_ATTACHED", "APPROVED", "POSTED"}
+            <= audit_actions
+        )
+
+    def test_ceo_self_approval_is_authorized_only_with_explicit_confirmation(self):
+        ceo = self.user("ops-ceo-self-approval", "CEO", ca=True, bd=True)
+        form = MoneyTransferOperationForm(
+            data={
+                "transaction_date": "2026-02-15",
+                "side": "CA",
+                "currency": "CAD",
+                "reference": "CEO-SELF-APPROVAL",
+                "business_purpose": "FACTORY_FUNDING",
+                "notes": "CEO transfer approval",
+                "transfer_type": TRANSFER_TYPE_CA_TO_BD,
+                "transfer_service": "WISE",
+                "other_transfer_service": "",
+                "from_account": self.bank.pk,
+                "amount": "1000",
+                "to_account": self.bd_bank.pk,
+                "destination_amount": "88000",
+                "receiving_currency": "BDT",
+                "provider_exchange_rate": "88",
+                "transfer_fee": "5",
+                "fee_currency": "CAD",
+                "rate_to_cad": "",
+                "rate_to_bdt": "",
+                "destination_rate_to_cad": "",
+                "destination_rate_to_bdt": "",
+            },
+            user=ceo,
+            workflow=workflow_definition("money-transfer"),
+            locked_side="CA",
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        operation = submit_operation(form.build_operation(), actor=ceo)
+        with self.assertRaisesMessage(FinanceOperationError, "Second confirmation is required"):
+            review_operation(
+                operation,
+                actor=ceo,
+                action="APPROVE",
+                notes="CEO verified the transfer.",
+            )
+        approved = review_operation(
+            operation,
+            actor=ceo,
+            action="APPROVE",
+            notes="CEO verified the transfer.",
+            confirm_self_approval=True,
+        )
+        self.assertEqual(approved.state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(approved.approved_by, ceo)
         client = Client()
         client.force_login(self.submitter)
         response = client.get(
@@ -1188,19 +1381,22 @@ class FinanceOperationsTests(TestCase):
             ).exists()
         )
 
-    def test_high_risk_self_approval_is_rejected_and_flag_off_blocks_posting(self):
+    def test_normal_finance_user_high_risk_self_approval_is_rejected_and_flag_off_blocks_posting(self):
+        finance_user = self.user("ops-normal-self-approval", "Finance", ca=True, bd=True)
         operation = self.operation(
             FinanceOperation.TYPE_OWNER_WITHDRAWAL,
             from_account=self.bank,
             reason="Approved owner distribution",
+            actor=finance_user,
         )
         self.evidence(operation)
         with self.assertRaises(FinanceOperationError):
             review_operation(
                 operation,
-                actor=self.submitter,
+                actor=finance_user,
                 action="APPROVE",
                 notes="Attempted self approval.",
+                confirm_self_approval=True,
             )
         operation = review_operation(
             operation,
@@ -1255,6 +1451,8 @@ class FinanceOperationsTests(TestCase):
         self.assertContains(finance_form, "Switch country with warning")
         client.force_login(normal)
         self.assertEqual(client.get(reverse("finance_operations_center")).status_code, 403)
+        client.force_login(accounts_both)
+        self.assertEqual(client.get(reverse("finance_approval_center")).status_code, 404)
 
     def test_document_download_rechecks_operation_scope(self):
         operation = self.operation(FinanceOperation.TYPE_OWNER_INVESTMENT, to_account=self.bank)
@@ -1280,12 +1478,20 @@ class FinanceOperationsTests(TestCase):
             )
         client = Client()
         client.force_login(self.approver)
+        approval_started = time.perf_counter()
         client.get(reverse("finance_approval_center"))
+        approval_cold_ms = (time.perf_counter() - approval_started) * 1000
+        approval_started = time.perf_counter()
         with CaptureQueriesContext(connection) as approval_queries:
             response = client.get(reverse("finance_approval_center"))
+        approval_warm_ms = (time.perf_counter() - approval_started) * 1000
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["page"].object_list), 50)
         self.assertLessEqual(len(approval_queries), 8)
+        print(
+            f"FINANCE_APPROVAL_QUEUE_PERF queries={len(approval_queries)} "
+            f"cold_ms={approval_cold_ms:.2f} warm_ms={approval_warm_ms:.2f}"
+        )
         client.get(reverse("finance_operations_center"))
         with CaptureQueriesContext(connection) as center_queries:
             response = client.get(reverse("finance_operations_center"))

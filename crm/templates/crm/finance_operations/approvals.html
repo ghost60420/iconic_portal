@@ -4,7 +4,10 @@
 <main class="fc-shell">
   {% include "crm/finance_operations/_styles.html" %}
   {% include "crm/finance_operations/_nav.html" %}
-  <h2>Pending Financial Approvals</h2>
+  <div class="ops-toolbar ops-approval-heading">
+    <div><h2>Pending Approvals</h2><p class="ops-form-note">Review Finance transactions waiting for an authorized decision.</p></div>
+    <div class="ops-approval-count"><strong>{{ pending_count }}</strong><span>Pending Approvals</span></div>
+  </div>
   {% include "crm/finance_operations/_page_guidance.html" with guidance_key="APPROVAL_CENTER" %}
   <form method="get" class="ops-filter-grid">
     <div class="fc-field"><label>Side</label><select class="form-select" name="side"><option value="">All</option><option value="CA" {% if selected_filters.side == 'CA' %}selected{% endif %}>Canada</option><option value="BD" {% if selected_filters.side == 'BD' %}selected{% endif %}>Bangladesh</option></select></div>
@@ -15,9 +18,23 @@
     <div class="fc-field"><label>Status</label><select class="form-select" name="state"><option value="">All</option><option value="PENDING" {% if selected_filters.state == 'PENDING' %}selected{% endif %}>Pending</option><option value="EVIDENCE_REQUIRED" {% if selected_filters.state == 'EVIDENCE_REQUIRED' %}selected{% endif %}>Evidence Required</option></select></div>
     <div class="fc-actions"><button class="fc-btn" type="submit"><i data-lucide="filter"></i>Filter</button></div>
   </form>
-  <section class="fc-band"><div class="fc-table-wrap"><table class="fc-table ops-table ops-responsive-table"><thead><tr><th>Operation</th><th>Type</th><th>Date</th><th>Side</th><th>Department</th><th>Submitted By</th><th>Reason</th><th class="num">Amount</th><th>Evidence</th><th>Risk</th><th></th></tr></thead><tbody>
-    {% for row in page %}<tr><td data-label="Operation"><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a></td><td data-label="Type">{{ row.get_operation_type_display }}</td><td data-label="Date">{{ row.transaction_date }}</td><td data-label="Side">{{ row.side }}</td><td data-label="Department">{{ row.department|default:"-" }}</td><td data-label="Submitted By">{{ row.submitted_by }}</td><td data-label="Reason">{{ row.reason|default:row.business_purpose|truncatechars:60 }}</td><td data-label="Amount" class="num">{{ row.currency }} {{ row.total_amount|floatformat:2|intcomma }}</td><td data-label="Evidence">{{ row.document_count|yesno:"Attached,Missing" }}</td><td data-label="Risk" class="{% if row.risk_level == 'HIGH' %}ops-risk{% endif %}">{{ row.get_risk_level_display }}</td><td data-label="Action"><a class="fc-btn" href="{% url 'finance_operation_detail' row.pk %}"><i data-lucide="search"></i>Review</a></td></tr>
-    {% empty %}<tr><td colspan="11" class="fc-empty">No assigned approvals.</td></tr>{% endfor %}
+  <section class="fc-band"><div class="fc-table-wrap"><table class="fc-table ops-table ops-responsive-table ops-approval-table"><thead><tr><th>Operation ID</th><th>Date</th><th>Country</th><th>Transaction Type</th><th>Created By</th><th>Submitted By</th><th class="num">Amount</th><th>Currency</th><th>Risk Level</th><th>Supporting Document</th><th>Current Status</th><th>Actions</th></tr></thead><tbody>
+    {% for row in page %}
+      <tr>
+        <td data-label="Operation ID"><a class="fc-link" href="{% url 'finance_operation_detail' row.pk %}">{{ row.operation_number }}</a><small class="ops-row-id">ID #{{ row.pk }}</small></td>
+        <td data-label="Date">{{ row.transaction_date }}</td>
+        <td data-label="Country">{{ row.get_side_display }}</td>
+        <td data-label="Transaction Type">{{ row.get_operation_type_display }}</td>
+        <td data-label="Created By">{{ row.created_by|default:"-" }}</td>
+        <td data-label="Submitted By">{{ row.submitted_by|default:"-" }}</td>
+        <td data-label="Amount" class="num">{{ row.total_amount|floatformat:2|intcomma }}</td>
+        <td data-label="Currency">{{ row.currency }}</td>
+        <td data-label="Risk Level" class="{% if row.risk_level == 'HIGH' %}ops-risk{% endif %}">{{ row.get_risk_level_display }}</td>
+        <td data-label="Supporting Document"><span class="ops-evidence {% if not row.document_count %}missing{% endif %}">{% if row.document_count %}Attached{% else %}Missing{% endif %}</span></td>
+        <td data-label="Current Status"><span class="ops-state {{ row.state|lower }}">{{ row.finance_status_label }}</span></td>
+        <td data-label="Actions"><div class="ops-approval-actions"><a class="fc-btn" href="{% url 'finance_operation_detail' row.pk %}"><i data-lucide="search"></i>Review</a><a class="fc-btn good" href="{% url 'finance_operation_review' row.pk 'approve' %}"><i data-lucide="check"></i>Approve</a><a class="fc-btn" href="{% url 'finance_operation_review' row.pk 'evidence_required' %}"><i data-lucide="reply"></i>Return for Information</a><a class="fc-btn danger" href="{% url 'finance_operation_review' row.pk 'reject' %}"><i data-lucide="x"></i>Reject</a></div></td>
+      </tr>
+    {% empty %}<tr><td colspan="12" class="fc-empty">No Finance transactions are waiting for your approval.</td></tr>{% endfor %}
   </tbody></table></div>{% include "crm/finance_operations/pagination.html" %}</section>
 </main>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script>if(window.lucide){lucide.createIcons();}</script>

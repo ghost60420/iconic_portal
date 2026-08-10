@@ -8,7 +8,7 @@
 
   <div class="ops-toolbar">
     <div><h2 style="margin:0">{{ operation.operation_number }}</h2><p class="ops-form-note">{{ operation.get_operation_type_display }}</p></div>
-    <span class="ops-state {{ operation.state|lower }}">{{ operation.get_state_display }}</span>
+    <span class="ops-state {{ operation.state|lower }}">{{ operation.finance_status_label }}</span>
   </div>
   {% include "crm/finance_operations/_page_guidance.html" with guidance_key="OPERATION_DETAIL" country_side=operation.side %}
 
@@ -18,6 +18,8 @@
       <div><strong>Supporting Document: Missing</strong><span>No supporting document attached.</span></div>
     </div>
   {% endif %}
+
+  {% if operation.state == 'APPROVED' %}<div class="fc-alert good"><strong>APPROVED - AWAITING POSTING</strong><br>Approved By: {{ operation.approved_by }}<br>Approved On: {{ operation.approved_at|date:"M j, Y H:i" }}</div>{% elif operation.state == 'POSTED' %}<div class="fc-alert good"><strong>POSTED</strong><br>Approved By: {{ operation.approved_by }} on {{ operation.approved_at|date:"M j, Y H:i" }}<br>Posted By: {{ operation.posted_by }} on {{ operation.posted_at|date:"M j, Y H:i" }}</div>{% endif %}
 
   {% if operation.operation_type == 'ACCOUNT_TRANSFER' %}
     <section class="fc-band ops-transfer-detail" aria-labelledby="transfer-detail-title">
@@ -52,6 +54,10 @@
       <div><small>Created By</small><strong>{{ operation.created_by|default:"-" }}</strong></div>
       <div><small>Submitted By</small><strong>{{ operation.submitted_by|default:"-" }}</strong></div>
       <div><small>Approved By</small><strong>{{ operation.approved_by|default:"-" }}</strong></div>
+      <div><small>Approved On</small><strong>{% if operation.approved_at %}{{ operation.approved_at|date:"M j, Y H:i" }}{% else %}-{% endif %}</strong></div>
+      <div><small>Self Approval</small><strong>{% if is_self_approved %}Yes{% else %}No{% endif %}</strong></div>
+      <div><small>Posted By</small><strong>{{ operation.posted_by|default:"-" }}</strong></div>
+      <div><small>Posted On</small><strong>{% if operation.posted_at %}{{ operation.posted_at|date:"M j, Y H:i" }}{% else %}-{% endif %}</strong></div>
       <div><small>Payment Account</small><strong>{% if can_view_bank_accounts %}{{ operation.from_account|default:operation.to_account|default:"-" }}{% else %}Restricted{% endif %}</strong></div>
       <div><small>Supporting Document</small><strong>{% if operation.document_count %}Attached{% else %}Missing{% endif %}</strong></div>
     </div>
@@ -100,7 +106,7 @@
 
   <section class="fc-band">
     <h2>Audit History</h2>
-    <div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Date</th><th>Action</th><th>User</th><th>Reason</th></tr></thead><tbody>{% for event in audit_events %}<tr><td>{{ event.created_at|date:"M j, Y H:i" }}</td><td>{{ event.action }}</td><td>{{ event.actor|default:"System" }}</td><td>{{ event.reason|default:"-" }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No audit events.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Date and Time</th><th>Action</th><th>User</th><th>Reason or Notes</th></tr></thead><tbody>{% for event in audit_events %}<tr><td>{{ event.created_at|date:"M j, Y H:i" }}</td><td><strong>{{ event.display_action }}</strong>{% if event.after_value.self_approval %}<span class="ops-audit-self">Self Approval: Yes · User ID {{ event.after_value.user_id }} · Operation ID {{ event.after_value.operation_id }}</span>{% endif %}</td><td>{{ event.actor|default:"System" }}</td><td>{{ event.reason|default:"-" }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No audit events.</td></tr>{% endfor %}</tbody></table></div>
   </section>
 </main>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
