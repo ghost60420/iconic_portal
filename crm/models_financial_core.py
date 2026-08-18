@@ -1333,7 +1333,7 @@ class FinanceOperation(FinancialAuditFields):
             self.STATE_PENDING: "Pending Approval",
             self.STATE_EVIDENCE_REQUIRED: "Returned",
             self.STATE_REJECTED: "Rejected",
-            self.STATE_APPROVED: "Approved - Awaiting Posting",
+            self.STATE_APPROVED: "Approved, Awaiting Posting",
             self.STATE_POSTED: "Posted",
             self.STATE_REVERSED: "Reversed",
         }.get(self.state, self.get_state_display())

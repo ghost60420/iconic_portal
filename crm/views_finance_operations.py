@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 
 from django.conf import settings
 from django.contrib import messages
@@ -53,15 +54,18 @@ from crm.services.financial_permissions import (
     can_manage_financial_transactions,
     can_post_finance_operation,
     can_review_finance_operation,
-    can_self_approve_high_risk_finance,
     can_submit_finance_operation,
     can_view_bank_details,
     can_view_finance_approval_center,
     can_view_full_posting_preview,
+    has_final_finance_approval_authority,
     require_financial_permission,
     scope_finance_operations_for_approval,
     scope_finance_operations_for_user,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 PRIMARY_CENTER_SLUGS = (
@@ -90,7 +94,7 @@ PRIMARY_CENTER_SLUGS = (
 
 AUDIT_ACTION_LABELS = {
     "TRANSACTION_CREATED": "Transaction Created",
-    "DRAFT_SAVED": "Draft Saved",
+    "DRAFT_SAVED": "Edited",
     "EVIDENCE_ATTACHED": "Evidence Attached",
     "SUBMITTED": "Submitted for Approval",
     "EVIDENCE_REQUIRED": "Returned for Information",
@@ -718,9 +722,8 @@ def finance_operation_review(request, pk, action):
         raise Http404("Unknown review action.")
     requires_self_approval_confirmation = bool(
         action == "APPROVE"
-        and operation.risk_level == FinanceOperation.RISK_HIGH
         and request.user.pk in {operation.created_by_id, operation.submitted_by_id}
-        and can_self_approve_high_risk_finance(request.user)
+        and has_final_finance_approval_authority(request.user)
     )
     if request.method == "POST":
         notes = (request.POST.get("notes") or "").strip()
@@ -733,7 +736,29 @@ def finance_operation_review(request, pk, action):
                 confirm_self_approval=request.POST.get("confirm_self_approval") == "yes",
             )
             if action == "APPROVE":
-                messages.success(request, "Transaction approved successfully.")
+                if has_final_finance_approval_authority(request.user):
+                    try:
+                        operation = post_operation(operation, actor=request.user)
+                    except (FinanceOperationWritesDisabled, FinanceOperationError, ValidationError, ValueError) as exc:
+                        operation.refresh_from_db()
+                        messages.warning(
+                            request,
+                            f"Transaction approved. Posting is waiting: {exc}",
+                        )
+                    except Exception as exc:
+                        logger.exception(
+                            "Unexpected Financial Core blocker after Finance approval",
+                            extra={"finance_operation_id": operation.pk},
+                        )
+                        operation.refresh_from_db()
+                        messages.warning(
+                            request,
+                            f"Transaction approved. Posting is waiting: {exc}",
+                        )
+                    else:
+                        messages.success(request, "Transaction approved and posted successfully.")
+                else:
+                    messages.success(request, "Transaction approved successfully.")
             elif action == "EVIDENCE_REQUIRED":
                 messages.success(request, "Transaction returned for more information.")
             else:

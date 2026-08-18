@@ -57,7 +57,11 @@ from crm.services.finance_operations import (
     workflow_definition,
 )
 from crm.services.financial_permissions import (
+    accessible_financial_sides,
+    can_post_finance_operation,
+    can_review_finance_operation,
     can_submit_finance_operation,
+    has_final_finance_approval_authority,
     scope_finance_operations_for_user,
 )
 from crm.services.factory_timeline import save_estimated_factory_timeline
@@ -1177,7 +1181,7 @@ class FinanceOperationsTests(TestCase):
         self.assertContains(queue, operation.operation_number)
         self.assertContains(queue, "Operation ID")
         self.assertContains(queue, "Created By")
-        self.assertContains(queue, "Supporting Document")
+        self.assertContains(queue, "Document Status")
         self.assertContains(queue, "Current Status")
         self.assertContains(queue, "Approve")
         self.assertContains(queue, "Return")
@@ -1189,7 +1193,8 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(confirmation.status_code, 200)
         self.assertContains(
             confirmation,
-            "You created this transaction. As CEO / Super Admin you are authorized to approve it.",
+            "You created this transaction. As CEO / Super Admin, you are authorized to approve it. "
+            "This approval will be recorded in the audit history.",
         )
         self.assertContains(confirmation, 'name="confirm_self_approval"')
 
@@ -1199,17 +1204,18 @@ class FinanceOperationsTests(TestCase):
         operation.refresh_from_db()
         self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
 
-        approved_response = client.post(
-            approve_url,
-            {
-                "notes": "Amounts and provider evidence verified.",
-                "confirm_self_approval": "yes",
-            },
-            follow=True,
-        )
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            approved_response = client.post(
+                approve_url,
+                {
+                    "notes": "Amounts and provider evidence verified.",
+                    "confirm_self_approval": "yes",
+                },
+                follow=True,
+            )
         self.assertEqual(approved_response.status_code, 200)
-        self.assertContains(approved_response, "Transaction approved successfully.")
-        self.assertContains(approved_response, "APPROVED - AWAITING POSTING")
+        self.assertContains(approved_response, "Transaction approved and posted successfully.")
+        self.assertContains(approved_response, "POSTED")
         self.assertContains(approved_response, "Approved By")
         self.assertContains(approved_response, "Approved On")
         self.assertContains(approved_response, "Self Approval")
@@ -1225,7 +1231,7 @@ class FinanceOperationsTests(TestCase):
         print(f"FINANCE_APPROVAL_DETAIL_PERF queries={len(detail_queries)} warm_ms={detail_ms:.2f}")
 
         operation.refresh_from_db()
-        self.assertEqual(operation.state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(operation.state, FinanceOperation.STATE_POSTED)
         self.assertEqual(operation.approved_by, self.submitter)
         self.assertIsNotNone(operation.approved_at)
         approval_audit = FinancialAuditEvent.objects.get(
@@ -1240,18 +1246,9 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(approval_audit.after_value["approved_by_id"], self.submitter.pk)
         self.assertEqual(approval_audit.after_value["user_id"], self.submitter.pk)
         self.assertEqual(approval_audit.after_value["operation_id"], operation.pk)
+        self.assertEqual(approval_audit.after_value["role"], "Super Admin")
         self.assertTrue(approval_audit.after_value["self_approval"])
         self.assertTrue(approval_audit.after_value["approval_date_time"])
-
-        post_url = reverse("finance_operation_post", args=[operation.pk])
-        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
-            post_confirmation = client.get(post_url)
-            self.assertContains(post_confirmation, "Confirm Ledger Posting")
-            posted_response = client.post(post_url, follow=True)
-        self.assertEqual(posted_response.status_code, 200)
-        self.assertContains(posted_response, "POSTED")
-        operation.refresh_from_db()
-        self.assertEqual(operation.state, FinanceOperation.STATE_POSTED)
 
         journals = JournalEntry.objects.filter(source_key__startswith=f"FINANCE-OPERATION:{operation.pk}")
         self.assertEqual(journals.count(), 3)
@@ -1270,6 +1267,7 @@ class FinanceOperationsTests(TestCase):
             Decimal("5.00"),
         )
         journal_count = journals.count()
+        post_url = reverse("finance_operation_post", args=[operation.pk])
         with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
             duplicate_response = client.post(post_url)
         self.assertEqual(duplicate_response.status_code, 302)
@@ -1320,28 +1318,114 @@ class FinanceOperationsTests(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors.as_json())
         operation = submit_operation(form.build_operation(), actor=ceo)
-        with self.assertRaisesMessage(FinanceOperationError, "Second confirmation is required"):
-            review_operation(
-                operation,
-                actor=ceo,
-                action="APPROVE",
-                notes="CEO verified the transfer.",
-            )
-        approved = review_operation(
-            operation,
-            actor=ceo,
-            action="APPROVE",
-            notes="CEO verified the transfer.",
-            confirm_self_approval=True,
-        )
-        self.assertEqual(approved.state, FinanceOperation.STATE_APPROVED)
-        self.assertEqual(approved.approved_by, ceo)
         client = Client()
-        client.force_login(self.submitter)
+        client.force_login(ceo)
+        approve_url = reverse("finance_operation_review", args=[operation.pk, "approve"])
+        self.assertContains(client.get(approve_url), "Privileged self-approval")
+        missing_confirmation = client.post(
+            approve_url,
+            {"notes": "CEO verified the transfer."},
+        )
+        self.assertContains(missing_confirmation, "Second confirmation is required")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            approved = client.post(
+                approve_url,
+                {
+                    "notes": "CEO verified the transfer.",
+                    "confirm_self_approval": "yes",
+                },
+                follow=True,
+            )
+        self.assertContains(approved, "Transaction approved and posted successfully.")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_POSTED)
+        self.assertEqual(operation.approved_by, ceo)
+        approval_audit = FinancialAuditEvent.objects.get(
+            object_id=operation.pk,
+            action="APPROVED",
+            source_reference=operation.operation_number,
+        )
+        self.assertEqual(approval_audit.after_value["role"], "CEO")
+        self.assertTrue(approval_audit.after_value["self_approval"])
         response = client.get(
             f"{reverse('finance_operation_create', args=['money-transfer'])}?side=BD"
         )
         self.assertContains(response, operation.operation_number)
+
+    def test_privileged_standard_risk_self_approval_warns_and_shows_exact_posting_blocker(self):
+        operation = self.operation(
+            FinanceOperation.TYPE_COMPANY_EXPENSE,
+            actor=self.submitter,
+            amount_before_tax=Decimal("100"),
+            supplier=self.supplier,
+            expense_category=self.office_rent,
+            department=self.department,
+            details={"payment_status": "UNPAID", "due_date": "2026-03-01"},
+        )
+        self.assertEqual(operation.risk_level, FinanceOperation.RISK_STANDARD)
+        self.evidence(operation)
+        client = Client()
+        client.force_login(self.submitter)
+        approve_url = reverse("finance_operation_review", args=[operation.pk, "approve"])
+        confirmation = client.get(approve_url)
+        self.assertContains(
+            confirmation,
+            "You created this transaction. As CEO / Super Admin, you are authorized to approve it.",
+        )
+        self.assertContains(confirmation, 'name="confirm_self_approval"')
+
+        self.period.state = FinancialPeriod.STATE_CLOSED
+        self.period.save(update_fields=["state"])
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            response = client.post(
+                approve_url,
+                {
+                    "notes": "Standard-risk expense verified by Super Admin.",
+                    "confirm_self_approval": "yes",
+                },
+                follow=True,
+            )
+        self.assertContains(response, "APPROVED, AWAITING POSTING")
+        self.assertContains(response, "Posting Blocker:")
+        self.assertContains(response, "Financial period &#x27;Finance operations 2026&#x27; is closed.")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_APPROVED)
+        self.assertIn("is closed", operation.posting_error)
+        self.assertFalse(JournalEntry.objects.filter(source_key=f"FINANCE-OPERATION:{operation.pk}").exists())
+        approval_audit = FinancialAuditEvent.objects.get(
+            object_id=operation.pk,
+            action="APPROVED",
+            source_reference=operation.operation_number,
+        )
+        self.assertTrue(approval_audit.after_value["self_approval"])
+
+    def test_privileged_approval_persists_when_required_posting_account_is_missing(self):
+        operation = self.operation(
+            FinanceOperation.TYPE_BANK_FEE,
+            actor=self.submitter,
+            from_account=self.bank,
+        )
+        FinancialAccount.objects.filter(system_key="BANK_FEES").update(is_active=False)
+        client = Client()
+        client.force_login(self.submitter)
+        approve_url = reverse("finance_operation_review", args=[operation.pk, "approve"])
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            response = client.post(
+                approve_url,
+                {
+                    "notes": "Bank fee verified by Super Admin.",
+                    "confirm_self_approval": "yes",
+                },
+                follow=True,
+            )
+        self.assertContains(response, "APPROVED, AWAITING POSTING")
+        self.assertContains(response, "Missing Financial Core accounts: BANK_FEES")
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(operation.posting_error, "Missing Financial Core accounts: BANK_FEES")
+        self.assertFalse(JournalEntry.objects.filter(source_key=f"FINANCE-OPERATION:{operation.pk}").exists())
 
     def test_internal_transfer_preview_remains_single_balanced_entry(self):
         form = self.transfer_form(
@@ -1453,6 +1537,18 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(client.get(reverse("finance_operations_center")).status_code, 403)
         client.force_login(accounts_both)
         self.assertEqual(client.get(reverse("finance_approval_center")).status_code, 404)
+
+    def test_ceo_and_super_admin_have_final_authority_for_every_finance_workflow_and_country(self):
+        ceo = self.user("ops-final-authority-ceo", "CEO", ca=True, bd=True)
+        for actor in (ceo, self.submitter):
+            with self.subTest(actor=actor.username):
+                self.assertTrue(has_final_finance_approval_authority(actor))
+                self.assertTrue(can_post_finance_operation(actor))
+                self.assertEqual(accessible_financial_sides(actor), {"CA", "BD"})
+                for _slug, operation_type, _title, _icon, _group in WORKFLOWS:
+                    for side in ("CA", "BD"):
+                        operation = FinanceOperation(operation_type=operation_type, side=side)
+                        self.assertTrue(can_review_finance_operation(actor, operation))
 
     def test_document_download_rechecks_operation_scope(self):
         operation = self.operation(FinanceOperation.TYPE_OWNER_INVESTMENT, to_account=self.bank)

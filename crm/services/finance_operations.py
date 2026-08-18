@@ -703,8 +703,9 @@ def review_operation(operation, *, actor, action, notes, confirm_self_approval=F
     locked = FinanceOperation.objects.select_for_update().get(pk=operation.pk)
     from crm.services.financial_permissions import (
         can_review_finance_operation,
-        can_self_approve_high_risk_finance,
+        has_final_finance_approval_authority,
     )
+    from crm.services.operations_permissions import ROLE_CEO, operations_role_names
 
     if not can_review_finance_operation(reviewer, locked):
         raise FinanceOperationError("You do not have permission to review this finance operation.")
@@ -715,18 +716,16 @@ def review_operation(operation, *, actor, action, notes, confirm_self_approval=F
         raise FinanceOperationError("Review notes must explain the decision.")
     is_self_approval = bool(
         action == "APPROVE"
-        and locked.risk_level == FinanceOperation.RISK_HIGH
         and reviewer.pk in {locked.created_by_id, locked.submitted_by_id}
     )
     if action == "APPROVE":
-        if is_self_approval:
-            if not can_self_approve_high_risk_finance(reviewer):
+        if is_self_approval and locked.risk_level == FinanceOperation.RISK_HIGH:
+            if not has_final_finance_approval_authority(reviewer):
                 raise FinanceOperationError("A user cannot approve their own high-risk finance operation.")
+        if is_self_approval and has_final_finance_approval_authority(reviewer):
             if not confirm_self_approval:
                 raise FinanceOperationError("Second confirmation is required for CEO or Super Admin self-approval.")
         preview = build_posting_preview(locked)
-        if preview["missing_accounts"]:
-            raise FinanceOperationError("Posting accounts are incomplete: " + ", ".join(preview["missing_accounts"]))
         next_state = FinanceOperation.STATE_APPROVED
     elif action == "REJECT":
         next_state = FinanceOperation.STATE_REJECTED
@@ -745,6 +744,14 @@ def review_operation(operation, *, actor, action, notes, confirm_self_approval=F
         update.update(approved_by=reviewer, approved_at=now, posting_preview=preview)
     FinanceOperation.objects.filter(pk=locked.pk).update(**update)
     locked.refresh_from_db()
+    reviewer_roles = operations_role_names(reviewer)
+    approval_role = (
+        "Super Admin"
+        if reviewer.is_superuser
+        else "CEO"
+        if ROLE_CEO in reviewer_roles
+        else ", ".join(sorted(reviewer_roles)) or "Authorized Approver"
+    )
     audit_operation(
         locked,
         next_state,
@@ -760,6 +767,7 @@ def review_operation(operation, *, actor, action, notes, confirm_self_approval=F
             "self_approval": is_self_approval,
             "decision_notes": notes,
             "user_id": reviewer.pk,
+            "role": approval_role,
             "operation_id": locked.pk,
         },
     )

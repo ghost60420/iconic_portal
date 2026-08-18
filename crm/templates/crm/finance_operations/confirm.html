@@ -10,7 +10,7 @@
     {% if requires_self_approval_confirmation %}
       <div class="fc-alert warn ops-self-approval-warning">
         <i data-lucide="shield-alert"></i>
-        <div><strong>Privileged self-approval</strong><span>You created this transaction. As CEO / Super Admin you are authorized to approve it. This action will be recorded in the audit history.</span></div>
+        <div><strong>Privileged self-approval</strong><span>You created this transaction. As CEO / Super Admin, you are authorized to approve it. This approval will be recorded in the audit history.</span></div>
       </div>
     {% endif %}
     {% if mode == 'review' and not operation.document_count %}<div class="fc-alert warn ops-document-warning"><i data-lucide="triangle-alert"></i><div><strong>Supporting Document: Missing</strong><span>The approver may continue, return the transaction for more information, or reject it.</span></div></div>{% endif %}

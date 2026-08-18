@@ -4,7 +4,7 @@
 <main class="fc-shell">
   {% include "crm/finance_operations/_styles.html" %}
   {% include "crm/finance_operations/_nav.html" %}
-  {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
+  {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% elif message.tags == 'warning' %}warn{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
 
   <div class="ops-toolbar">
     <div><h2 style="margin:0">{{ operation.operation_number }}</h2><p class="ops-form-note">{{ operation.get_operation_type_display }}</p></div>
@@ -19,7 +19,7 @@
     </div>
   {% endif %}
 
-  {% if operation.state == 'APPROVED' %}<div class="fc-alert good"><strong>APPROVED - AWAITING POSTING</strong><br>Approved By: {{ operation.approved_by }}<br>Approved On: {{ operation.approved_at|date:"M j, Y H:i" }}</div>{% elif operation.state == 'POSTED' %}<div class="fc-alert good"><strong>POSTED</strong><br>Approved By: {{ operation.approved_by }} on {{ operation.approved_at|date:"M j, Y H:i" }}<br>Posted By: {{ operation.posted_by }} on {{ operation.posted_at|date:"M j, Y H:i" }}</div>{% endif %}
+  {% if operation.state == 'APPROVED' %}<div class="fc-alert warn"><strong>APPROVED, AWAITING POSTING</strong><br>Approved By: {{ operation.approved_by }}<br>Approved On: {{ operation.approved_at|date:"M j, Y H:i" }}{% if operation.posting_error %}<br>Posting Blocker: {{ operation.posting_error }}{% endif %}</div>{% elif operation.state == 'POSTED' %}<div class="fc-alert good"><strong>POSTED</strong><br>Approved By: {{ operation.approved_by }} on {{ operation.approved_at|date:"M j, Y H:i" }}<br>Posted By: {{ operation.posted_by }} on {{ operation.posted_at|date:"M j, Y H:i" }}</div>{% endif %}
 
   {% if operation.operation_type == 'ACCOUNT_TRANSFER' %}
     <section class="fc-band ops-transfer-detail" aria-labelledby="transfer-detail-title">
@@ -106,7 +106,7 @@
 
   <section class="fc-band">
     <h2>Audit History</h2>
-    <div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Date and Time</th><th>Action</th><th>User</th><th>Reason or Notes</th></tr></thead><tbody>{% for event in audit_events %}<tr><td>{{ event.created_at|date:"M j, Y H:i" }}</td><td><strong>{{ event.display_action }}</strong>{% if event.after_value.self_approval %}<span class="ops-audit-self">Self Approval: Yes · User ID {{ event.after_value.user_id }} · Operation ID {{ event.after_value.operation_id }}</span>{% endif %}</td><td>{{ event.actor|default:"System" }}</td><td>{{ event.reason|default:"-" }}</td></tr>{% empty %}<tr><td colspan="4" class="fc-empty">No audit events.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="fc-table-wrap"><table class="fc-table ops-table"><thead><tr><th>Date and Time</th><th>Action</th><th>User</th><th>Role</th><th>Reason or Notes</th></tr></thead><tbody>{% for event in audit_events %}<tr><td>{{ event.created_at|date:"M j, Y H:i" }}</td><td><strong>{{ event.display_action }}</strong>{% if event.action == 'APPROVED' %}<span class="ops-audit-self">User ID {{ event.after_value.user_id }} | Self Approval: {% if event.after_value.self_approval %}Yes{% else %}No{% endif %} | Operation ID {{ event.after_value.operation_id }}</span>{% endif %}</td><td>{{ event.actor|default:"System" }}</td><td>{{ event.after_value.role|default:"-" }}</td><td>{{ event.reason|default:"-" }}</td></tr>{% empty %}<tr><td colspan="5" class="fc-empty">No audit events.</td></tr>{% endfor %}</tbody></table></div>
   </section>
 </main>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
