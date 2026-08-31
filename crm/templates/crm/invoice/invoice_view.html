@@ -689,7 +689,7 @@
             </div>
           {% endif %}
 
-          <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" novalidate>
+          <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             <div class="pay-form-grid">
               <div class="pay-field">
@@ -708,6 +708,18 @@
                 <label for="{{ payment_form.payment_method.id_for_label }}">Payment method</label>
                 {{ payment_form.payment_method }}
                 {% if payment_form.payment_method.errors %}<div class="pay-error">{{ payment_form.payment_method.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_account.id_for_label }}">Account / Payment Account</label>
+                {{ payment_form.payment_account }}
+                {% if payment_form.payment_account.errors %}<div class="pay-error">{{ payment_form.payment_account.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.reference.id_for_label }}">Reference</label>
+                {{ payment_form.reference }}
+                {% if payment_form.reference.errors %}<div class="pay-error">{{ payment_form.reference.errors }}</div>{% endif %}
               </div>
 
               <div class="pay-field">
@@ -747,6 +759,12 @@
                 <label for="{{ payment_form.notes.id_for_label }}">Notes</label>
                 {{ payment_form.notes }}
                 {% if payment_form.notes.errors %}<div class="pay-error">{{ payment_form.notes.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field pay-field--wide">
+                <label for="{{ payment_form.receipt.id_for_label }}">Receipt <span class="pay-help">Optional</span></label>
+                {{ payment_form.receipt }}
+                {% if payment_form.receipt.errors %}<div class="pay-error">{{ payment_form.receipt.errors }}</div>{% endif %}
               </div>
             </div>
 

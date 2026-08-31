@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.contrib.staticfiles import finders
 from django.db import transaction
 from django.db.models import F, Q, Sum
@@ -18,13 +18,14 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import (
     CRMAuditLog,
     CostingHeader,
     Customer,
     ExchangeRate,
+    FinancialDocument,
     Invoice,
     InvoicePayment,
     InvoiceSettings,
@@ -2375,7 +2376,7 @@ def invoice_view(request, pk):
         "crm/invoice/invoice_view.html",
         {
             "invoice": display_invoice,
-            "payment_form": InvoicePaymentForm(invoice=inv, initial=initial),
+            "payment_form": InvoicePaymentForm(invoice=inv, user=request.user, initial=initial),
             **payment_context,
             "reference_images": reference_images,
             "primary_reference_image": reference_images[0] if reference_images else None,
@@ -2948,10 +2949,13 @@ def invoice_pdf(request, pk):
 
 @login_required
 @user_passes_test(superuser_only)
-@require_POST
+@require_http_methods(["GET", "POST"])
 def invoice_payment_add(request, pk):
+    if request.method == "GET":
+        return invoice_view(request, pk)
+
     inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
-    form = InvoicePaymentForm(request.POST, invoice=inv)
+    form = InvoicePaymentForm(request.POST, request.FILES, invoice=inv, user=request.user)
 
     if not form.is_valid():
         payment_history = list(
@@ -2975,6 +2979,7 @@ def invoice_payment_add(request, pk):
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": is_accounting_period_closed(timezone.localdate(), invoice_payment_side(inv)),
                 "can_manage_invoice_costing": can_view_invoice_costing,
+                "can_manage_invoices": True,
                 "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             },
         )
@@ -3008,6 +3013,7 @@ def invoice_payment_add(request, pk):
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": True,
                 "can_manage_invoice_costing": can_view_invoice_costing,
+                "can_manage_invoices": True,
                 "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             },
         )
@@ -3015,15 +3021,49 @@ def invoice_payment_add(request, pk):
     payment = form.save(commit=False)
     payment.side = side
     try:
-        result = record_invoice_payment(inv, payment, actor=request.user)
-    except PaymentWriteError as exc:
+        with transaction.atomic():
+            result = record_invoice_payment(
+                inv,
+                payment,
+                actor=request.user,
+                payment_account=form.cleaned_data["payment_account"],
+                reference=form.cleaned_data["reference"],
+            )
+            receipt = form.cleaned_data.get("receipt")
+            if receipt:
+                source_record = result.financial_result["event"] if result.financial_result else result.payment
+                FinancialDocument.objects.create(
+                    source_record=source_record,
+                    file=receipt,
+                    document_type="CUSTOMER_RECEIPT",
+                    description=form.cleaned_data["reference"],
+                    created_by=request.user,
+                    modified_by=request.user,
+                )
+    except (PaymentWriteError, ValidationError) as exc:
         return _invoice_payment_error_response(request, inv, str(exc), status=409)
+    except OSError:
+        return _invoice_payment_error_response(
+            request,
+            inv,
+            "The receipt could not be stored. No payment or journal was created.",
+            status=409,
+        )
     inv = result.invoice
 
     if inv.payment_status_key == "overpaid":
         messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
     else:
-        messages.success(request, "Payment received and accounting entry saved.")
+        customer_credit = (result.financial_result or {}).get("customer_credit", Decimal("0"))
+        if result.financial_result is None:
+            messages.success(request, "Payment received and accounting entry saved.")
+        elif customer_credit:
+            messages.success(
+                request,
+                "Payment received and posted to Customer Deposits. It did not recognize revenue while the invoice is draft.",
+            )
+        else:
+            messages.success(request, "Payment received and posted to Financial Core once.")
     return redirect("invoice_view", pk=inv.pk)
 
 

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.urls import reverse
@@ -36,6 +37,7 @@ class RecordedPayment:
     invoice: Invoice
     payment: InvoicePayment
     accounting_entry: AccountingEntry
+    financial_result: dict | None = None
 
 
 def _decimal(value) -> Decimal:
@@ -185,8 +187,17 @@ def _validate_new_payment(invoice: Invoice, payment: InvoicePayment) -> None:
 
 
 @transaction.atomic
-def record_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=None) -> RecordedPayment:
-    locked = Invoice.objects.select_for_update().select_related("customer", "order").get(pk=invoice.pk)
+def record_invoice_payment(
+    invoice: Invoice,
+    payment: InvoicePayment,
+    *,
+    actor=None,
+    payment_account=None,
+    reference="",
+) -> RecordedPayment:
+    locked = Invoice.objects.select_for_update().select_related(
+        "customer", "order", "financial_state"
+    ).get(pk=invoice.pk)
     payment.invoice = locked
     payment.side = (payment.side or invoice_payment_side(locked)).upper().strip()
     payment.created_by = _actor_or_none(actor)
@@ -194,6 +205,8 @@ def record_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=N
         payment.production_order = locked.order
 
     _validate_new_payment(locked, payment)
+    if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False) and not locked.customer_id:
+        raise PaymentWriteError("Select a customer on the invoice before recording payment.")
     payment.save()
 
     entry = AccountingEntry.objects.create(
@@ -217,37 +230,69 @@ def record_invoice_payment(invoice: Invoice, payment: InvoicePayment, *, actor=N
 
     payment.accounting_entry = entry
     payment.save(update_fields=["accounting_entry"])
+    financial_result = None
     if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
-        from crm.services.receivable_accounting import record_customer_receipt, resolve_legacy_payment_account
+        from crm.models import InvoiceFinancialState
+        from crm.services.receivable_accounting import (
+            record_customer_receipt,
+            resolve_legacy_payment_account,
+            validate_customer_payment_account,
+        )
 
-        payment_account = resolve_legacy_payment_account(
-            side=payment.side,
-            currency=payment.currency,
-            payment_method=payment.payment_method,
-        )
-        record_customer_receipt(
-            customer=locked.customer,
-            amount=payment.amount,
-            currency=payment.currency,
-            receipt_date=payment.payment_date,
-            payment_account=payment_account,
-            reference=f"LEGACY-{payment.pk}",
-            actor=actor,
-            invoices=(locked,),
-            payment_method=payment.payment_method,
-            rate_to_cad=payment.rate_to_cad,
-            rate_to_bdt=payment.rate_to_bdt,
-            evidence_reference=f"Invoice payment {payment.pk}",
-            legacy_payment=payment,
-            legacy_accounting_entry=entry,
-        )
+        try:
+            payment_account = payment_account or resolve_legacy_payment_account(
+                side=payment.side,
+                currency=payment.currency,
+                payment_method=payment.payment_method,
+            )
+            validate_customer_payment_account(
+                payment_account=payment_account,
+                side=payment.side,
+                currency=payment.currency,
+                payment_method=payment.payment_method,
+            )
+            try:
+                financial_state = locked.financial_state
+            except InvoiceFinancialState.DoesNotExist:
+                financial_state = None
+            core_invoices = (
+                (locked,)
+                if financial_state
+                and financial_state.document_status == InvoiceFinancialState.DOCUMENT_ISSUED
+                else ()
+            )
+            payment_reference = (reference or f"Invoice payment {payment.pk}").strip()
+            financial_result = record_customer_receipt(
+                customer=locked.customer,
+                amount=payment.amount,
+                currency=payment.currency,
+                receipt_date=payment.payment_date,
+                payment_account=payment_account,
+                reference=payment_reference,
+                idempotency_reference=f"LEGACY-{payment.pk}",
+                actor=actor,
+                invoices=core_invoices,
+                payment_method=payment.payment_method,
+                rate_to_cad=payment.rate_to_cad,
+                rate_to_bdt=payment.rate_to_bdt,
+                evidence_reference=payment_reference,
+                legacy_payment=payment,
+                legacy_accounting_entry=entry,
+            )
+        except (ValueError, ValidationError) as exc:
+            raise PaymentWriteError(str(exc)) from exc
     write_payment_projection(
         locked,
         paid_amount=_decimal(locked.paid_amount) + _decimal(payment.amount),
         actor=actor,
         sync_lifecycle=True,
     )
-    return RecordedPayment(invoice=locked, payment=payment, accounting_entry=entry)
+    return RecordedPayment(
+        invoice=locked,
+        payment=payment,
+        accounting_entry=entry,
+        financial_result=financial_result,
+    )
 
 
 @transaction.atomic

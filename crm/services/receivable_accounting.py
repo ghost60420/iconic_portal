@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from crm.models import (
     CashBankAccount,
+    FinancialAccount,
     Invoice,
     InvoiceFinancialState,
     JournalEntry,
@@ -28,6 +29,57 @@ class ReceivableAccountingError(ValueError):
     pass
 
 
+CUSTOMER_PAYMENT_METHOD_CHOICES = (
+    ("e_transfer", "E Transfer"),
+    ("paypal", "PayPal"),
+    ("bank_transfer", "Bank Transfer"),
+    ("cash", "Cash"),
+)
+
+
+PAYMENT_METHOD_ACCOUNT_KINDS = {
+    "e_transfer": {CashBankAccount.KIND_BANK},
+    "paypal": {CashBankAccount.KIND_PAYPAL},
+    "bank_transfer": {CashBankAccount.KIND_BANK},
+    "cash": {CashBankAccount.KIND_CASH},
+    # Historical codes stay valid for existing integrations and records.
+    "bank": {CashBankAccount.KIND_BANK},
+    "cheque": {CashBankAccount.KIND_BANK},
+    "card": {CashBankAccount.KIND_BANK, CashBankAccount.KIND_PAYPAL},
+    "mobile": {CashBankAccount.KIND_MOBILE},
+    "other": {
+        CashBankAccount.KIND_BANK,
+        CashBankAccount.KIND_CASH,
+        CashBankAccount.KIND_PAYPAL,
+        CashBankAccount.KIND_MOBILE,
+        CashBankAccount.KIND_OTHER,
+    },
+}
+
+
+def validate_customer_payment_account(*, payment_account, side, currency, payment_method):
+    if payment_account is None:
+        raise ReceivableAccountingError("Select the receiving bank, PayPal, or cash account.")
+    side = (side or "").upper().strip()
+    currency = (currency or "").upper().strip()
+    method = (payment_method or "").lower().strip()
+    allowed_kinds = PAYMENT_METHOD_ACCOUNT_KINDS.get(method, set())
+    if not payment_account.is_active or not payment_account.gl_account.is_active:
+        raise ReceivableAccountingError("The selected payment account is inactive.")
+    if payment_account.side != side:
+        raise ReceivableAccountingError(f"Select a {side} payment account for this invoice.")
+    if payment_account.currency != currency:
+        raise ReceivableAccountingError(f"Select a {currency} payment account for this invoice.")
+    if payment_account.kind not in allowed_kinds:
+        method_label = dict(CUSTOMER_PAYMENT_METHOD_CHOICES).get(method, "selected payment method")
+        raise ReceivableAccountingError(f"Select a valid receiving account for {method_label}.")
+    if payment_account.gl_account.account_type != FinancialAccount.TYPE_ASSET:
+        raise ReceivableAccountingError("Payment accounts must post to an asset account, not expense or COGS.")
+    if not payment_account.gl_account.system_key:
+        raise ReceivableAccountingError("The selected payment account is not mapped to Financial Core.")
+    return payment_account
+
+
 def _actor(actor):
     if not actor or not getattr(actor, "is_authenticated", False):
         raise ReceivableAccountingError("An authenticated actor is required.")
@@ -35,16 +87,19 @@ def _actor(actor):
 
 
 def resolve_legacy_payment_account(*, side, currency, payment_method):
-    kind = {
-        "cash": CashBankAccount.KIND_CASH,
-        "mobile": CashBankAccount.KIND_MOBILE,
-    }.get((payment_method or "").lower(), CashBankAccount.KIND_BANK)
+    allowed_kinds = PAYMENT_METHOD_ACCOUNT_KINDS.get(
+        (payment_method or "").lower().strip(),
+        {CashBankAccount.KIND_BANK},
+    )
     candidates = list(
         CashBankAccount.objects.filter(
             side=(side or "").upper(),
             currency=(currency or "").upper(),
-            kind=kind,
+            kind__in=allowed_kinds,
             is_active=True,
+            gl_account__is_active=True,
+            gl_account__account_type=FinancialAccount.TYPE_ASSET,
+            gl_account__system_key__isnull=False,
         )[:2]
     )
     if len(candidates) != 1:
@@ -333,12 +388,24 @@ def record_customer_receipt(
     rate_to_cad=None,
     rate_to_bdt=None,
     evidence_reference="",
+    idempotency_reference="",
     legacy_payment=None,
     legacy_accounting_entry=None,
 ):
     approver = _actor(actor)
     if not reference or not str(reference).strip():
         raise ReceivableAccountingError("Customer receipts require an external reference.")
+    if payment_account is None:
+        raise ReceivableAccountingError("Select the receiving bank, PayPal, or cash account.")
+    reference = str(reference).strip()
+    idempotency_reference = str(idempotency_reference or reference).strip()
+    payment_method = (payment_method or "bank").lower().strip()
+    validate_customer_payment_account(
+        payment_account=payment_account,
+        side=payment_account.side,
+        currency=currency,
+        payment_method=payment_method,
+    )
     locked_invoices = list(
         Invoice.objects.select_for_update()
         .select_related("financial_state")
@@ -388,11 +455,11 @@ def record_customer_receipt(
         )
     journal = create_draft_journal(
         journal_date=receipt_date,
-        reference=f"FIN-RCPT-{reference}",
+        reference=f"FIN-RCPT-{idempotency_reference}",
         description=f"Customer receipt {reference}",
         side=payment_account.side,
         snapshot=snapshot,
-        source_key=f"CUSTOMER-RECEIPT:{reference}",
+        source_key=f"CUSTOMER-RECEIPT:{idempotency_reference}",
         source_record=legacy_payment or customer,
         actor=approver,
         lines=[
@@ -417,9 +484,9 @@ def record_customer_receipt(
             currency=snapshot.currency,
             rate_to_cad=snapshot.rate_to_cad,
             rate_to_bdt=snapshot.rate_to_bdt,
-            idempotency_key=f"CORE:CUSTOMER-RECEIPT:{reference}",
-            external_reference=str(reference).strip(),
-            evidence_reference=(evidence_reference or str(reference)).strip(),
+            idempotency_key=f"CORE:CUSTOMER-RECEIPT:{idempotency_reference}",
+            external_reference=reference,
+            evidence_reference=(evidence_reference or reference).strip(),
             legacy_invoice_payment=legacy_payment,
             accounting_entry=legacy_accounting_entry,
             financial_journal=journal,
@@ -435,7 +502,7 @@ def record_customer_receipt(
             invoice=invoice,
             signed_amount=applied,
             allocation_date=receipt_date,
-            idempotency_key=f"CORE:CUSTOMER-RECEIPT:{reference}:INVOICE:{invoice.pk}",
+            idempotency_key=f"CORE:CUSTOMER-RECEIPT:{idempotency_reference}:INVOICE:{invoice.pk}",
             reason=f"Receipt {reference}",
             actor=approver,
         )

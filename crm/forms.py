@@ -13,6 +13,7 @@
 
 from decimal import Decimal
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -23,6 +24,7 @@ from .models import (
     AccountingDocument,
     BDStaff,
     BDStaffMonth,
+    CashBankAccount,
     Customer,
     Event,
     InventoryItem,
@@ -42,7 +44,13 @@ from .models import (
     LibraryAttachment,
     lead_product_interest_choices,
 )
+from .services.financial_permissions import accessible_financial_sides
 from .services.living_catalog import CATALOG_IMAGE_FIELDS, prepare_catalog_image
+from .services.payment_reconciliation import invoice_payment_side
+from .services.receivable_accounting import (
+    CUSTOMER_PAYMENT_METHOD_CHOICES,
+    PAYMENT_METHOD_ACCOUNT_KINDS,
+)
 
 # --------------------------------------------------
 # Shared multi file widgets
@@ -1745,6 +1753,30 @@ class InvoiceSettingsForm(forms.ModelForm):
 
 
 class InvoicePaymentForm(forms.ModelForm):
+    payment_method = forms.ChoiceField(
+        choices=CUSTOMER_PAYMENT_METHOD_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    payment_account = forms.ModelChoiceField(
+        queryset=CashBankAccount.objects.none(),
+        required=False,
+        label="Account / Payment Account",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    reference = forms.CharField(
+        max_length=120,
+        label="Reference",
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    receipt = forms.FileField(
+        required=False,
+        label="Receipt",
+        help_text="Optional.",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "form-control", "accept": ".pdf,.jpg,.jpeg,.png,.webp"}
+        ),
+    )
+
     class Meta:
         model = InvoicePayment
         fields = [
@@ -1753,10 +1785,13 @@ class InvoicePaymentForm(forms.ModelForm):
             "currency",
             "side",
             "payment_method",
+            "payment_account",
+            "reference",
             "rate_to_cad",
             "rate_to_bdt",
             "production_order",
             "notes",
+            "receipt",
         ]
         widgets = {
             "payment_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
@@ -1770,18 +1805,43 @@ class InvoicePaymentForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
-    def __init__(self, *args, invoice=None, **kwargs):
+    def __init__(self, *args, invoice=None, user=None, **kwargs):
         self.invoice = invoice
+        self.user = user
         super().__init__(*args, **kwargs)
+        core_writes_enabled = getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
+        if core_writes_enabled:
+            self.fields["payment_method"].initial = "e_transfer"
+        else:
+            self.fields["payment_method"].choices = InvoicePayment.METHOD_CHOICES
+            self.fields["reference"].required = False
 
         if invoice is not None:
             invoice_currency = (getattr(invoice, "currency", "") or "CAD").upper()
-            invoice_side = (getattr(invoice, "invoice_region", "") or "").upper()
-            if invoice_side not in {"CA", "BD"}:
-                invoice_side = "BD" if invoice_currency == "BDT" else "CA"
+            invoice_side = invoice_payment_side(invoice)
 
             self.fields["currency"].initial = invoice_currency
             self.fields["side"].initial = invoice_side
+            self.fields["currency"].disabled = True
+            self.fields["side"].disabled = True
+
+            allowed_sides = accessible_financial_sides(user) if user else {invoice_side}
+            accounts = CashBankAccount.objects.none()
+            if invoice_side in allowed_sides:
+                accounts = CashBankAccount.objects.filter(
+                    side=invoice_side,
+                    currency=invoice_currency,
+                    kind__in=(
+                        CashBankAccount.KIND_BANK,
+                        CashBankAccount.KIND_PAYPAL,
+                        CashBankAccount.KIND_CASH,
+                    ),
+                    is_active=True,
+                    gl_account__is_active=True,
+                    gl_account__account_type="ASSET",
+                    gl_account__system_key__isnull=False,
+                ).select_related("gl_account").order_by("kind", "name")
+            self.fields["payment_account"].queryset = accounts
 
             if getattr(invoice, "order_id", None):
                 self.fields["production_order"].initial = invoice.order_id
@@ -1800,11 +1860,28 @@ class InvoicePaymentForm(forms.ModelForm):
         currency = (cleaned.get("currency") or "").upper().strip()
         rate_to_cad = cleaned.get("rate_to_cad") or Decimal("0")
         rate_to_bdt = cleaned.get("rate_to_bdt") or Decimal("0")
+        payment_account = cleaned.get("payment_account")
+        payment_method = (cleaned.get("payment_method") or "").lower().strip()
 
         if self.invoice is not None:
             invoice_currency = (self.invoice.currency or "").upper().strip()
             if currency and currency != invoice_currency:
                 self.add_error("currency", "Payment currency must match the invoice currency.")
+            if self.user and invoice_payment_side(self.invoice) not in accessible_financial_sides(self.user):
+                raise forms.ValidationError("You do not have access to this invoice country.")
+
+        if payment_account is None and getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
+            self.add_error("payment_account", "Select the receiving bank, PayPal, or cash account.")
+        elif payment_account is not None:
+            allowed_kinds = PAYMENT_METHOD_ACCOUNT_KINDS.get(payment_method, set())
+            if payment_account.kind not in allowed_kinds:
+                method_label = dict(CUSTOMER_PAYMENT_METHOD_CHOICES).get(
+                    payment_method, "selected payment method"
+                )
+                self.add_error(
+                    "payment_account",
+                    f"Select a valid receiving account for {method_label}.",
+                )
 
         if currency == "CAD":
             cleaned["rate_to_cad"] = Decimal("1")

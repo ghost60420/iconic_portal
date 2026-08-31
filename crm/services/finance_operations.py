@@ -835,7 +835,13 @@ def _post_customer(operation, actor):
             rate_to_bdt=operation.rate_to_bdt,
             notes=f"Finance operation {operation.operation_number}; reference {_posting_reference(operation)}",
         )
-        recorded = record_invoice_payment(operation.invoice, payment, actor=actor)
+        recorded = record_invoice_payment(
+            operation.invoice,
+            payment,
+            actor=actor,
+            payment_account=operation.to_account,
+            reference=_posting_reference(operation),
+        )
         excess = money(operation.total_amount - applied)
         if excess:
             record_customer_receipt(

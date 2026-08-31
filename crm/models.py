@@ -5791,8 +5791,11 @@ class InvoiceAudit(models.Model):
 
 class InvoicePayment(models.Model):
     METHOD_CHOICES = [
-        ("bank", "Bank transfer"),
+        ("e_transfer", "E Transfer"),
+        ("paypal", "PayPal"),
+        ("bank_transfer", "Bank Transfer"),
         ("cash", "Cash"),
+        ("bank", "Bank transfer (historical)"),
         ("cheque", "Cheque"),
         ("card", "Card"),
         ("mobile", "Mobile payment"),
