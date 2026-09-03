@@ -679,6 +679,7 @@
               <span class="status s-overpaid">Current month closed</span>
             {% endif %}
           </div>
+          <p class="pay-help">Use this section when recording money received for this specific invoice.</p>
 
           {% if payment_form.non_field_errors %}
             <div class="pay-alert">{{ payment_form.non_field_errors }}</div>
@@ -691,6 +692,7 @@
 
           <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
+            {{ payment_form.submission_token }}
             <div class="pay-form-grid">
               <div class="pay-field">
                 <label for="{{ payment_form.payment_date.id_for_label }}">Payment date</label>
@@ -717,8 +719,9 @@
               </div>
 
               <div class="pay-field">
-                <label for="{{ payment_form.reference.id_for_label }}">Reference</label>
+                <label for="{{ payment_form.reference.id_for_label }}">Reference <span class="pay-help">Optional</span></label>
                 {{ payment_form.reference }}
+                {% if payment_form.reference.help_text %}<div class="pay-help">{{ payment_form.reference.help_text }}</div>{% endif %}
                 {% if payment_form.reference.errors %}<div class="pay-error">{{ payment_form.reference.errors }}</div>{% endif %}
               </div>
 

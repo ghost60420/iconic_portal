@@ -15,8 +15,10 @@ from crm.models import (
     AccountingMonthClose,
     AccountingMonthLock,
     CRMAuditLog,
+    FinanceOperation,
     Invoice,
     InvoicePayment,
+    ReceivableEvent,
 )
 from crm.services.invoice_state import write_payment_projection
 
@@ -90,6 +92,26 @@ def is_accounting_period_closed(payment_date, side: str) -> bool:
 def reconciliation_difference(invoice: Invoice) -> Decimal:
     recorded = invoice.payments.aggregate(total_paid=Sum("amount"))["total_paid"] or Decimal("0")
     return _money(_decimal(invoice.paid_amount) - recorded)
+
+
+def customer_payment_reference_exists(customer, reference, *, exclude_operation=None) -> bool:
+    reference = (reference or "").strip()
+    if not customer or not reference:
+        return False
+    if ReceivableEvent.objects.filter(
+        customer=customer,
+        external_reference__iexact=reference,
+        state__in=(ReceivableEvent.STATE_POSTED, ReceivableEvent.STATE_REVERSED),
+    ).exists():
+        return True
+    operations = FinanceOperation.objects.filter(
+        operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+        customer=customer,
+        reference__iexact=reference,
+    ).exclude(state=FinanceOperation.STATE_REJECTED)
+    if exclude_operation is not None and getattr(exclude_operation, "pk", None):
+        operations = operations.exclude(pk=exclude_operation.pk)
+    return operations.exists()
 
 
 def _entry_snapshot(entry: AccountingEntry) -> dict:
@@ -194,6 +216,9 @@ def record_invoice_payment(
     actor=None,
     payment_account=None,
     reference="",
+    idempotency_reference="",
+    source_operation=None,
+    allow_duplicate_reference=False,
 ) -> RecordedPayment:
     locked = Invoice.objects.select_for_update().select_related(
         "customer", "order", "financial_state"
@@ -207,6 +232,17 @@ def record_invoice_payment(
     _validate_new_payment(locked, payment)
     if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False) and not locked.customer_id:
         raise PaymentWriteError("Select a customer on the invoice before recording payment.")
+    if (
+        not allow_duplicate_reference
+        and customer_payment_reference_exists(
+            locked.customer,
+            reference,
+            exclude_operation=source_operation,
+        )
+    ):
+        raise PaymentWriteError(
+            "A customer payment with this reference already exists. Review the existing payment before recording another."
+        )
     payment.save()
 
     entry = AccountingEntry.objects.create(
@@ -269,7 +305,7 @@ def record_invoice_payment(
                 receipt_date=payment.payment_date,
                 payment_account=payment_account,
                 reference=payment_reference,
-                idempotency_reference=f"LEGACY-{payment.pk}",
+                idempotency_reference=(idempotency_reference or f"LEGACY-{payment.pk}").strip(),
                 actor=actor,
                 invoices=core_invoices,
                 payment_method=payment.payment_method,

@@ -180,6 +180,52 @@ class InvoicePaymentLiveFixTests(TestCase):
         self.assertContains(response, "Account / Payment Account")
         self.assertContains(response, "Reference")
         self.assertContains(response, "Receipt")
+        self.assertContains(
+            response,
+            "Use this section when recording money received for this specific invoice.",
+        )
+        self.assertFalse(response.context["payment_form"].fields["reference"].required)
+        self.assertTrue(response.context["payment_form"]["submission_token"].value())
+
+    def test_reference_is_optional_and_missing_period_is_shown_inline(self):
+        invoice = self.invoice("LIVE-OPTIONAL-REFERENCE", total="50.00")
+
+        without_reference = self.post_payment(invoice, "10.00", reference="")
+
+        self.assertEqual(without_reference.status_code, 302)
+        self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
+
+        outside_period = self.invoice("LIVE-MISSING-PERIOD", total="50.00")
+        data = self.payment_data(outside_period, "10.00", reference="PERIOD-BLOCK")
+        data["payment_date"] = "2027-01-01"
+        blocked = self.client.post(reverse("invoice_payment_add", args=[outside_period.pk]), data)
+
+        self.assertEqual(blocked.status_code, 200)
+        self.assertFormError(
+            blocked.context["payment_form"],
+            "payment_date",
+            "No Financial Core period is configured for the journal date and side.",
+        )
+        self.assertFalse(InvoicePayment.objects.filter(invoice=outside_period).exists())
+
+    def test_repeated_submission_token_cannot_create_a_second_payment_or_journal(self):
+        invoice = self.invoice("LIVE-IDEMPOTENT-POST", total="50.00")
+        data = self.payment_data(invoice, "10.00", reference="")
+        data["submission_token"] = "same-browser-submission-token"
+        receipt_journals_before = JournalEntry.objects.filter(
+            source_key__startswith="CUSTOMER-RECEIPT:"
+        ).count()
+
+        first = self.client.post(reverse("invoice_payment_add", args=[invoice.pk]), data)
+        second = self.client.post(reverse("invoice_payment_add", args=[invoice.pk]), data)
+
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
+        self.assertEqual(
+            JournalEntry.objects.filter(source_key__startswith="CUSTOMER-RECEIPT:").count(),
+            receipt_journals_before + 1,
+        )
 
     def test_form_filters_country_currency_and_non_asset_accounts(self):
         ca_invoice = self.invoice("LIVE-CA-FILTER")
@@ -334,7 +380,12 @@ class InvoicePaymentLiveFixTests(TestCase):
 
         response = self.post_payment(invoice, "100.01", reference="OVERPAY")
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context["payment_form"],
+            "amount",
+            "Payment exceeds the outstanding invoice balance. Use the approved customer credit workflow for any excess.",
+        )
         self.assertEqual(
             (
                 InvoicePayment.objects.count(),

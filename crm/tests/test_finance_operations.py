@@ -34,6 +34,7 @@ from crm.models import (
     FinancialDocument,
     FinancialPeriod,
     Invoice,
+    InvoicePayment,
     InventoryItem,
     InventoryMovement,
     JournalEntry,
@@ -312,7 +313,7 @@ class FinanceOperationsTests(TestCase):
                     "customer": self.customer.pk,
                     "invoice": invoice.pk,
                     "amount": "25.00",
-                    "payment_method": "bank",
+                    "payment_method": "bank_transfer",
                     "payment_account": self.bank.pk,
                 },
             ),
@@ -437,7 +438,7 @@ class FinanceOperationsTests(TestCase):
             "customer": self.customer.pk,
             "invoice": invoice.pk,
             "amount": "30.00",
-            "payment_method": "bank",
+            "payment_method": "bank_transfer",
             "payment_account": self.bank.pk,
             "action": "submit",
         }
@@ -486,7 +487,7 @@ class FinanceOperationsTests(TestCase):
             "customer": self.customer.pk,
             "invoice": invoice.pk,
             "amount": "10.00",
-            "payment_method": "bank",
+            "payment_method": "bank_transfer",
             "payment_account": self.bank.pk,
             "action": "draft",
         }
@@ -700,7 +701,7 @@ class FinanceOperationsTests(TestCase):
             "customer": self.customer.pk,
             "invoice": invoice.pk,
             "amount": "125.00",
-            "payment_method": "bank",
+            "payment_method": "bank_transfer",
             "payment_account": self.bank.pk,
             "supporting_document": SimpleUploadedFile("payment.txt", b"payment"),
         }
@@ -716,6 +717,88 @@ class FinanceOperationsTests(TestCase):
         form = CustomerPaymentOperationForm(data=data, files=data, user=self.submitter, workflow={"operation_type": FinanceOperation.TYPE_CUSTOMER_PAYMENT})
         self.assertTrue(form.is_valid(), form.errors.as_json())
         self.assertTrue(form.build_operation().duplicate_warning)
+
+    def test_invoice_payment_reference_is_detected_by_finance_entry(self):
+        from crm.services.payment_reconciliation import record_invoice_payment
+
+        invoice = self.invoice("OPS-CROSS-ENTRY-DUPLICATE")
+        payment = InvoicePayment(
+            payment_date=date(2026, 2, 16),
+            amount=Decimal("10.00"),
+            currency="CAD",
+            side="CA",
+            payment_method="bank_transfer",
+            rate_to_cad=Decimal("1"),
+            rate_to_bdt=Decimal("100"),
+        )
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            record_invoice_payment(
+                invoice,
+                payment,
+                actor=self.approver,
+                payment_account=self.bank,
+                reference="CROSS-ENTRY-REFERENCE",
+            )
+        data = {
+            "transaction_date": "2026-02-16",
+            "side": "CA",
+            "currency": "CAD",
+            "rate_to_cad": "1",
+            "rate_to_bdt": "100",
+            "reference": "CROSS-ENTRY-REFERENCE",
+            "customer": self.customer.pk,
+            "invoice": invoice.pk,
+            "amount": "10.00",
+            "payment_method": "bank_transfer",
+            "payment_account": self.bank.pk,
+        }
+
+        form = CustomerPaymentOperationForm(
+            data=data,
+            user=self.submitter,
+            workflow={"operation_type": FinanceOperation.TYPE_CUSTOMER_PAYMENT},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("duplicate_override", form.errors)
+
+    def test_rejected_customer_payment_reference_does_not_block_new_payment(self):
+        invoice = self.invoice("OPS-REJECTED-REFERENCE")
+        rejected = self.operation(
+            FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+            "10.00",
+            reference="REJECTED-REFERENCE",
+            customer=self.customer,
+            invoice=invoice,
+            to_account=self.bank,
+            payment_method="bank_transfer",
+        )
+        rejected = review_operation(
+            rejected,
+            actor=self.approver,
+            action="REJECT",
+            notes="Rejected test payment remains audit history only.",
+        )
+        form = CustomerPaymentOperationForm(
+            data={
+                "transaction_date": "2026-02-16",
+                "side": "CA",
+                "currency": "CAD",
+                "rate_to_cad": "1",
+                "rate_to_bdt": "100",
+                "reference": "REJECTED-REFERENCE",
+                "customer": self.customer.pk,
+                "invoice": invoice.pk,
+                "amount": "10.00",
+                "payment_method": "bank_transfer",
+                "payment_account": self.bank.pk,
+            },
+            user=self.submitter,
+            workflow={"operation_type": FinanceOperation.TYPE_CUSTOMER_PAYMENT},
+        )
+
+        self.assertEqual(rejected.state, FinanceOperation.STATE_REJECTED)
+        self.assertTrue(form.is_valid(), form.errors.as_json())
 
     def test_customer_partial_full_and_overpayment_credit_use_protected_service(self):
         invoice = self.invoice("OPS-PAY-INV")

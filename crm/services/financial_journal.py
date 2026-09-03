@@ -51,7 +51,7 @@ def _audit(record, action, actor, *, reason="", before=None, after=None, source_
     )
 
 
-def _open_period(journal_date, side):
+def resolve_open_financial_period(journal_date, side):
     periods = FinancialPeriod.objects.filter(start_date__lte=journal_date, end_date__gte=journal_date)
     period = periods.filter(side=side).first() or periods.filter(side="").first()
     if not period:
@@ -128,7 +128,7 @@ def create_draft_journal(
         currency=snapshot.currency,
         rate_to_cad=snapshot.rate_to_cad,
         rate_to_bdt=snapshot.rate_to_bdt,
-        period=_open_period(journal_date, side),
+        period=resolve_open_financial_period(journal_date, side),
         source_content_type=source_content_type,
         source_object_id=source_object_id,
         source_key=key,

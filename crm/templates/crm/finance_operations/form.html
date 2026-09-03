@@ -38,6 +38,9 @@
     <span>* Required before submission</span>
     <small>Drafts require only the minimum accounting fields. Receipt and supporting documents are optional.</small>
   </div>
+  {% if workflow.operation_type == 'CUSTOMER_PAYMENT' %}
+    <p class="ops-form-note">Use this page when recording a customer payment from Finance. Select the customer first, then select the invoice being paid.</p>
+  {% endif %}
 
   {% if workflow.operation_type == 'CUSTOMER_REFUND' or workflow.operation_type == 'CUSTOMER_CREDIT_NOTE' or workflow.operation_type == 'CUSTOMER_CREDIT' %}
     <nav class="ops-related" aria-label="Customer adjustment workflows">

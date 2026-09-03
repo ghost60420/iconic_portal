@@ -178,6 +178,31 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertIn("supplier@example.com", supplier_html)
         self.assertNotIn("Bangladesh Supplier", supplier_html)
 
+    def test_customer_payment_uses_approved_methods_and_asset_accounts_only(self):
+        invalid_account = CashBankAccount.objects.create(
+            name="Expense-backed account",
+            kind=CashBankAccount.KIND_BANK,
+            side="CA",
+            currency="CAD",
+            gl_account=account_by_key("COGS_PRODUCTION_SHIPPING"),
+            created_by=self.user,
+        )
+
+        form = self.payment_form("CA")
+
+        self.assertEqual(
+            list(form.fields["payment_method"].choices),
+            [
+                ("e_transfer", "E Transfer"),
+                ("paypal", "PayPal"),
+                ("bank_transfer", "Bank Transfer"),
+                ("cash", "Cash"),
+            ],
+        )
+        account_ids = set(form.fields["payment_account"].queryset.values_list("pk", flat=True))
+        self.assertIn(self.ca_account.pk, account_ids)
+        self.assertNotIn(invalid_account.pk, account_ids)
+
     def test_expense_categories_have_real_labels_and_visual_groups(self):
         form = ExpenseOperationForm(
             user=self.user,
@@ -218,6 +243,10 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertContains(response, "Canada Finance")
         self.assertContains(response, "finance_form.js")
         self.assertContains(response, 'data-parent-field="customer"')
+        self.assertContains(
+            response,
+            "Use this page when recording a customer payment from Finance. Select the customer first, then select the invoice being paid.",
+        )
 
     def test_major_finance_forms_render_one_distinct_page_guide(self):
         cases = (

@@ -841,6 +841,9 @@ def _post_customer(operation, actor):
             actor=actor,
             payment_account=operation.to_account,
             reference=_posting_reference(operation),
+            idempotency_reference=f"FINANCE-OPERATION:{operation.pk}",
+            source_operation=operation,
+            allow_duplicate_reference=operation.duplicate_warning,
         )
         excess = money(operation.total_amount - applied)
         if excess:

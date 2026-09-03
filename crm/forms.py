@@ -12,6 +12,7 @@
 # 9) Added safe money validation and stable widgets
 
 from decimal import Decimal
+from uuid import uuid4
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -46,7 +47,11 @@ from .models import (
 )
 from .services.financial_permissions import accessible_financial_sides
 from .services.living_catalog import CATALOG_IMAGE_FIELDS, prepare_catalog_image
-from .services.payment_reconciliation import invoice_payment_side
+from .services.financial_journal import JournalError, resolve_open_financial_period
+from .services.payment_reconciliation import (
+    customer_payment_reference_exists,
+    invoice_payment_side,
+)
 from .services.receivable_accounting import (
     CUSTOMER_PAYMENT_METHOD_CHOICES,
     PAYMENT_METHOD_ACCOUNT_KINDS,
@@ -1765,9 +1770,12 @@ class InvoicePaymentForm(forms.ModelForm):
     )
     reference = forms.CharField(
         max_length=120,
+        required=False,
         label="Reference",
+        help_text="Optional. Enter the bank, PayPal, transfer, or cash receipt reference when available.",
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
+    submission_token = forms.CharField(required=False, widget=forms.HiddenInput())
     receipt = forms.FileField(
         required=False,
         label="Receipt",
@@ -1787,6 +1795,7 @@ class InvoicePaymentForm(forms.ModelForm):
             "payment_method",
             "payment_account",
             "reference",
+            "submission_token",
             "rate_to_cad",
             "rate_to_bdt",
             "production_order",
@@ -1809,6 +1818,8 @@ class InvoicePaymentForm(forms.ModelForm):
         self.invoice = invoice
         self.user = user
         super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.initial.setdefault("submission_token", uuid4().hex)
         core_writes_enabled = getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
         if core_writes_enabled:
             self.fields["payment_method"].initial = "e_transfer"
@@ -1862,6 +1873,8 @@ class InvoicePaymentForm(forms.ModelForm):
         rate_to_bdt = cleaned.get("rate_to_bdt") or Decimal("0")
         payment_account = cleaned.get("payment_account")
         payment_method = (cleaned.get("payment_method") or "").lower().strip()
+        payment_date = cleaned.get("payment_date")
+        reference = (cleaned.get("reference") or "").strip()
 
         if self.invoice is not None:
             invoice_currency = (self.invoice.currency or "").upper().strip()
@@ -1869,6 +1882,28 @@ class InvoicePaymentForm(forms.ModelForm):
                 self.add_error("currency", "Payment currency must match the invoice currency.")
             if self.user and invoice_payment_side(self.invoice) not in accessible_financial_sides(self.user):
                 raise forms.ValidationError("You do not have access to this invoice country.")
+            if self.invoice.balance <= 0:
+                self.add_error("amount", "This invoice has no outstanding balance.")
+            elif cleaned.get("amount") and cleaned["amount"] > self.invoice.balance:
+                self.add_error(
+                    "amount",
+                    "Payment exceeds the outstanding invoice balance. Use the approved customer credit workflow for any excess.",
+                )
+            if reference and customer_payment_reference_exists(self.invoice.customer, reference):
+                self.add_error(
+                    "reference",
+                    "A customer payment with this reference already exists. Review the existing payment before recording another.",
+                )
+
+        if (
+            getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
+            and payment_date
+            and self.invoice is not None
+        ):
+            try:
+                resolve_open_financial_period(payment_date, invoice_payment_side(self.invoice))
+            except JournalError as exc:
+                self.add_error("payment_date", str(exc))
 
         if payment_account is None and getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
             self.add_error("payment_account", "Select the receiving bank, PayPal, or cash account.")

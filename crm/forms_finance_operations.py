@@ -15,6 +15,7 @@ from crm.models import (
     ExpenseCategory,
     FactoryRunningCostDefault,
     FinanceOperation,
+    FinancialAccount,
     Invoice,
     InventoryItem,
     ProductionOrder,
@@ -28,6 +29,12 @@ from crm.services.financial_permissions import (
     accessible_financial_sides,
     scope_bank_accounts_for_user,
     scope_invoices_for_user,
+)
+from crm.services.payment_reconciliation import customer_payment_reference_exists
+from crm.services.receivable_accounting import (
+    CUSTOMER_PAYMENT_METHOD_CHOICES,
+    ReceivableAccountingError,
+    validate_customer_payment_account,
 )
 
 
@@ -515,7 +522,7 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
     customer = forms.ModelChoiceField(queryset=Customer.objects.none())
     invoice = InvoiceBalanceChoiceField(queryset=Invoice.objects.none())
     amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
-    payment_method = forms.ChoiceField(choices=PAYMENT_METHODS)
+    payment_method = forms.ChoiceField(choices=CUSTOMER_PAYMENT_METHOD_CHOICES)
     payment_account = forms.ModelChoiceField(queryset=CashBankAccount.objects.none())
     allow_customer_credit = forms.BooleanField(
         required=False, label="Approve excess as unapplied customer credit"
@@ -530,7 +537,16 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
         self.fields["customer"].queryset = _customers_for_sides(self.allowed_sides).order_by(
             "account_brand", "contact_name"
         )
-        self.fields["payment_account"].queryset = self._accounts()
+        self.fields["payment_account"].queryset = self._accounts().filter(
+            kind__in=(
+                CashBankAccount.KIND_BANK,
+                CashBankAccount.KIND_PAYPAL,
+                CashBankAccount.KIND_CASH,
+            ),
+            gl_account__account_type=FinancialAccount.TYPE_ASSET,
+            gl_account__is_active=True,
+            gl_account__system_key__isnull=False,
+        )
         self.fields["customer"].label = "Customer"
         self.fields["invoice"].label = "Invoice"
         self.fields["amount"].label = "Amount"
@@ -557,14 +573,20 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
         account = cleaned.get("payment_account")
         if account and account.currency != cleaned.get("currency"):
             self.add_error("payment_account", "Payment account currency must match the payment currency.")
+        if account and cleaned.get("side") and cleaned.get("currency") and cleaned.get("payment_method"):
+            try:
+                validate_customer_payment_account(
+                    payment_account=account,
+                    side=cleaned["side"],
+                    currency=cleaned["currency"],
+                    payment_method=cleaned["payment_method"],
+                )
+            except ReceivableAccountingError as exc:
+                self.add_error("payment_account", str(exc))
         duplicate = False
         reference = (cleaned.get("reference") or "").strip()
         if customer and reference:
-            duplicate = FinanceOperation.objects.filter(
-                operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
-                customer=customer,
-                reference__iexact=reference,
-            ).exclude(state=FinanceOperation.STATE_REJECTED).exists()
+            duplicate = customer_payment_reference_exists(customer, reference)
         if duplicate and not cleaned.get("duplicate_override"):
             self.add_error("duplicate_override", "A matching payment reference already exists. Review it before continuing.")
         if duplicate and len((cleaned.get("duplicate_reason") or "").strip()) < 5:

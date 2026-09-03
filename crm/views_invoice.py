@@ -3028,6 +3028,11 @@ def invoice_payment_add(request, pk):
                 actor=request.user,
                 payment_account=form.cleaned_data["payment_account"],
                 reference=form.cleaned_data["reference"],
+                idempotency_reference=(
+                    f"INVOICE-PAYMENT-FORM:{inv.pk}:{form.cleaned_data['submission_token']}"
+                    if form.cleaned_data.get("submission_token")
+                    else ""
+                ),
             )
             receipt = form.cleaned_data.get("receipt")
             if receipt:
