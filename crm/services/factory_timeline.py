@@ -23,7 +23,7 @@ def _actor(actor):
 
 
 def _pricing_type(quick_costing):
-    if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE:
+    if quick_costing.is_sampling:
         return "SAMPLE"
     return {
         QuickCosting.PRICING_FOB: "FOB",
@@ -123,17 +123,18 @@ def apply_factory_timeline_to_summary(quick_costing, summary, *, snapshot=_UNSET
     if not snapshot:
         return summary
     adjusted = dict(summary)
-    timeline_cost = _timeline_cost_in_costing_currency(
-        quick_costing,
-        snapshot.estimated_timeline_cost,
-        snapshot.daily_cost_currency,
-    )
     quantity = Decimal(adjusted.get("quantity") or 0)
     revenue = money(adjusted.get("sales_value"))
-    estimated_profit = money(adjusted.get("final_profit_after_commission")) - timeline_cost
     if snapshot.locked_at:
         estimated_profit = money(snapshot.estimated_profit)
         timeline_cost = money(adjusted.get("final_profit_after_commission")) - estimated_profit
+    else:
+        timeline_cost = _timeline_cost_in_costing_currency(
+            quick_costing,
+            snapshot.estimated_timeline_cost,
+            snapshot.daily_cost_currency,
+        )
+        estimated_profit = money(adjusted.get("final_profit_after_commission")) - timeline_cost
     adjusted["factory_timeline_cost"] = timeline_cost
     adjusted["factory_timeline_cost_source_currency"] = snapshot.daily_cost_currency
     adjusted["factory_timeline_cost_source_amount"] = snapshot.estimated_timeline_cost

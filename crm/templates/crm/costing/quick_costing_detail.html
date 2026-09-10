@@ -1092,8 +1092,13 @@
           <div class="quick-meta-row"><span>Style / Project</span><strong>{{ quick_costing.project_name }}</strong></div>
           <div class="quick-meta-row"><span>Product</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
           <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
-          <div class="quick-meta-row"><span>Pricing Type</span><strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong></div>
-          <div class="quick-meta-row"><span>Service Type</span><strong>{{ quick_costing.service_type_label }}</strong></div>
+          {% if quick_costing.is_sampling %}
+            <div class="quick-meta-row"><span>Pricing Type</span><strong>Sample</strong></div>
+            <div class="quick-meta-row"><span>Service Type</span><strong>Sampling</strong></div>
+          {% else %}
+            <div class="quick-meta-row"><span>Pricing Type</span><strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong></div>
+            <div class="quick-meta-row"><span>Service Type</span><strong>{{ quick_costing.service_type_label }}</strong></div>
+          {% endif %}
           {% if quick_costing.is_bangladesh_local_sewing %}<div class="quick-meta-row"><span>Factory</span><strong>Bangladesh</strong></div>{% endif %}
 	          <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
 	          <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ approval_status_label }}</span></strong></div>
@@ -1103,7 +1108,7 @@
 		          {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}<div class="quick-meta-row"><span>Open Latest Version</span><strong><a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}">Open Latest Version</a></strong></div>{% endif %}
           <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
           <div class="quick-meta-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
-          <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+          <div class="quick-meta-row"><span>{% if quick_costing.is_sampling %}Number of Sample Pieces{% else %}Quantity{% endif %}</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
           {% if quick_costing.opportunity %}<div class="quick-meta-row"><span>Opportunity</span><strong><a href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">{{ quick_costing.opportunity.opportunity_id }}</a></strong></div>{% endif %}
           {% if quick_costing.quotation_number %}<div class="quick-meta-row"><span>Quotation</span><strong><a href="{% url 'quick_costing_client_quotation' quick_costing.pk %}">{{ quick_costing.quotation_number }}</a></strong></div>{% endif %}
           {% if invoice %}<div class="quick-meta-row"><span>Invoice</span><strong><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></strong></div>{% endif %}
@@ -1111,6 +1116,69 @@
       </div>
     </details>
 
+    {% if quick_costing.is_sampling %}
+      <details class="quick-detail-card" open>
+        <summary>2. Sample Details</summary>
+        <div class="quick-detail-body">
+          <div class="quick-summary-grid">
+            <div class="quick-summary-row"><span>Sample Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+            <div class="quick-summary-row"><span>Client Paid</span><strong>{% if quick_costing.uses_simplified_sample_costing %}{{ calc.display.sample_charge_pair }}{% else %}{{ calc.display.total_sales_order_pair }}{% endif %}</strong></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="quick-detail-card" open>
+        <summary>3. Costs</summary>
+        <div class="quick-detail-body">
+          <div class="quick-summary-grid">
+            <div class="quick-summary-row"><span>Shipping Cost</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Estimated Production Days</span><strong>{% if factory_timeline %}{{ factory_timeline.estimated_production_days }} days{% else %}Pending Estimate{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Daily Factory Operating Cost</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost|floatformat:2 }} / day{% else %}Pending Estimate{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Estimated Factory Timeline Cost</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.estimated_timeline_cost|floatformat:2 }}{% if factory_timeline.daily_cost_currency != calc.currency %} / {{ calc.display.factory_timeline_cost_pair }}{% endif %}{% else %}Pending Estimate{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Other Sample Cost</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="quick-detail-card" open>
+        <summary>4. Sample Profit Summary</summary>
+        <div class="quick-detail-body">
+          <div class="quick-summary-grid">
+            <div class="quick-summary-row"><span>Sample Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+            <div class="quick-summary-row"><span>Client Paid</span><strong>{% if quick_costing.uses_simplified_sample_costing %}{{ calc.display.sample_charge_pair }}{% else %}{{ calc.display.total_sales_order_pair }}{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Shipping Cost</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Factory Timeline Cost</span><strong>{{ calc.display.factory_timeline_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Other Sample Cost</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Advanced Sample Costs</span><strong>{% if quick_costing.uses_simplified_sample_costing %}{{ calc.display.sample_advanced_cost_total_pair }}{% else %}{{ calc.display.product_production_cost_total_pair }}{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Total Estimated Sample Cost</span><strong>{{ calc.display.total_cost_order_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Estimated Sample Profit</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Estimated Sample Margin</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_margin_percent }}%</strong></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="quick-detail-card">
+        <summary>Advanced Sample Costs</summary>
+        <div class="quick-detail-body">
+          <div class="quick-summary-grid">
+            {% if quick_costing.uses_simplified_sample_costing %}
+            <div class="quick-summary-row"><span>Fabric</span><strong>{{ calc.display.sample_fabric_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Trim</span><strong>{{ calc.display.sample_trim_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Printing / Embroidery</span><strong>{{ calc.display.sample_print_embroidery_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Wash</span><strong>{{ calc.display.sample_wash_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Packaging</span><strong>{{ calc.display.sample_packaging_cost_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Special Development</span><strong>{{ calc.display.sample_development_cost_pair }}</strong></div>
+            {% else %}
+            <div class="quick-summary-row"><span>Historical Material Cost</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Historical Production Cost</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
+            <div class="quick-summary-row"><span>Historical Commission</span><strong>{{ calc.display.commission_total_pair }}</strong></div>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+
+      {% include "crm/costing/_factory_timeline.html" %}
+    {% else %}
     {% if quick_costing.is_bangladesh_local_sewing %}
       <details class="quick-detail-card" open>
         <summary>Bangladesh Local Sewing</summary>
@@ -1225,6 +1293,7 @@
         </div>
       </div>
     </details>
+    {% endif %}
 
 		    <section class="quick-detail-card" aria-label="Version information">
 		      <h2 class="quick-section-title">Version Information</h2>

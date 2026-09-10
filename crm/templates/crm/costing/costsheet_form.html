@@ -536,9 +536,10 @@
     </div>
 
     <div class="quick-costing-layout">
-      <form method="post" id="quickCostingForm" class="quick-breakdown-form">
+      <form method="post" id="quickCostingForm" class="quick-breakdown-form" data-sample-bdt-per-cad="{{ sample_bdt_per_cad|default_if_none:'' }}" data-sample-bdt-per-usd="{{ sample_bdt_per_usd|default_if_none:'' }}" data-factory-currency="{% if factory_default %}{{ factory_default.currency }}{% else %}BDT{% endif %}">
         {% csrf_token %}
         <input type="hidden" name="costing_type" value="quick">
+        <input type="hidden" name="sample_mode" value="simplified">
 
         <details class="card quick-breakdown-card" open>
           <summary>1. General Information</summary>
@@ -599,15 +600,30 @@
                   {% for error in quick_form.exchange_rate_bdt_per_cad.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
                 {% else %}
                   <div class="quick-readonly-field"><span class="quick-readonly-note">Not required for single-currency costing</span></div>
+                  {{ quick_form.exchange_rate_bdt_per_cad.as_hidden }}
                 {% endif %}
               </div>
               <div>
-                <label>Quantity</label>
+                <label data-quantity-label>Quantity</label>
                 <div class="quick-input-with-unit">
                   {{ quick_form.quantity }}
                   <span class="quick-input-unit">pieces</span>
                 </div>
                 {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="card quick-sample-card quick-breakdown-card" data-sample-costing hidden open>
+          <summary>2. Sample Details</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>{{ quick_form.sample_charge.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.sample_charge }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>
+                <div class="field-help">Total amount charged to the customer for this sample.</div>
+                {% for error in quick_form.sample_charge.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
             </div>
           </div>
@@ -676,41 +692,41 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" data-export-costing open>
-          <summary>3. Production Cost</summary>
+        <details class="card quick-breakdown-card" data-cost-section open>
+          <summary data-cost-section-title>3. Production Cost</summary>
           <div class="quick-breakdown-body">
             <div class="grid">
-              <div>
+              <div data-bulk-costing>
                 <label>Making Cost Per Piece</label>
                 <div class="quick-input-with-unit">{{ quick_form.making_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.making_cost_per_piece.help_text }}</div>
                 {% for error in quick_form.making_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Print / Embroidery Cost Per Piece</label>
                 <div class="quick-input-with-unit">{{ quick_form.print_embroidery_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">Combined printing and embroidery field in the current Quick Costing schema.</div>
                 {% for error in quick_form.print_embroidery_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Wash Cost Per Piece</label>
                 <div class="quick-readonly-field"><span class="quick-readonly-note">Not configured in Quick Costing</span></div>
                 <div class="field-help">Wash cost is not included in the current calculation.</div>
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Trims Cost Per Piece</label>
                 <div class="quick-input-with-unit">{{ quick_form.trims_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.trims_cost_per_piece.help_text }}</div>
                 {% for error in quick_form.trims_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Packaging Cost Per Piece</label>
                 <div class="quick-input-with-unit">{{ quick_form.packaging_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.packaging_cost_per_piece.help_text }}</div>
                 {% for error in quick_form.packaging_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               {% if quick_form.show_legacy_fields %}
-                <div>
+                <div data-bulk-costing>
                   <label>{{ quick_form.production_cost.label }}</label>
                   <div class="quick-input-with-unit">{{ quick_form.production_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                   <div class="field-help">{{ quick_form.production_cost.help_text }}</div>
@@ -718,26 +734,71 @@
                 </div>
               {% endif %}
               <div>
-                <label>Other Expenses Per Order</label>
+                <label data-other-cost-label>Other Expenses Per Order</label>
                 <div class="quick-input-with-unit">{{ quick_form.other_expenses }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.other_expenses.help_text }}</div>
                 {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               <div>
-                <label>Less Shipping Cost Per Order</label>
+                <label data-shipping-cost-label>Less Shipping Cost Per Order</label>
                 <div class="quick-input-with-unit">{{ quick_form.shipping_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.shipping_cost.help_text }}</div>
                 {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Shipping Allocation Per Piece</label>
                 <div class="quick-readonly-field" data-quick-summary="shippingPiece">৳0.00 BDT</div>
               </div>
-              <div>
+              <div data-bulk-costing>
                 <label>Other Expenses Allocation Per Piece</label>
                 <div class="quick-readonly-field" data-quick-summary="otherPiece">৳0.00 BDT</div>
               </div>
+              <div data-sample-costing hidden>
+                <label>{{ quick_form.estimated_production_days.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.estimated_production_days }}<span class="quick-input-unit">days</span></div>
+                {% for error in quick_form.estimated_production_days.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div data-sample-costing hidden>
+                <label>{{ quick_form.daily_factory_cost.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.daily_factory_cost }}<span class="quick-input-unit">{% if factory_default %}{{ factory_default.currency }}{% else %}BDT{% endif %}</span></div>
+                <div class="field-help">{% if can_override_factory_rate %}Saved as the rate snapshot for this costing.{% else %}From Finance Settings and saved as a rate snapshot.{% endif %}</div>
+                {% for error in quick_form.daily_factory_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div data-sample-costing hidden>
+                <label>Estimated Factory Timeline Cost</label>
+                <div class="quick-readonly-field" data-sample-summary="timelineSource">BDT 0.00</div>
+                <div class="field-help">Estimated days multiplied by the saved daily factory rate.</div>
+              </div>
             </div>
+          </div>
+        </details>
+
+        <details class="card quick-sample-card quick-breakdown-card" data-sample-costing hidden>
+          <summary>4. Advanced Sample Costs</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div><label>{{ quick_form.sample_fabric_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_fabric_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_fabric_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+              <div><label>{{ quick_form.sample_trim_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_trim_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_trim_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+              <div><label>{{ quick_form.sample_print_embroidery_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_print_embroidery_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_print_embroidery_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+              <div><label>{{ quick_form.sample_wash_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_wash_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_wash_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+              <div><label>{{ quick_form.sample_packaging_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_packaging_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_packaging_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+              <div><label>{{ quick_form.sample_development_cost.label }}</label><div class="quick-input-with-unit">{{ quick_form.sample_development_cost }}<span class="quick-input-unit" data-quick-currency-unit>BDT</span></div>{% for error in quick_form.sample_development_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="card quick-sample-card quick-breakdown-card" data-sample-costing hidden open aria-label="Sample profit summary" aria-live="polite">
+          <summary><span>5. Sample Profit Summary <span class="quick-summary-currency" data-quick-summary="currency">BDT</span></span></summary>
+          <div class="quick-breakdown-body">
+            <div class="quick-summary-row"><span>Sample Quantity</span><strong data-sample-summary="quantity">0 pieces</strong></div>
+            <div class="quick-summary-row"><span>Client Paid</span><strong data-sample-summary="charge">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Shipping Cost</span><strong data-sample-summary="shipping">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Factory Timeline Cost</span><strong data-sample-summary="timeline">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Other Sample Cost</span><strong data-sample-summary="other">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Advanced Sample Costs</span><strong data-sample-summary="advanced">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Total Estimated Sample Cost</span><strong data-sample-summary="total">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Estimated Sample Profit</span><strong data-sample-summary="profit">BDT 0.00</strong></div>
+            <div class="quick-summary-row"><span>Estimated Sample Margin</span><strong data-sample-summary="margin">0.00%</strong></div>
           </div>
         </details>
 
@@ -803,7 +864,7 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" open aria-label="Live cost summary" aria-live="polite">
+        <details class="card quick-breakdown-card" data-bulk-costing open aria-label="Live cost summary" aria-live="polite">
           <summary><span>5. Profit Summary <span class="quick-summary-currency" data-quick-summary="currency">BDT</span></span></summary>
           <div class="quick-breakdown-body">
             <div class="quick-summary-row"><span>Sales Value</span><strong data-quick-summary="salesValue">৳0.00 BDT</strong></div>
@@ -822,7 +883,7 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" open>
+        <details class="card quick-breakdown-card" data-bulk-costing open>
           <summary>6. Live Order Summary</summary>
           <div class="quick-breakdown-body">
             <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
@@ -1182,6 +1243,7 @@
 <script>
   (function () {
     const fields = {
+      purpose: document.getElementById("id_costing_purpose"),
       pricingType: document.getElementById("id_pricing_type"),
       quantity: document.getElementById("id_quantity"),
       currency: document.getElementById("id_currency"),
@@ -1205,8 +1267,18 @@
       targetMargin: document.getElementById("id_target_margin_percent"),
       sewingCharge: document.getElementById("id_sewing_charge_per_piece_bdt"),
       sewingCost: document.getElementById("id_sewing_cost_per_piece_bdt"),
-      extraLocalCost: document.getElementById("id_extra_local_cost_bdt")
+      extraLocalCost: document.getElementById("id_extra_local_cost_bdt"),
+      sampleCharge: document.getElementById("id_sample_charge"),
+      sampleFabric: document.getElementById("id_sample_fabric_cost"),
+      sampleTrim: document.getElementById("id_sample_trim_cost"),
+      samplePrint: document.getElementById("id_sample_print_embroidery_cost"),
+      sampleWash: document.getElementById("id_sample_wash_cost"),
+      samplePackaging: document.getElementById("id_sample_packaging_cost"),
+      sampleDevelopment: document.getElementById("id_sample_development_cost"),
+      estimatedDays: document.getElementById("id_estimated_production_days"),
+      dailyFactoryCost: document.getElementById("id_daily_factory_cost")
     };
+    const form = document.getElementById("quickCostingForm");
     const legacyMode = {% if quick_form.show_legacy_fields %}true{% else %}false{% endif %};
 
     function numberValue(input) {
@@ -1268,11 +1340,35 @@
       });
     }
 
+    function setSampleSummary(name, value, tone) {
+      document.querySelectorAll('[data-sample-summary="' + name + '"]').forEach((node) => {
+        node.textContent = value;
+        node.classList.toggle("quick-profit-negative", tone === "negative");
+        node.classList.toggle("quick-profit-positive", tone === "positive");
+      });
+    }
+
     function updateSummary() {
       const quantity = Math.max(0, numberValue(fields.quantity));
-      const isLocalSewing = fields.pricingType && fields.pricingType.value === "cmt_sewing";
+      const isSampling = Boolean(
+        (fields.purpose && fields.purpose.value === "sample")
+        || (fields.pricingType && fields.pricingType.value === "sample")
+      );
+      const isLocalSewing = !isSampling && fields.pricingType && fields.pricingType.value === "cmt_sewing";
       document.querySelectorAll("[data-local-sewing-only]").forEach((node) => { node.hidden = !isLocalSewing; });
-      document.querySelectorAll("[data-export-costing]").forEach((node) => { node.hidden = isLocalSewing; });
+      document.querySelectorAll("[data-export-costing]").forEach((node) => { node.hidden = isLocalSewing || isSampling; });
+      document.querySelectorAll("[data-sample-costing]").forEach((node) => { node.hidden = !isSampling; });
+      document.querySelectorAll("[data-bulk-costing]").forEach((node) => { node.hidden = isSampling; });
+      const costSection = document.querySelector("[data-cost-section]");
+      if (costSection) costSection.hidden = isLocalSewing;
+      const costSectionTitle = document.querySelector("[data-cost-section-title]");
+      if (costSectionTitle) costSectionTitle.textContent = isSampling ? "3. Costs" : "3. Production Cost";
+      const quantityLabel = document.querySelector("[data-quantity-label]");
+      if (quantityLabel) quantityLabel.textContent = isSampling ? "Number of Sample Pieces" : "Quantity";
+      const otherCostLabel = document.querySelector("[data-other-cost-label]");
+      if (otherCostLabel) otherCostLabel.textContent = isSampling ? "Other Sample Cost" : "Other Expenses Per Order";
+      const shippingCostLabel = document.querySelector("[data-shipping-cost-label]");
+      if (shippingCostLabel) shippingCostLabel.textContent = isSampling ? "Shipping Cost" : "Less Shipping Cost Per Order";
       if (isLocalSewing && fields.currency) fields.currency.value = "BDT";
       const currency = fields.currency && fields.currency.value ? fields.currency.value : "BDT";
       const exchangeRate = numberValue(fields.exchangeRate);
@@ -1297,6 +1393,54 @@
         if (commissionType === "percentage") return roundMoney(Math.max(profit, 0) * commissionValue / 100);
         if (commissionType === "fixed") return commissionValue;
         return 0;
+      }
+      if (isSampling) {
+        const charge = numberValue(fields.sampleCharge);
+        const days = numberValue(fields.estimatedDays);
+        const dailyRate = numberValue(fields.dailyFactoryCost);
+        const timelineSource = days * dailyRate;
+        const factoryCurrency = (form && form.dataset.factoryCurrency) || "BDT";
+        const bdtPerCad = Number((form && form.dataset.sampleBdtPerCad) || 0);
+        const bdtPerUsd = Number((form && form.dataset.sampleBdtPerUsd) || 0);
+        let timelineCost = timelineSource;
+        let conversionAvailable = factoryCurrency === currency;
+        if (factoryCurrency === "BDT" && currency === "CAD" && bdtPerCad > 1) {
+          timelineCost = timelineSource / bdtPerCad;
+          conversionAvailable = true;
+        } else if (factoryCurrency === "BDT" && currency === "USD" && bdtPerUsd > 1) {
+          timelineCost = timelineSource / bdtPerUsd;
+          conversionAvailable = true;
+        }
+        const advanced = [
+          fields.sampleFabric,
+          fields.sampleTrim,
+          fields.samplePrint,
+          fields.sampleWash,
+          fields.samplePackaging,
+          fields.sampleDevelopment
+        ].reduce((total, field) => total + numberValue(field), 0);
+        const totalCost = shipping + other + advanced + (conversionAvailable ? timelineCost : 0);
+        const profit = charge - totalCost;
+        const margin = charge > 0 && conversionAvailable ? (profit / charge) * 100 : null;
+        const profitTone = profit < 0 ? "negative" : "positive";
+        const normalizedTimeline = conversionAvailable
+          ? formatMoney(timelineCost, currency, exchangeRate)
+          : "Approved currency snapshot required";
+        setSampleSummary("quantity", quantity.toLocaleString() + " pieces");
+        setSampleSummary("charge", formatMoney(charge, currency, exchangeRate));
+        setSampleSummary("shipping", formatMoney(shipping, currency, exchangeRate));
+        setSampleSummary("timelineSource", factoryCurrency + " " + formatNumber(timelineSource));
+        setSampleSummary("timeline", factoryCurrency + " " + formatNumber(timelineSource) + (factoryCurrency !== currency ? " / " + normalizedTimeline : ""));
+        setSampleSummary("other", formatMoney(other, currency, exchangeRate));
+        setSampleSummary("advanced", formatMoney(advanced, currency, exchangeRate));
+        setSampleSummary("total", conversionAvailable ? formatMoney(totalCost, currency, exchangeRate) : "Pending approved currency snapshot");
+        setSampleSummary("profit", conversionAvailable ? formatMoney(profit, currency, exchangeRate) : "Pending approved currency snapshot", profitTone);
+        setSampleSummary("margin", margin === null ? "Pending currency snapshot" : margin.toFixed(2) + "%", profitTone);
+        document.querySelectorAll("[data-quick-currency-unit]").forEach((node) => {
+          node.textContent = currencyUnitLabel(currency);
+        });
+        setSummary("currency", currency);
+        return;
       }
       if (isLocalSewing) {
         const charge = numberValue(fields.sewingCharge);

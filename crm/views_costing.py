@@ -27,6 +27,7 @@ from .models import (
     CostingAuditLog,
     CostingSnapshot,
     CRMAuditLog,
+    ExchangeRate,
     FactoryRunningCostDefault,
     NEW_COSTING_CATEGORY_CHOICES,
     NEW_COSTING_CURRENCY_CHOICES,
@@ -53,9 +54,12 @@ from .services.costing_workflow import (
 )
 from .services.factory_timeline import (
     apply_factory_timeline_to_summary,
+    configured_factory_default,
+    current_estimated_inputs,
     factory_cost_in_costing_currency,
     FactoryTimelineError,
     refresh_estimated_factory_timeline,
+    save_estimated_factory_timeline,
 )
 from .services.financial_permissions import can_enter_production_cost
 from .services.ceo_approval_queue import build_ceo_approval_queue_querysets
@@ -136,6 +140,42 @@ def _can_decide_quick_costing(user, quick_costing, *, user_can_approve=None):
     if not user_can_approve:
         return False
     return True
+
+
+def _can_override_quick_factory_rate(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_superuser
+            or operations_role_names(user).intersection(
+                {ROLE_CEO, ROLE_FINANCE, ROLE_ADMIN, ROLE_DIRECTOR, ROLE_MANAGER}
+            )
+        )
+    )
+
+
+def _quick_factory_default_for_form(*, quick_costing=None, currency=None):
+    timeline = (
+        quick_costing._state.fields_cache.get("factory_timeline")
+        if quick_costing and quick_costing.pk
+        else None
+    )
+    if timeline and timeline.source_default_id:
+        return timeline.source_default
+    probe = quick_costing or QuickCosting(currency=currency or "BDT")
+    return configured_factory_default(probe)
+
+
+def _quick_sample_bdt_per_cad(quick_costing=None):
+    stored_rate = getattr(quick_costing, "exchange_rate_bdt_per_cad", None)
+    if stored_rate and stored_rate > 1:
+        return stored_rate
+    return (
+        ExchangeRate.objects.order_by("-updated_at", "-pk")
+        .values_list("cad_to_bdt", flat=True)
+        .first()
+    )
 
 
 def _deny_without_internal_costing_or_accounting(request):
@@ -233,7 +273,13 @@ def _format_quick_money_lines(value, exchange_rate, currency="BDT", is_legacy_cu
 def _quick_costing_calc(quick_costing):
     summary = quick_costing.calculation_summary()
     timeline = quick_costing._state.fields_cache.get("factory_timeline")
-    summary = apply_factory_timeline_to_summary(quick_costing, summary, snapshot=timeline)
+    timeline_conversion_error = ""
+    try:
+        summary = apply_factory_timeline_to_summary(quick_costing, summary, snapshot=timeline)
+    except FactoryTimelineError as exc:
+        timeline_conversion_error = str(exc)
+        summary = dict(summary)
+        summary["factory_timeline_cost"] = Decimal("0")
     exchange_rate = summary.get("exchange_rate")
     currency = summary["currency"]
     is_legacy_currency = summary["is_legacy_currency"]
@@ -298,8 +344,17 @@ def _quick_costing_calc(quick_costing):
         "target_margin_percent": summary["target_margin_percent"],
         "margin_status": summary["margin_status"],
         "factory_timeline_cost": summary.get("factory_timeline_cost", Decimal("0")),
+        "sample_charge": summary.get("sample_charge", Decimal("0")),
+        "sample_advanced_cost_total": summary.get("sample_advanced_cost_total", Decimal("0")),
+        "sample_fabric_cost": summary.get("sample_fabric_cost", Decimal("0")),
+        "sample_trim_cost": summary.get("sample_trim_cost", Decimal("0")),
+        "sample_print_embroidery_cost": summary.get("sample_print_embroidery_cost", Decimal("0")),
+        "sample_wash_cost": summary.get("sample_wash_cost", Decimal("0")),
+        "sample_packaging_cost": summary.get("sample_packaging_cost", Decimal("0")),
+        "sample_development_cost": summary.get("sample_development_cost", Decimal("0")),
+        "timeline_conversion_error": timeline_conversion_error,
     }
-    calc["cost_available"] = calc["total_cost_order"] > Decimal("0")
+    calc["cost_available"] = summary.get("cost_available", calc["total_cost_order"] > Decimal("0"))
     money_pair = lambda value: _format_quick_money_pair(value, exchange_rate, currency, is_legacy_currency)
     money_lines = lambda value: _format_quick_money_lines(value, exchange_rate, currency, is_legacy_currency)
     commission_type_labels = dict(QuickCosting.COMMISSION_TYPE_CHOICES)
@@ -395,6 +450,14 @@ def _quick_costing_calc(quick_costing):
         "target_margin_percent_label": f"{_format_quick_percent(calc['target_margin_percent'])}%" if calc["target_margin_percent"] is not None else "N/A",
         "margin_status": calc["margin_status"],
         "factory_timeline_cost_pair": money_pair(calc["factory_timeline_cost"]),
+        "sample_charge_pair": money_pair(calc["sample_charge"]),
+        "sample_advanced_cost_total_pair": money_pair(calc["sample_advanced_cost_total"]),
+        "sample_fabric_cost_pair": money_pair(calc["sample_fabric_cost"]),
+        "sample_trim_cost_pair": money_pair(calc["sample_trim_cost"]),
+        "sample_print_embroidery_cost_pair": money_pair(calc["sample_print_embroidery_cost"]),
+        "sample_wash_cost_pair": money_pair(calc["sample_wash_cost"]),
+        "sample_packaging_cost_pair": money_pair(calc["sample_packaging_cost"]),
+        "sample_development_cost_pair": money_pair(calc["sample_development_cost"]),
         "currency": "Legacy BDT with CAD conversion" if is_legacy_currency else currency,
         "exchange_rate": f"1 CAD = {_format_quick_decimal(exchange_rate)} BDT" if exchange_rate else "N/A",
     }
@@ -1350,28 +1413,59 @@ def cost_sheet_create(request, opportunity_id=None):
         costing_type = "advanced"
 
     if costing_type == "quick":
+        can_override_factory_rate = _can_override_quick_factory_rate(request.user)
+        posted_currency = request.POST.get("currency") if request.method == "POST" else None
+        factory_default = _quick_factory_default_for_form(currency=posted_currency)
         if request.method == "POST":
-            quick_form = QuickCostingForm(request.POST, opportunity=opportunity)
+            quick_form = QuickCostingForm(
+                request.POST,
+                opportunity=opportunity,
+                factory_default=factory_default,
+                can_override_factory_rate=can_override_factory_rate,
+            )
             if quick_form.is_valid():
-                quick_costing = quick_form.save(commit=False)
-                if opportunity:
-                    account_brand, contact_name = _opportunity_account_snapshot(opportunity)
-                    quick_costing.opportunity = opportunity
-                    quick_costing.account_brand = account_brand
-                    quick_costing.contact_name = contact_name
-                quick_costing.created_by = request.user if request.user.is_authenticated else None
-                quick_costing.save()
-                messages.success(request, "Quick costing saved.")
-                return redirect("quick_costing_detail", pk=quick_costing.pk)
+                try:
+                    with transaction.atomic():
+                        quick_costing = quick_form.save(commit=False)
+                        if opportunity:
+                            account_brand, contact_name = _opportunity_account_snapshot(opportunity)
+                            quick_costing.opportunity = opportunity
+                            quick_costing.account_brand = account_brand
+                            quick_costing.contact_name = contact_name
+                        quick_costing.created_by = request.user if request.user.is_authenticated else None
+                        quick_costing.save()
+                        if quick_costing.uses_simplified_sample_costing:
+                            save_estimated_factory_timeline(
+                                quick_costing,
+                                estimated_days=quick_form.cleaned_data["estimated_production_days"],
+                                daily_default=factory_default,
+                                daily_amount_snapshot=quick_form.cleaned_data["daily_factory_cost"],
+                                actor=request.user,
+                                **current_estimated_inputs(quick_costing),
+                            )
+                except FactoryTimelineError as exc:
+                    quick_form.add_error(None, str(exc))
+                else:
+                    messages.success(request, "Quick costing saved.")
+                    return redirect("quick_costing_detail", pk=quick_costing.pk)
             messages.error(request, "Please fix the errors below.")
         else:
-            quick_form = QuickCostingForm(initial=_quick_costing_initial(opportunity), opportunity=opportunity)
+            quick_form = QuickCostingForm(
+                initial=_quick_costing_initial(opportunity),
+                opportunity=opportunity,
+                factory_default=factory_default,
+                can_override_factory_rate=can_override_factory_rate,
+            )
 
         context = {
             "quick_form": quick_form,
             "opportunity": opportunity,
             "mode": "create",
             "costing_type": "quick",
+            "factory_default": factory_default,
+            "can_override_factory_rate": can_override_factory_rate,
+            "sample_bdt_per_cad": _quick_sample_bdt_per_cad(),
+            "sample_bdt_per_usd": getattr(opportunity, "fx_rate_bdt_per_usd", None),
         }
         return render(request, "crm/costing/costsheet_form.html", context)
 
@@ -1446,11 +1540,7 @@ def quick_costing_detail(request, pk):
             daily_amount=quick_costing.configured_factory_default_amount,
             currency=quick_costing.configured_factory_default_currency,
         )
-    user_roles = operations_role_names(request.user)
-    can_override_factory_rate = bool(
-        request.user.is_superuser
-        or user_roles.intersection({ROLE_CEO, ROLE_FINANCE, ROLE_ADMIN, ROLE_DIRECTOR, ROLE_MANAGER})
-    )
+    can_override_factory_rate = _can_override_quick_factory_rate(request.user)
     timeline_estimate_form = FactoryTimelineEstimateForm(
         prefix="estimate",
         can_override_rate=can_override_factory_rate,
@@ -1658,17 +1748,36 @@ def quick_costing_edit(request, pk):
         messages.error(request, "Approved quick costing is locked.")
         return redirect("quick_costing_detail", pk=pk)
 
+    can_override_factory_rate = _can_override_quick_factory_rate(request.user)
+    factory_default = _quick_factory_default_for_form(quick_costing=quick_costing)
     if request.method == "POST":
-        form = QuickCostingForm(request.POST, instance=quick_costing, opportunity=quick_costing.opportunity)
+        form = QuickCostingForm(
+            request.POST,
+            instance=quick_costing,
+            opportunity=quick_costing.opportunity,
+            factory_default=factory_default,
+            can_override_factory_rate=can_override_factory_rate,
+        )
         if form.is_valid():
             try:
                 with transaction.atomic():
                     quick_costing = form.save()
-                    refresh_estimated_factory_timeline(
-                        quick_costing,
-                        getattr(quick_costing, "factory_timeline", None),
-                        actor=request.user,
-                    )
+                    timeline = quick_costing._state.fields_cache.get("factory_timeline")
+                    if quick_costing.uses_simplified_sample_costing and (not timeline or not timeline.locked_at):
+                        save_estimated_factory_timeline(
+                            quick_costing,
+                            estimated_days=form.cleaned_data["estimated_production_days"],
+                            daily_default=factory_default,
+                            daily_amount_snapshot=form.cleaned_data["daily_factory_cost"],
+                            actor=request.user,
+                            **current_estimated_inputs(quick_costing),
+                        )
+                    else:
+                        refresh_estimated_factory_timeline(
+                            quick_costing,
+                            timeline,
+                            actor=request.user,
+                        )
             except FactoryTimelineError as exc:
                 form.add_error(None, str(exc))
             else:
@@ -1676,7 +1785,12 @@ def quick_costing_edit(request, pk):
                 return redirect("quick_costing_detail", pk=pk)
         messages.error(request, "Please fix the errors below.")
     else:
-        form = QuickCostingForm(instance=quick_costing, opportunity=quick_costing.opportunity)
+        form = QuickCostingForm(
+            instance=quick_costing,
+            opportunity=quick_costing.opportunity,
+            factory_default=factory_default,
+            can_override_factory_rate=can_override_factory_rate,
+        )
 
     context = {
         "quick_form": form,
@@ -1684,6 +1798,10 @@ def quick_costing_edit(request, pk):
         "opportunity": quick_costing.opportunity,
         "mode": "edit",
         "costing_type": "quick",
+        "factory_default": factory_default,
+        "can_override_factory_rate": can_override_factory_rate,
+        "sample_bdt_per_cad": _quick_sample_bdt_per_cad(quick_costing),
+        "sample_bdt_per_usd": getattr(quick_costing.opportunity, "fx_rate_bdt_per_usd", None),
     }
     return render(request, "crm/costing/costsheet_form.html", context)
 

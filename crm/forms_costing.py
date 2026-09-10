@@ -434,6 +434,20 @@ def is_local_sewing_initial(initial, instance):
 
 
 class QuickCostingForm(forms.ModelForm):
+    estimated_production_days = forms.IntegerField(
+        required=False,
+        min_value=1,
+        widget=forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "2"}),
+        label="Estimated Production Days",
+    )
+    daily_factory_cost = forms.DecimalField(
+        required=False,
+        min_value=Decimal("0.01"),
+        max_digits=18,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={"min": "0.01", "step": "0.01"}),
+        label="Daily Factory Operating Cost",
+    )
     money_fields = [
         "material_cost",
         "production_cost",
@@ -451,6 +465,13 @@ class QuickCostingForm(forms.ModelForm):
         "sewing_charge_per_piece_bdt",
         "sewing_cost_per_piece_bdt",
         "extra_local_cost_bdt",
+        "sample_charge",
+        "sample_fabric_cost",
+        "sample_trim_cost",
+        "sample_print_embroidery_cost",
+        "sample_wash_cost",
+        "sample_packaging_cost",
+        "sample_development_cost",
     ]
     non_negative_messages = {
         "fabric_cost_per_kg": "Fabric cost per kg cannot be negative.",
@@ -469,15 +490,38 @@ class QuickCostingForm(forms.ModelForm):
         "sewing_charge_per_piece_bdt": "Sewing charge cannot be negative.",
         "sewing_cost_per_piece_bdt": "Sewing cost cannot be negative.",
         "extra_local_cost_bdt": "Extra local cost cannot be negative.",
+        "sample_charge": "Amount client paid cannot be negative.",
+        "sample_fabric_cost": "Fabric cost cannot be negative.",
+        "sample_trim_cost": "Trim cost cannot be negative.",
+        "sample_print_embroidery_cost": "Print or embroidery cost cannot be negative.",
+        "sample_wash_cost": "Wash cost cannot be negative.",
+        "sample_packaging_cost": "Packaging cost cannot be negative.",
+        "sample_development_cost": "Special development cost cannot be negative.",
     }
 
     def __init__(self, *args, **kwargs):
         self.opportunity = kwargs.pop("opportunity", None)
+        self.factory_default = kwargs.pop("factory_default", None)
+        self.can_override_factory_rate = kwargs.pop("can_override_factory_rate", False)
         super().__init__(*args, **kwargs)
         opportunity = self.opportunity or getattr(self.instance, "opportunity", None)
+        timeline = self.instance._state.fields_cache.get("factory_timeline") if self.instance.pk else None
         linked_salesperson = self._linked_salesperson(opportunity)
         self.fields["costing_purpose"].required = False
         self.fields["pricing_type"].required = False
+        sampling_form_mode = bool(
+            (
+                self.is_bound
+                and self.data.get("sample_mode") == "simplified"
+                and (
+                    self.data.get("costing_purpose") == QuickCosting.PURPOSE_SAMPLE
+                    or self.data.get("pricing_type") == QuickCosting.PRICING_SAMPLE
+                )
+            )
+            or getattr(self.instance, "uses_simplified_sample_costing", False)
+        )
+        if sampling_form_mode:
+            self.fields["selling_price_per_piece"].required = False
         if not self.instance.pk and not self.initial.get("pricing_type"):
             self.initial["pricing_type"] = QuickCosting.PRICING_FULL_PACKAGE
         self.show_legacy_fields = bool(self.instance.pk and self.instance.currency is None)
@@ -500,6 +544,15 @@ class QuickCostingForm(forms.ModelForm):
                 )
         for field_name in ("commission_type", "commission_value", "commission_currency"):
             self.fields[field_name].required = False
+        for field_name in (
+            "sample_fabric_cost",
+            "sample_trim_cost",
+            "sample_print_embroidery_cost",
+            "sample_wash_cost",
+            "sample_packaging_cost",
+            "sample_development_cost",
+        ):
+            self.fields[field_name].required = False
         self.fields["salesperson"].required = False
         self.fields["salesperson"].empty_label = "Not assigned"
         self.fields["salesperson"].queryset = self.fields["salesperson"].queryset.filter(
@@ -509,6 +562,20 @@ class QuickCostingForm(forms.ModelForm):
             self.initial["salesperson"] = linked_salesperson.pk
         if not self.is_bound and is_local_sewing_initial(self.initial, self.instance):
             self.initial.setdefault("commission_currency", "BDT")
+        self.initial.setdefault(
+            "estimated_production_days",
+            getattr(timeline, "estimated_production_days", None),
+        )
+        self.initial.setdefault(
+            "daily_factory_cost",
+            getattr(timeline, "daily_factory_cost", None)
+            or getattr(self.factory_default, "daily_amount", None),
+        )
+        if not self.can_override_factory_rate:
+            self.fields["daily_factory_cost"].disabled = True
+        if timeline and timeline.locked_at:
+            self.fields["estimated_production_days"].disabled = True
+            self.fields["daily_factory_cost"].disabled = True
         for field in self.fields.values():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " costing-input").strip()
@@ -540,7 +607,43 @@ class QuickCostingForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        is_sampling = (
+            cleaned.get("costing_purpose") == QuickCosting.PURPOSE_SAMPLE
+            or (cleaned.get("pricing_type") or "").strip().lower() == QuickCosting.PRICING_SAMPLE
+        )
+        is_simplified_sampling = is_sampling and bool(
+            self.data.get("sample_mode") == "simplified"
+            or self.instance.sample_charge is not None
+            or cleaned.get("sample_charge") is not None
+            or cleaned.get("estimated_production_days")
+        )
         is_local_sewing = cleaned.get("pricing_type") == QuickCosting.PRICING_CMT
+        if is_simplified_sampling:
+            for field_name in (
+                "fabric_cost_per_kg",
+                "fabric_consumption_kg_per_piece",
+                "making_cost_per_piece",
+                "print_embroidery_cost_per_piece",
+                "trims_cost_per_piece",
+                "packaging_cost_per_piece",
+                "sewing_charge_per_piece_bdt",
+                "sewing_cost_per_piece_bdt",
+                "extra_local_cost_bdt",
+            ):
+                cleaned[field_name] = None
+            cleaned["material_cost"] = Decimal("0")
+            cleaned["production_cost"] = Decimal("0")
+            cleaned["selling_price_per_piece"] = Decimal("0")
+        for field_name in (
+            "sample_fabric_cost",
+            "sample_trim_cost",
+            "sample_print_embroidery_cost",
+            "sample_wash_cost",
+            "sample_packaging_cost",
+            "sample_development_cost",
+        ):
+            if cleaned.get(field_name) in (None, ""):
+                cleaned[field_name] = Decimal("0")
         if is_local_sewing:
             cleaned["currency"] = "BDT"
             charge = cleaned.get("sewing_charge_per_piece_bdt")
@@ -602,13 +705,46 @@ class QuickCostingForm(forms.ModelForm):
                 usd_rate = getattr(opportunity, "fx_rate_bdt_per_usd", None) if opportunity else None
                 if not usd_rate or usd_rate <= 0:
                     self.add_error("commission_currency", "USD commission conversion requires a linked opportunity with a USD to BDT rate.")
-        fabric_cost = cleaned.get("fabric_cost_per_kg")
-        fabric_consumption = cleaned.get("fabric_consumption_kg_per_piece")
-        if (fabric_cost is None) != (fabric_consumption is None):
-            message = "Enter both fabric cost per kg and fabric consumption per piece."
-            self.add_error("fabric_cost_per_kg", message)
-            self.add_error("fabric_consumption_kg_per_piece", message)
-        if commission_type != QuickCosting.COMMISSION_NONE and not self.errors:
+        if is_simplified_sampling:
+            if not self.factory_default:
+                raise forms.ValidationError(
+                    "An active Bangladesh daily factory operating cost must be configured in Finance before Sampling can be saved."
+                )
+            if cleaned.get("sample_charge") is None or cleaned.get("sample_charge") <= 0:
+                self.add_error("sample_charge", "Amount client paid is required and must be greater than zero.")
+            if not cleaned.get("estimated_production_days"):
+                self.add_error("estimated_production_days", "Estimated production days are required for Sampling.")
+            if not cleaned.get("daily_factory_cost"):
+                self.add_error(
+                    "daily_factory_cost",
+                    "A Finance daily factory operating cost is required for Sampling.",
+                )
+            if self.instance.pk and self.instance.is_locked and self.instance.sample_charge is None:
+                raise forms.ValidationError(
+                    "This approved historical sample uses the legacy costing snapshot. Create a revision to use simplified Sampling mode."
+                )
+            cleaned["selling_price_per_piece"] = Decimal("0")
+            cleaned["commission_type"] = QuickCosting.COMMISSION_NONE
+            cleaned["commission_value"] = Decimal("0")
+            cleaned["commission_currency"] = "BDT"
+        else:
+            cleaned["sample_charge"] = None
+            for field_name in (
+                "sample_fabric_cost",
+                "sample_trim_cost",
+                "sample_print_embroidery_cost",
+                "sample_wash_cost",
+                "sample_packaging_cost",
+                "sample_development_cost",
+            ):
+                cleaned[field_name] = Decimal("0")
+            fabric_cost = cleaned.get("fabric_cost_per_kg")
+            fabric_consumption = cleaned.get("fabric_consumption_kg_per_piece")
+            if (fabric_cost is None) != (fabric_consumption is None):
+                message = "Enter both fabric cost per kg and fabric consumption per piece."
+                self.add_error("fabric_cost_per_kg", message)
+                self.add_error("fabric_consumption_kg_per_piece", message)
+        if not is_simplified_sampling and commission_type != QuickCosting.COMMISSION_NONE and not self.errors:
             projected = QuickCosting(
                 buyer_name=cleaned.get("buyer_name") or "",
                 project_name=cleaned.get("project_name") or "",
@@ -691,6 +827,13 @@ class QuickCostingForm(forms.ModelForm):
             "sewing_charge_per_piece_bdt",
             "sewing_cost_per_piece_bdt",
             "extra_local_cost_bdt",
+            "sample_charge",
+            "sample_fabric_cost",
+            "sample_trim_cost",
+            "sample_print_embroidery_cost",
+            "sample_wash_cost",
+            "sample_packaging_cost",
+            "sample_development_cost",
         ]
         widgets = {
             "buyer_name": forms.TextInput(attrs={"placeholder": "Buyer or company name"}),
@@ -718,6 +861,13 @@ class QuickCostingForm(forms.ModelForm):
             "sewing_charge_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "sewing_cost_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "extra_local_cost_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_charge": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "350.00"}),
+            "sample_fabric_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_trim_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_print_embroidery_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_wash_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_packaging_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sample_development_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
         }
         labels = {
             "buyer_name": "Buyer Name",
@@ -748,6 +898,13 @@ class QuickCostingForm(forms.ModelForm):
             "sewing_charge_per_piece_bdt": "Sewing Charge Per Piece",
             "sewing_cost_per_piece_bdt": "Sewing Cost Per Piece",
             "extra_local_cost_bdt": "Extra Local Cost",
+            "sample_charge": "Amount Client Paid",
+            "sample_fabric_cost": "Fabric",
+            "sample_trim_cost": "Trim",
+            "sample_print_embroidery_cost": "Printing / Embroidery",
+            "sample_wash_cost": "Wash",
+            "sample_packaging_cost": "Packaging",
+            "sample_development_cost": "Special Development",
         }
         help_texts = {
             "currency": "Select BDT, CAD, or USD for this costing.",

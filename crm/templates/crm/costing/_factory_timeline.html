@@ -1,7 +1,10 @@
 {% load humanize %}
 <details class="quick-detail-card" id="production-timeline" data-base-profit="{{ timeline_base_profit }}" data-costing-currency="{{ calc.currency }}" data-daily-cost-currency="{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }}{% elif factory_default %}{{ factory_default.currency }}{% endif %}" data-daily-cost-source="{% if factory_timeline %}{{ factory_timeline.daily_factory_cost }}{% elif factory_default %}{{ factory_default.daily_amount }}{% endif %}" data-daily-cost-converted="{{ timeline_daily_cost_in_costing_currency|default_if_none:'' }}" open>
-  <summary>4. Production Timeline and Factory Cost</summary>
+  <summary>{% if quick_costing.is_sampling %}5{% else %}4{% endif %}. Production Timeline and Factory Cost</summary>
   <div class="quick-detail-body">
+    {% if calc.timeline_conversion_error %}
+      <div class="quick-timeline-notice">{{ calc.timeline_conversion_error }} The saved costing remains unchanged; add the required approved currency snapshot before updating this estimate.</div>
+    {% endif %}
     {% if not factory_default and not factory_timeline %}
       <div class="quick-timeline-notice">No active Bangladesh factory daily operating cost is configured in Finance Settings. A rate is required before the timeline estimate can be saved.</div>
     {% endif %}
@@ -31,11 +34,12 @@
       <div class="quick-summary-row"><span>Rate Snapshot</span><strong>{% if factory_timeline %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.daily_factory_cost|floatformat:2|intcomma }} / day{% else %}Pending Estimate{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Snapshot State</span><strong>{% if factory_timeline.locked_at %}Approved and Locked{% elif factory_timeline %}Saved Draft{% else %}Pending Estimate{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.display.sales_value_pair }}</strong></div>
-      <div class="quick-summary-row"><span>Material Cost</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
-      <div class="quick-summary-row"><span>Production Cost</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
+      {% if not quick_costing.is_sampling %}<div class="quick-summary-row"><span>Material Cost</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>{% endif %}
+      {% if not quick_costing.is_sampling %}<div class="quick-summary-row"><span>Production Cost</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>{% endif %}
       <div class="quick-summary-row"><span>Shipping</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
-      <div class="quick-summary-row"><span>Other Expenses</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
-      <div class="quick-summary-row"><span>Estimated Profit</span><strong data-timeline-estimated-profit>{% if factory_timeline %}{{ calc.display.net_profit_total_pair }}{% else %}Pending Estimate{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>{% if quick_costing.is_sampling %}Other Sample Cost{% else %}Other Expenses{% endif %}</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+      {% if quick_costing.is_sampling %}<div class="quick-summary-row"><span>Advanced Sample Costs</span><strong>{% if quick_costing.uses_simplified_sample_costing %}{{ calc.display.sample_advanced_cost_total_pair }}{% else %}{{ calc.display.product_production_cost_total_pair }}{% endif %}</strong></div>{% endif %}
+      <div class="quick-summary-row"><span>{% if quick_costing.is_sampling %}Estimated Sample Profit{% else %}Estimated Profit{% endif %}</span><strong data-timeline-estimated-profit>{% if factory_timeline %}{{ calc.display.net_profit_total_pair }}{% else %}Pending Estimate{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Estimated Margin</span><strong>{% if factory_timeline %}{{ calc.display.net_profit_margin_percent }}%{% else %}Pending Estimate{% endif %}</strong></div>
     </div>
 
@@ -46,7 +50,7 @@
     <div class="quick-summary-grid">
       <div class="quick-summary-row"><span>Actual Production Days</span><strong>{% if factory_timeline.actual_production_days != None %}{{ factory_timeline.actual_production_days }} days{% else %}Pending Production{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Actual Factory Timeline Cost</span><strong>{% if factory_timeline.actual_timeline_cost != None %}{{ factory_timeline.daily_cost_currency }} {{ factory_timeline.actual_timeline_cost|floatformat:2|intcomma }}{% else %}Pending Production{% endif %}</strong></div>
-      <div class="quick-summary-row"><span>Actual Profit</span><strong>{% if factory_timeline.actual_profit != None %}{{ calc.currency }} {{ factory_timeline.actual_profit|floatformat:2|intcomma }}{% else %}Pending Approved Actual Costs{% endif %}</strong></div>
+      <div class="quick-summary-row"><span>{% if quick_costing.is_sampling %}Actual Sample Profit{% else %}Actual Profit{% endif %}</span><strong>{% if factory_timeline.actual_profit != None %}{{ calc.currency }} {{ factory_timeline.actual_profit|floatformat:2|intcomma }}{% else %}Pending Approved Actual Costs{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Timeline Difference</span><strong>{% if factory_timeline.timeline_variance != None %}{% if factory_timeline.timeline_variance > 0 %}+{% endif %}{{ factory_timeline.timeline_variance }} days{% else %}Pending Production{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Timeline Status</span><strong>{% if factory_timeline.timeline_variance != None %}<span class="quick-timeline-status timeline-{{ factory_timeline.status|lower }}">{% if factory_timeline.timeline_variance == 0 %}On Target{% elif factory_timeline.timeline_variance < 0 %}Faster Than Estimate{% else %}Over Estimate{% endif %}</span>{% else %}<span class="quick-timeline-status timeline-yellow">Pending Production</span>{% endif %}</strong></div>
       <div class="quick-summary-row"><span>Profit Difference</span><strong>{% if factory_timeline.profit_variance != None %}{{ calc.currency }} {% if factory_timeline.profit_variance > 0 %}+{% endif %}{{ factory_timeline.profit_variance|floatformat:2|intcomma }}{% else %}Pending Approved Actual Costs{% endif %}</strong></div>

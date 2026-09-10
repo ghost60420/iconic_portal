@@ -2073,10 +2073,12 @@ class QuickCosting(models.Model):
     PRICING_FULL_PACKAGE = "full_package"
     PRICING_FOB = "fob"
     PRICING_CMT = "cmt_sewing"
+    PRICING_SAMPLE = "sample"
     PRICING_TYPE_CHOICES = [
         (PRICING_FULL_PACKAGE, "Full Package"),
         (PRICING_FOB, "FOB"),
         (PRICING_CMT, "CMT / Sewing Only"),
+        (PRICING_SAMPLE, "Sample"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_SUBMITTED = "submitted"
@@ -2163,6 +2165,13 @@ class QuickCosting(models.Model):
         "sewing_charge_per_piece_bdt",
         "sewing_cost_per_piece_bdt",
         "extra_local_cost_bdt",
+        "sample_charge",
+        "sample_fabric_cost",
+        "sample_trim_cost",
+        "sample_print_embroidery_cost",
+        "sample_wash_cost",
+        "sample_packaging_cost",
+        "sample_development_cost",
     )
 
     costing_type = models.CharField(
@@ -2275,6 +2284,18 @@ class QuickCosting(models.Model):
         null=True,
         blank=True,
     )
+    sample_charge = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    sample_fabric_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
+    sample_trim_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
+    sample_print_embroidery_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
+    sample_wash_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
+    sample_packaging_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
+    sample_development_cost = models.DecimalField(max_digits=14, decimal_places=2, blank=True, default=Decimal("0"))
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -2382,9 +2403,20 @@ class QuickCosting(models.Model):
 
     @property
     def purpose_label(self):
-        if self.costing_purpose == self.PURPOSE_SAMPLE:
+        if self.is_sampling:
             return "Sample Costing"
         return "Bulk Production Costing"
+
+    @property
+    def is_sampling(self):
+        return (
+            self.costing_purpose == self.PURPOSE_SAMPLE
+            or (self.pricing_type or "").strip().lower() == self.PRICING_SAMPLE
+        )
+
+    @property
+    def uses_simplified_sample_costing(self):
+        return self.is_sampling and self.sample_charge is not None
 
     @property
     def effective_pricing_type(self):
@@ -2735,6 +2767,97 @@ class QuickCosting(models.Model):
 
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)
+        if self.uses_simplified_sample_costing:
+            zero = Decimal("0")
+            sample_charge = self.sample_charge or zero
+            shipping_cost = self.shipping_cost or zero
+            other_expenses = self.other_expenses or zero
+            advanced_components = {
+                "sample_fabric_cost": self.sample_fabric_cost or zero,
+                "sample_trim_cost": self.sample_trim_cost or zero,
+                "sample_print_embroidery_cost": self.sample_print_embroidery_cost or zero,
+                "sample_wash_cost": self.sample_wash_cost or zero,
+                "sample_packaging_cost": self.sample_packaging_cost or zero,
+                "sample_development_cost": self.sample_development_cost or zero,
+            }
+            advanced_total = sum(advanced_components.values(), zero)
+            total_cost = shipping_cost + other_expenses + advanced_total
+            profit = sample_charge - total_cost
+            margin = (profit / sample_charge * Decimal("100")) if sample_charge else zero
+            cost_per_piece = total_cost / quantity if quantity else zero
+            profit_per_piece = profit / quantity if quantity else zero
+            summary = {
+                "quantity": quantity,
+                "currency": self.currency or "BDT",
+                "is_legacy_currency": self.currency is None,
+                "exchange_rate": self.exchange_rate_bdt_per_cad or None,
+                "uses_detailed_costing": advanced_total > zero,
+                "fabric_cost_per_kg": zero,
+                "fabric_consumption_kg_per_piece": zero,
+                "fabric_cost_per_piece": zero,
+                "making_cost_per_piece": zero,
+                "print_embroidery_cost_per_piece": zero,
+                "trims_cost_per_piece": zero,
+                "packaging_cost_per_piece": zero,
+                "sales_value": sample_charge,
+                "net_revenue": sample_charge - shipping_cost - other_expenses,
+                "product_production_cost_total": advanced_total,
+                "product_production_cost_per_piece": advanced_total / quantity if quantity else zero,
+                "material_cost_total": advanced_components["sample_fabric_cost"] + advanced_components["sample_trim_cost"],
+                "material_cost_per_piece": (
+                    (advanced_components["sample_fabric_cost"] + advanced_components["sample_trim_cost"]) / quantity
+                    if quantity
+                    else zero
+                ),
+                "production_cost_total": advanced_total,
+                "production_cost_per_piece": advanced_total / quantity if quantity else zero,
+                "other_expenses_total": other_expenses,
+                "other_expenses_per_piece": other_expenses / quantity if quantity else zero,
+                "shipping_cost_total": shipping_cost,
+                "shipping_cost_per_piece": shipping_cost / quantity if quantity else zero,
+                "total_cost": total_cost,
+                "cost_per_piece": cost_per_piece,
+                "selling_price_per_piece": sample_charge / quantity if quantity else zero,
+                "selling_price_total": sample_charge,
+                "revenue": sample_charge,
+                "gross_profit_per_piece": profit_per_piece,
+                "gross_profit_total": profit,
+                "commission_per_piece": zero,
+                "commission_total": zero,
+                "commission_percent": None,
+                "commission_amount_calculated": zero,
+                "commission_type": self.COMMISSION_NONE,
+                "commission_value": zero,
+                "commission_currency": self.currency or "BDT",
+                "commission_display_amount": zero,
+                "commission_display_available": True,
+                "commission_conversion_available": True,
+                "profit_before_commission": profit,
+                "profit_before_commission_per_piece": profit_per_piece,
+                "final_profit_after_commission": profit,
+                "final_profit_after_commission_per_piece": profit_per_piece,
+                "net_profit_per_piece": profit_per_piece,
+                "net_profit_total": profit,
+                "gross_profit_margin_percent": margin,
+                "net_profit_margin_percent": margin,
+                "target_margin_percent": self.target_margin_percent,
+                "margin_status": "Calculated",
+                "cost_available": True,
+                "profit_per_piece": profit_per_piece,
+                "total_profit": profit,
+                "profit_margin_percent": margin,
+                "sample_charge": sample_charge,
+                "sample_advanced_cost_total": advanced_total,
+                **advanced_components,
+            }
+            target = self.target_margin_percent
+            if target is None:
+                summary["margin_status"] = "No target set"
+            elif margin >= target:
+                summary["margin_status"] = "Meets target"
+            else:
+                summary["margin_status"] = "Below target"
+            return summary
         if self.is_bangladesh_local_sewing:
             zero = Decimal("0")
             charge = self.sewing_charge_per_piece_bdt or zero
