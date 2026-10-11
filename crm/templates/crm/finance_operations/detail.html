@@ -77,7 +77,7 @@
           <a class="fc-btn" href="{% url 'finance_posting_preview' operation.pk %}"><i data-lucide="eye"></i>Posting Preview</a>
         {% endif %}
         {% if can_review and operation.state == 'PENDING' or can_review and operation.state == 'EVIDENCE_REQUIRED' %}
-          <a class="fc-btn good" href="{% url 'finance_operation_review' operation.pk 'approve' %}"><i data-lucide="check"></i>Approve</a>
+          <a class="fc-btn good" href="{% url 'finance_operation_review' operation.pk 'approve' %}"><i data-lucide="check"></i>{% if operation.operation_type == 'CUSTOMER_PAYMENT' %}Verify receipt{% else %}Approve{% endif %}</a>
           <a class="fc-btn" href="{% url 'finance_operation_review' operation.pk 'evidence_required' %}"><i data-lucide="reply"></i>Return for More Information</a>
           <a class="fc-btn danger" href="{% url 'finance_operation_review' operation.pk 'reject' %}"><i data-lucide="x"></i>Reject</a>
         {% endif %}

@@ -4,6 +4,13 @@
 <main class="fc-shell{% if not financial_core_writes_enabled %} fc-readonly{% endif %}">
   {% include "crm/financial_core/_nav.html" %}
   {% include "crm/finance_operations/_page_guidance.html" with guidance_key="FINANCE_DASHBOARD" country_side=side %}
+  <section class="fc-band" aria-label="Customer payment verification">
+    <h2>Customer payments</h2>
+    <p>Only verified and posted payments count as received. <a href="{% url 'finance_approval_center' %}">Review payments awaiting verification</a></p>
+    <table class="fc-table"><thead><tr><th>Invoice</th><th>Payment</th><th>Status</th></tr></thead><tbody>
+    {% for payment in customer_payments %}<tr><td>{{ payment.invoice.invoice_number }}</td><td>{{ payment.currency }} {{ payment.total_amount|floatformat:2 }}</td><td><a href="{% url 'finance_operation_detail' payment.pk %}">{{ payment.finance_status_label }}</a></td></tr>{% empty %}<tr><td colspan="3">No customer payment requests recorded.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
   <form method="get" class="fc-form-grid fc-filter-grid">
     <div class="fc-field"><label for="fc-start">Start</label><input id="fc-start" class="form-control" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}"></div>
     <div class="fc-field"><label for="fc-end">End</label><input id="fc-end" class="form-control" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}"></div>

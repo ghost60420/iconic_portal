@@ -519,6 +519,7 @@ class FinanceOperationForm(forms.Form):
 
 
 class CustomerPaymentOperationForm(FinanceOperationForm):
+    submission_token = forms.CharField(required=False, widget=forms.HiddenInput())
     customer = forms.ModelChoiceField(queryset=Customer.objects.none())
     invoice = InvoiceBalanceChoiceField(queryset=Invoice.objects.none())
     amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
@@ -532,6 +533,9 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from uuid import uuid4
+        if not self.is_bound:
+            self.initial.setdefault("submission_token", uuid4().hex)
         invoices = _eligible_invoices(self.user, self.allowed_sides)
         self.fields["invoice"].queryset = invoices
         self.fields["customer"].queryset = _customers_for_sides(self.allowed_sides).order_by(
@@ -609,6 +613,9 @@ class CustomerPaymentOperationForm(FinanceOperationForm):
             },
         )
         operation.duplicate_warning = cleaned.get("duplicate_detected", False)
+        from hashlib import sha256
+        token = cleaned.get("submission_token") or f"{operation.transaction_date}:{operation.total_amount}:{operation.to_account_id}:{operation.payment_method}:{operation.reference}"
+        operation.operation_number = "PAY-" + sha256(f"{operation.invoice_id}:{token}".encode()).hexdigest()[:32]
         operation.duplicate_warning_text = (
             f"Duplicate reference approved for review: {cleaned.get('duplicate_reason', '')}"
             if operation.duplicate_warning else ""

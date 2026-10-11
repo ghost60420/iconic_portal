@@ -1,0 +1,28 @@
+{% load l10n %}
+<section class="cardx pay-section" id="invoice-payment-verification" aria-label="Payment verification">
+  <div class="pad">
+    <strong>{{ payment_summary.payment_status }}</strong>
+    <p>{{ payment_summary.production_readiness }}. Production requires its existing approval.</p>
+    <p>Invoice total: {{ invoice.currency }} {{ invoice.total_amount|floatformat:2 }} · Previously paid (verified): {{ invoice.paid_amount|floatformat:2 }} · Remaining balance: {{ invoice.balance|floatformat:2 }}</p>
+    <p>Current payment: <span id="invoice-current-payment">0.00</span> · Balance after verification: <span id="invoice-projected-balance">{{ invoice.balance|floatformat:2 }}</span></p>
+    {% for operation in pending_payments %}
+      <p><a href="{% url 'finance_operation_detail' operation.pk %}">{{ operation.operation_number }}</a> — {{ operation.currency }} {{ operation.total_amount|floatformat:2 }} — {{ operation.finance_status_label }}</p>
+    {% empty %}<p>No payments awaiting verification.</p>{% endfor %}
+  </div>
+</section>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const amount = document.getElementById('id_amount');
+  const current = document.getElementById('invoice-current-payment');
+  const balance = document.getElementById('invoice-projected-balance');
+  if (!amount || !current || !balance) return;
+  const outstanding = Number('{{ invoice.balance|unlocalize }}');
+  const update = () => {
+    const value = Math.max(0, Number(amount.value) || 0);
+    current.textContent = value.toFixed(2);
+    balance.textContent = Math.max(0, outstanding - value).toFixed(2);
+  };
+  amount.addEventListener('input', update);
+  update();
+});
+</script>

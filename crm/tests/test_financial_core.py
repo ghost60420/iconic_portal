@@ -624,6 +624,6 @@ class FinancialCoreTests(TestCase):
         )
         for route in routes:
             with self.subTest(route=route):
-                response = client.get(reverse(route), HTTP_USER_AGENT="Mozilla/5.0 (iPhone; Mobile)")
+                response = client.get(reverse(route), follow=True, HTTP_USER_AGENT="Mozilla/5.0 (iPhone; Mobile)")
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, "Finance Dashboard")

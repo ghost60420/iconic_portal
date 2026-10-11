@@ -80,6 +80,11 @@ def validate_customer_payment_account(*, payment_account, side, currency, paymen
     return payment_account
 
 
+def _ledger_rate_to_cad(snapshot):
+    # The existing receivables ledger stores BDT per CAD; Core stores CAD per BDT.
+    return Decimal("1") / snapshot.rate_to_cad if snapshot.currency == "BDT" else snapshot.rate_to_cad
+
+
 def _actor(actor):
     if not actor or not getattr(actor, "is_authenticated", False):
         raise ReceivableAccountingError("An authenticated actor is required.")
@@ -269,7 +274,7 @@ def issue_invoice_to_financial_core(
         effective_date=locked.effective_invoice_date,
         native_amount=total,
         currency=locked.currency,
-        rate_to_cad=snapshot.rate_to_cad,
+        rate_to_cad=_ledger_rate_to_cad(snapshot),
         rate_to_bdt=snapshot.rate_to_bdt,
         idempotency_key=f"CORE:INVOICE:{locked.pk}:ISSUED",
         external_reference=locked.invoice_number,
@@ -336,7 +341,7 @@ def void_financial_core_invoice(invoice, *, actor, reason, void_date=None):
         effective_date=reversal_journal.journal_date,
         native_amount=state.issued_native_amount,
         currency=state.currency,
-        rate_to_cad=state.rate_to_cad,
+        rate_to_cad=_ledger_rate_to_cad(state),
         rate_to_bdt=state.rate_to_bdt,
         idempotency_key=f"CORE:INVOICE:{locked.pk}:VOID",
         external_reference=reversal_journal.reference,
@@ -482,7 +487,7 @@ def record_customer_receipt(
             effective_date=receipt_date,
             native_amount=snapshot.native_amount,
             currency=snapshot.currency,
-            rate_to_cad=snapshot.rate_to_cad,
+            rate_to_cad=_ledger_rate_to_cad(snapshot),
             rate_to_bdt=snapshot.rate_to_bdt,
             idempotency_key=f"CORE:CUSTOMER-RECEIPT:{idempotency_reference}",
             external_reference=reference,
@@ -563,7 +568,7 @@ def apply_customer_credit_note(
             effective_date=credit_date,
             native_amount=amount,
             currency=snapshot.currency,
-            rate_to_cad=snapshot.rate_to_cad,
+            rate_to_cad=_ledger_rate_to_cad(snapshot),
             rate_to_bdt=snapshot.rate_to_bdt,
             idempotency_key=f"CORE:CREDIT-NOTE:{reference}",
             external_reference=reference,
@@ -642,7 +647,7 @@ def record_customer_refund(
             effective_date=refund_date,
             native_amount=amount,
             currency=snapshot.currency,
-            rate_to_cad=snapshot.rate_to_cad,
+            rate_to_cad=_ledger_rate_to_cad(snapshot),
             rate_to_bdt=snapshot.rate_to_bdt,
             idempotency_key=f"CORE:CUSTOMER-REFUND:{reference}",
             external_reference=reference,

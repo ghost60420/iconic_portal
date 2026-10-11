@@ -7,6 +7,9 @@
   <section class="fc-confirm">
     <h1 class="fc-title">{% if mode == 'post' %}Confirm Ledger Posting{% elif action == 'APPROVE' %}Confirm Approval{% elif action == 'REJECT' %}Confirm Rejection{% else %}Return for More Information{% endif %}</h1>
     <p><strong>{{ operation.operation_number }}</strong><br>{{ operation.get_operation_type_display }} · {{ operation.currency }} {{ operation.total_amount }} · {{ operation.get_risk_level_display }} risk</p>
+    {% if operation.operation_type == 'CUSTOMER_PAYMENT' and action == 'APPROVE' %}
+      <p><strong>Verify that the money has arrived in the receiving account.</strong> Confirmation records you as verifier and automatically posts a standard payment. An employee's payment entry alone is not confirmation of receipt.</p>
+    {% endif %}
     {% if requires_self_approval_confirmation %}
       <div class="fc-alert warn ops-self-approval-warning">
         <i data-lucide="shield-alert"></i>

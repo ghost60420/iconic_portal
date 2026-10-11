@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -552,7 +552,7 @@ def finance_operation_create(request, workflow_slug):
                             f"{operation.operation_number} submitted for approval. No journal was posted.",
                         )
                     return redirect("finance_operation_detail", pk=operation.pk)
-                except (FinanceOperationError, ValidationError, ValueError) as exc:
+                except (FinanceOperationError, ValidationError, ValueError, IntegrityError) as exc:
                     form.add_error(None, str(exc))
     recent = _operation_queryset(request).filter(operation_type=workflow["operation_type"])
     if locked_side:
@@ -736,7 +736,9 @@ def finance_operation_review(request, pk, action):
                 confirm_self_approval=request.POST.get("confirm_self_approval") == "yes",
             )
             if action == "APPROVE":
-                if has_final_finance_approval_authority(request.user):
+                if operation.state == FinanceOperation.STATE_POSTED:
+                    messages.success(request, "Payment verified and posted successfully.")
+                elif has_final_finance_approval_authority(request.user):
                     try:
                         operation = post_operation(operation, actor=request.user)
                     except (FinanceOperationWritesDisabled, FinanceOperationError, ValidationError, ValueError) as exc:
@@ -764,7 +766,7 @@ def finance_operation_review(request, pk, action):
             else:
                 messages.success(request, "Transaction rejected.")
             return redirect("finance_operation_detail", pk=operation.pk)
-        except FinanceOperationError as exc:
+        except (FinanceOperationError, ValueError, ValidationError) as exc:
             messages.error(request, str(exc))
     return render(
         request,

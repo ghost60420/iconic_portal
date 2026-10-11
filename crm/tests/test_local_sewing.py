@@ -430,7 +430,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(duplicate, order)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
 
-    def test_quoted_local_sewing_zero_payment_invoice_starts_production(self):
+    def test_quoted_local_sewing_zero_payment_invoice_blocks_production(self):
         quick = self.quick(
             status=QuickCosting.STATUS_QUOTED,
             approved_at=timezone.now(),
@@ -450,14 +450,15 @@ class LocalSewingApprovalGateTests(TestCase):
             deposit_percentage=Decimal("30.00"),
         )
 
-        order, created = create_production_order_from_approved_quick_costing(quick, invoice=invoice)
+        with self.assertRaisesMessage(ProductionOrderCreationError, "Verified payment"):
+            create_production_order_from_approved_quick_costing(quick, invoice=invoice)
 
-        self.assertTrue(created)
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
         invoice.refresh_from_db()
-        self.assertEqual(invoice.order, order)
+        self.assertIsNone(invoice.order_id)
         self.assertEqual(invoice.paid_amount, Decimal("0.00"))
         self.assertEqual(invoice.balance, Decimal("10000.00"))
-        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
 
     def test_local_sewing_invoice_cannot_bypass_approved_quick_costing_link(self):
         quick = self.quick(status=QuickCosting.STATUS_APPROVED, approved_at=timezone.now())

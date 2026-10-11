@@ -53,7 +53,7 @@ def _audit(record, action, actor, *, reason="", before=None, after=None, source_
 
 def resolve_open_financial_period(journal_date, side):
     periods = FinancialPeriod.objects.filter(start_date__lte=journal_date, end_date__gte=journal_date)
-    period = periods.filter(side=side).first() or periods.filter(side="").first()
+    period = periods.filter(side__in=(side, "")).order_by("-side", "-start_date").first()
     if not period:
         raise JournalError("No Financial Core period is configured for the journal date and side.")
     if period.state != FinancialPeriod.STATE_OPEN:

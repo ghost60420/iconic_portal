@@ -192,13 +192,19 @@ def _validate_financial_journal(event: ReceivableEvent) -> None:
         raise ReceivablesLedgerError("Receivable events require a posted financial journal.")
     if journal.currency != event.currency or journal.journal_date != event.event_date:
         raise ReceivablesLedgerError("Financial journal currency and date must match the receivable event.")
-    if _decimal(journal.rate_to_cad) != _decimal(event.rate_to_cad):
+    event_cad_rate = _decimal(event.rate_to_cad)
+    if event.currency == "BDT":
+        event_cad_rate = (Decimal("1") / event_cad_rate).quantize(Decimal("0.0000000001"))
+    if _decimal(journal.rate_to_cad) != event_cad_rate:
         raise ReceivablesLedgerError("Financial journal CAD rate must match the receivable event snapshot.")
     if _decimal(journal.rate_to_bdt) != _decimal(event.rate_to_bdt):
         raise ReceivablesLedgerError("Financial journal BDT rate must match the receivable event snapshot.")
     totals = journal.lines.aggregate(debit=Sum("native_debit"), credit=Sum("native_credit"))
     if _money(totals["debit"]) != _money(event.native_amount) or _money(totals["credit"]) != _money(event.native_amount):
         raise ReceivablesLedgerError("Financial journal amount must match the receivable event amount.")
+    converted = journal.lines.aggregate(cad=Sum("cad_debit"), bdt=Sum("bdt_debit"))
+    if _money(converted["cad"]) != _money(event.amount_cad) or _money(converted["bdt"]) != _money(event.amount_bdt):
+        raise ReceivablesLedgerError("Financial journal converted amounts must match the receivable event snapshot.")
 
 
 def _validate_legacy_payment_link(event: ReceivableEvent) -> None:

@@ -22,7 +22,6 @@ from crm.forms_financial_core import (
     BankReconciliationForm,
     BankStatementLineForm,
     CashBankAccountForm,
-    CustomerReceiptForm,
     ExpenseCategoryForm,
     ExpenseRecordForm,
     FactoryTimelineEstimateForm,
@@ -132,7 +131,6 @@ from crm.services.financial_reporting import (
 )
 from crm.services.payables_ledger import PayablesLedgerError, approve_supplier_bill, record_supplier_payment
 from crm.services.production_costs import ProductionCostError, approve_production_cost
-from crm.services.receivable_accounting import ReceivableAccountingError, record_customer_receipt
 
 
 def _attach_document(record, uploaded_file, *, actor, document_type, description=""):
@@ -194,12 +192,19 @@ def _common(request, **context):
 
 @require_financial_permission("view")
 def financial_core_dashboard(request):
+    from crm.models import FinanceOperation
+    from crm.services.financial_permissions import scope_finance_operations_for_user
     start, end = _dates(request)
     summary = executive_financial_summary(start_date=start, end_date=end, as_of_date=end, side=_side(request))
+    payments = scope_finance_operations_for_user(
+        FinanceOperation.objects.filter(operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT).select_related("invoice"), request.user
+    )
+    if _side(request):
+        payments = payments.filter(side=_side(request))
     return render(
         request,
         "crm/financial_core/dashboard.html",
-        _common(request, summary=summary, start_date=start, end_date=end, side=_side(request)),
+        _common(request, summary=summary, start_date=start, end_date=end, side=_side(request), customer_payments=payments.order_by("-created_at")[:10]),
     )
 
 
@@ -525,24 +530,8 @@ def financial_supplier_bill_approve(request, pk):
 @require_financial_permission("manage")
 @require_core_writes
 def financial_customer_receipts(request):
-    form = CustomerReceiptForm(request.POST or None, request.FILES or None, user=request.user)
-    if request.method == "POST" and form.is_valid():
-        try:
-            receipt_data = form.cleaned_data.copy()
-            supporting_document = receipt_data.pop("supporting_document", None)
-            result = record_customer_receipt(actor=request.user, **receipt_data)
-            _attach_document(
-                result["event"], supporting_document, actor=request.user,
-                document_type="CUSTOMER_RECEIPT", description=result["event"].reference,
-            )
-            messages.success(
-                request,
-                f"Receipt posted. Allocated {result['allocated']}; customer credit {result['customer_credit']}.",
-            )
-            return redirect("financial_customer_receipts")
-        except (ReceivableAccountingError, ValueError, ValidationError) as exc:
-            messages.error(request, str(exc))
-    return render(request, "crm/financial_core/operations.html", _common(request, operation="customer_receipts", title="Customer Receipts", form=form, records=[]))
+    # Customer receipts use the shared entry/verification workflow.
+    return redirect("finance_operation_create", workflow_slug="customer-payment")
 
 
 @require_http_methods(["GET", "POST"])

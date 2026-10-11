@@ -1,0 +1,72 @@
+    {% if can_record_payment %}
+      <div class="cardx pay-section noPrint" id="payment-received-form">
+        <div class="pad">
+          <div class="pay-section-title">
+            <span>Record customer payment</span>
+          </div>
+          <p class="pay-help">Record the customer payment once. Finance or CEO verifies receipt and posts it automatically. Unverified payments do not reduce the balance or unlock production.</p>
+          {% for warning in payment_form.configuration_warnings %}<div class="pay-alert pay-alert--warn">{{ warning }}</div>{% endfor %}
+
+          {% if payment_form.non_field_errors %}
+            <div class="pay-alert">{{ payment_form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+            {{ payment_form.submission_token }}
+            <div class="pay-form-grid">
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_date.id_for_label }}">Payment date</label>
+                {{ payment_form.payment_date }}
+                {% if payment_form.payment_date.errors %}<div class="pay-error">{{ payment_form.payment_date.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.amount.id_for_label }}">Amount received</label>
+                {{ payment_form.amount }}
+                {% if payment_form.amount.errors %}<div class="pay-error">{{ payment_form.amount.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_method.id_for_label }}">Payment method</label>
+                {{ payment_form.payment_method }}
+                {% if payment_form.payment_method.errors %}<div class="pay-error">{{ payment_form.payment_method.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_account.id_for_label }}">Receiving account</label>
+                {{ payment_form.payment_account }}
+                {% if payment_form.payment_account.errors %}<div class="pay-error">{{ payment_form.payment_account.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.reference.id_for_label }}">Reference <span class="pay-help">Optional</span></label>
+                {{ payment_form.reference }}
+                {% if payment_form.reference.help_text %}<div class="pay-help">{{ payment_form.reference.help_text }}</div>{% endif %}
+                {% if payment_form.reference.errors %}<div class="pay-error">{{ payment_form.reference.errors }}</div>{% endif %}
+              </div>
+
+              {{ payment_form.currency.as_hidden }}{{ payment_form.side.as_hidden }}{{ payment_form.production_order }}
+              {{ payment_form.rate_to_cad.as_hidden }}{{ payment_form.rate_to_bdt.as_hidden }}
+              {% if payment_form.rate_to_cad.errors or payment_form.rate_to_bdt.errors %}<div class="pay-error">{{ payment_form.rate_to_cad.errors }}{{ payment_form.rate_to_bdt.errors }} Ask Finance to review the configured exchange rates.</div>{% endif %}
+
+              <div class="pay-field pay-field--wide">
+                <label for="{{ payment_form.notes.id_for_label }}">Notes</label>
+                {{ payment_form.notes }}
+                {% if payment_form.notes.errors %}<div class="pay-error">{{ payment_form.notes.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field pay-field--wide">
+                <label for="{{ payment_form.receipt.id_for_label }}">Receipt <span class="pay-help">Optional</span></label>
+                {{ payment_form.receipt }}
+                {% if payment_form.receipt.errors %}<div class="pay-error">{{ payment_form.receipt.errors }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="pay-actions">
+              <button class="pay-save" type="submit">Record payment for verification</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}

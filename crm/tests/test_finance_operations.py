@@ -213,6 +213,7 @@ class FinanceOperationsTests(TestCase):
             amount_cad=Decimal("0"),
             amount_bdt=Decimal("0"),
             reference=reference or f"OPS-REF-{number}",
+            payment_method=fields.pop("payment_method", "bank_transfer"),
             business_purpose=fields.pop("business_purpose", "Verified business purpose"),
             **fields,
         )
@@ -427,6 +428,7 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(PayrollBatch.objects.count(), protected_counts["payroll"])
         self.assertEqual(InventoryMovement.objects.count(), protected_counts["inventory"])
 
+    @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
     def test_customer_payment_without_receipt_requires_confirmation_then_submits(self):
         invoice = self.invoice("OPS-NO-DOCUMENT-PAYMENT")
         payload = {
@@ -473,7 +475,7 @@ class FinanceOperationsTests(TestCase):
             action="APPROVE",
             notes="Approved without evidence after review.",
         )
-        self.assertEqual(approved.state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(approved.state, FinanceOperation.STATE_POSTED)
         self.assertFalse(JournalEntry.objects.filter(source_key=f"FINANCE-OPERATION:{operation.pk}").exists())
 
     def test_draft_can_be_edited_and_returned_for_more_information(self):
@@ -598,7 +600,7 @@ class FinanceOperationsTests(TestCase):
         issue_invoice_to_financial_core(
             bd_invoice,
             actor=self.approver,
-            rate_to_cad=Decimal("100"),
+            rate_to_cad=Decimal("0.01"),
             rate_to_bdt=Decimal("1"),
         )
         client = Client()
@@ -800,6 +802,7 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(rejected.state, FinanceOperation.STATE_REJECTED)
         self.assertTrue(form.is_valid(), form.errors.as_json())
 
+    @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
     def test_customer_partial_full_and_overpayment_credit_use_protected_service(self):
         invoice = self.invoice("OPS-PAY-INV")
         partial = self.operation(
@@ -811,8 +814,7 @@ class FinanceOperationsTests(TestCase):
             payment_method="bank",
         )
         partial = self.approve(partial)
-        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
-            partial = post_operation(partial, actor=self.approver)
+        self.assertEqual(partial.state, FinanceOperation.STATE_POSTED)
         invoice.refresh_from_db()
         self.assertEqual(invoice.paid_amount, Decimal("40.00"))
         self.assertEqual(invoice.status, "partial")
@@ -826,8 +828,7 @@ class FinanceOperationsTests(TestCase):
             payment_method="bank",
         )
         final = self.approve(final)
-        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
-            final = post_operation(final, actor=self.approver)
+        self.assertEqual(final.state, FinanceOperation.STATE_POSTED)
         invoice.refresh_from_db()
         self.assertEqual(invoice.paid_amount, Decimal("100.00"))
         self.assertEqual(invoice.status, "paid")
@@ -855,25 +856,27 @@ class FinanceOperationsTests(TestCase):
             ).exists()
         )
 
+    @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
     def test_customer_balance_change_cannot_create_unapproved_credit(self):
         invoice = self.invoice("OPS-CONCURRENT-INV")
         operations = [
-            self.approve(self.operation(
+            self.operation(
                 FinanceOperation.TYPE_CUSTOMER_PAYMENT,
                 "80",
                 customer=self.customer,
                 invoice=invoice,
                 to_account=self.bank,
-            ))
+            )
             for _index in range(2)
         ]
         with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
-            post_operation(operations[0], actor=self.approver)
+            self.approve(operations[0])
             with self.assertRaises(FinanceOperationError):
-                post_operation(operations[1], actor=self.approver)
+                self.approve(operations[1])
         operations[1].refresh_from_db()
-        self.assertEqual(operations[1].state, FinanceOperation.STATE_APPROVED)
+        self.assertEqual(operations[1].state, FinanceOperation.STATE_PENDING)
 
+    @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
     def test_customer_refund_credit_note_and_unapplied_credit_post_linked_events(self):
         invoice = self.invoice("OPS-ADJ-INV", "200")
         receipt = self.operation(
@@ -883,8 +886,7 @@ class FinanceOperationsTests(TestCase):
             invoice=invoice,
             to_account=self.bank,
         )
-        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
-            post_operation(self.approve(receipt), actor=self.approver)
+        self.assertEqual(self.approve(receipt).state, FinanceOperation.STATE_POSTED)
         refund = self.operation(
             FinanceOperation.TYPE_CUSTOMER_REFUND,
             "25",
@@ -1591,7 +1593,7 @@ class FinanceOperationsTests(TestCase):
         self.assertFalse(can_submit_finance_operation(production, FinanceOperation.TYPE_PAYROLL))
         self.assertTrue(can_submit_finance_operation(hr, FinanceOperation.TYPE_PAYROLL))
         self.assertFalse(can_submit_finance_operation(hr, FinanceOperation.TYPE_OWNER_INVESTMENT))
-        self.assertFalse(can_submit_finance_operation(sales, FinanceOperation.TYPE_CUSTOMER_PAYMENT))
+        self.assertTrue(can_submit_finance_operation(sales, FinanceOperation.TYPE_CUSTOMER_PAYMENT))
         self.assertFalse(can_submit_finance_operation(normal, FinanceOperation.TYPE_COMPANY_EXPENSE))
 
         ca_operation = self.operation(FinanceOperation.TYPE_COMPANY_EXPENSE, amount_before_tax=Decimal("100"), expense_category=self.office_rent, supplier=self.supplier, details={"payment_status": "UNPAID", "due_date": "2026-03-01"})

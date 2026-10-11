@@ -203,6 +203,8 @@ def can_submit_finance_operation(user, operation_type):
     roles = _roles(user)
     if user.is_superuser or roles & {ROLE_CEO, ROLE_FINANCE, ROLE_ACCOUNTS}:
         return True
+    if roles & SALES_ROLES and operation_type == "CUSTOMER_PAYMENT":
+        return True
     if ROLE_PRODUCTION in roles:
         return operation_type in FINANCE_OPERATION_TYPES_PRODUCTION
     if ROLE_HR in roles:
@@ -214,6 +216,8 @@ def can_review_finance_operation(user, operation=None):
     if not _authenticated(user):
         return False
     roles = _roles(user)
+    if operation is not None and operation.operation_type == "CUSTOMER_PAYMENT" and operation.side not in accessible_financial_sides(user):
+        return False
     if user.is_superuser or ROLE_CEO in roles:
         return True
     if ROLE_FINANCE in roles and _has_any_accounting_flag(user):
@@ -386,6 +390,8 @@ def scope_invoices_for_user(queryset, user):
 def can_access_invoice(user, invoice):
     if not invoice or not getattr(invoice, "pk", None):
         return False
+    if _authenticated(user) and user.is_superuser:
+        return True
     from crm.models import Invoice
 
     return scope_invoices_for_user(Invoice.objects.filter(pk=invoice.pk), user).exists()

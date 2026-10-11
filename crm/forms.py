@@ -17,6 +17,7 @@ from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.contrib.auth import get_user_model
 
 from .models import (
@@ -1765,7 +1766,7 @@ class InvoicePaymentForm(forms.ModelForm):
     payment_account = forms.ModelChoiceField(
         queryset=CashBankAccount.objects.none(),
         required=False,
-        label="Account / Payment Account",
+        label="Receiving account",
         widget=forms.Select(attrs={"class": "form-select"}),
     )
     reference = forms.CharField(
@@ -1818,6 +1819,11 @@ class InvoicePaymentForm(forms.ModelForm):
         self.invoice = invoice
         self.user = user
         super().__init__(*args, **kwargs)
+        self.configuration_warnings = []
+        self.fields["submission_token"].required = True
+        self.fields["payment_account"].required = True
+        self.fields["rate_to_cad"].required = False
+        self.fields["rate_to_bdt"].required = False
         if not self.is_bound:
             self.initial.setdefault("submission_token", uuid4().hex)
         core_writes_enabled = getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False)
@@ -1853,9 +1859,49 @@ class InvoicePaymentForm(forms.ModelForm):
                     gl_account__system_key__isnull=False,
                 ).select_related("gl_account").order_by("kind", "name")
             self.fields["payment_account"].queryset = accounts
+            account_choices = [(account.pk, str(account)) for account in accounts]
+            self.fields["payment_account"].choices = [("", "Select receiving account"), *account_choices]
+            if not account_choices:
+                self.configuration_warnings.append(
+                    f"No eligible {invoice_side}/{invoice_currency} receiving account is available. Ask Finance to configure an active bank, PayPal or cash account mapped to an active Financial Core asset account. No account will be guessed."
+                )
+            try:
+                selected_date = parse_date(str(self.data.get("payment_date", ""))) if self.is_bound else self.initial.get("payment_date", timezone.localdate())
+            except ValueError:
+                selected_date = None  # DateField will render the validation error.
+            if selected_date:
+                try:
+                    resolve_open_financial_period(selected_date, invoice_side)
+                except JournalError as exc:
+                    self.configuration_warnings.append(f"{exc} Ask Finance to configure the correct period for {selected_date} / {invoice_side}. Closed periods will not be opened automatically.")
+            # Entry users select money received, not accounting conversion rates.
+            from crm.services.financial_currency import resolve_currency_snapshot, MissingExchangeRate
+            rates = {"rate_to_cad": Decimal("0"), "rate_to_bdt": Decimal("0")}
+            try:
+                snapshot = resolve_currency_snapshot(
+                    native_amount=Decimal("1"), currency=invoice_currency,
+                    transaction_date=selected_date or timezone.localdate(), create_review=False,
+                )
+                rates = {
+                    "rate_to_cad": (Decimal("1") / snapshot.rate_to_cad if invoice_currency == "BDT" else snapshot.rate_to_cad),
+                    "rate_to_bdt": snapshot.rate_to_bdt,
+                }
+            except MissingExchangeRate:
+                configured = _latest_rate_bdt_per_cad()
+                if configured > 1 and invoice_currency in {"CAD", "BDT"}:
+                    rates = {"rate_to_cad": Decimal("1") if invoice_currency == "CAD" else configured,
+                             "rate_to_bdt": configured if invoice_currency == "CAD" else Decimal("1")}
+                else:
+                    self.configuration_warnings.append("An accounting exchange rate is missing. Ask Finance to configure an approved rate before recording payment.")
+            for field, value in rates.items():
+                self.initial[field] = value.quantize(Decimal("0.000001"))
+                self.fields[field].disabled = True
 
             if getattr(invoice, "order_id", None):
                 self.fields["production_order"].initial = invoice.order_id
+            self.fields["production_order"].queryset = ProductionOrder.objects.filter(pk=invoice.order_id)
+            self.fields["production_order"].disabled = True
+            self.fields["production_order"].widget = forms.HiddenInput()
 
         self.fields["production_order"].required = False
         self.fields["notes"].required = False
@@ -1926,6 +1972,9 @@ class InvoicePaymentForm(forms.ModelForm):
                     cleaned["rate_to_bdt"] = cad_to_bdt
         elif currency == "BDT":
             cleaned["rate_to_bdt"] = Decimal("1")
+            if not rate_to_cad:
+                rate_to_cad = _latest_rate_bdt_per_cad()
+                cleaned["rate_to_cad"] = rate_to_cad
             if rate_to_cad <= 1:
                 self.add_error(
                     "rate_to_cad",

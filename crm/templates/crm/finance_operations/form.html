@@ -74,6 +74,7 @@
 
   <form class="ops-finance-form" method="post" enctype="multipart/form-data">
     {% csrf_token %}
+    {% if form.submission_token %}{{ form.submission_token }}{% endif %}
     {% if editing_draft %}<input type="hidden" name="draft_id" value="{{ editing_draft.pk }}">{% endif %}
     {% if missing_document_confirmation %}
       <input type="hidden" name="confirm_missing_document" value="yes">

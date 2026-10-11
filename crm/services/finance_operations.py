@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
+from hashlib import sha256
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
@@ -14,6 +15,8 @@ from crm.models import (
     FinanceOperation,
     FinancialAccount,
     FinancialAuditEvent,
+    Customer,
+    Invoice,
     InvoicePayment,
     InventoryItem,
     InventoryMovement,
@@ -581,6 +584,62 @@ def _check_operation_access(operation, actor):
         raise FinanceOperationError("You do not have permission to use this Finance workflow.")
     if operation.side not in accessible_financial_sides(actor):
         raise FinanceOperationError("You do not have access to the selected business side.")
+    if operation.operation_type == FinanceOperation.TYPE_CUSTOMER_PAYMENT:
+        from crm.services.financial_permissions import can_access_invoice
+        if not operation.invoice_id or not can_access_invoice(actor, operation.invoice):
+            raise FinanceOperationError("You do not have access to this invoice.")
+
+
+def _validate_customer_payment_submission(operation):
+    """Validate and serialize receipt requests without touching settled balances."""
+    from crm.services.payment_reconciliation import customer_payment_reference_exists, is_accounting_period_closed
+    from crm.services.financial_journal import resolve_open_financial_period
+    from crm.services.receivable_accounting import validate_customer_payment_account
+    from crm.services.opportunity_payment_stage import opportunity_for_invoice
+    if not operation.invoice_id or not operation.customer_id:
+        raise FinanceOperationError("Select an invoice and its customer before recording payment.")
+    Customer.objects.select_for_update().get(pk=operation.customer_id)
+    invoice = Invoice.objects.select_for_update().select_related(
+        "opportunity", "quick_costing__opportunity", "costing_header__opportunity", "order__opportunity"
+    ).get(pk=operation.invoice_id)
+    if invoice.is_archived or invoice.status == "cancelled" or invoice.balance <= 0:
+        raise FinanceOperationError("This invoice is archived, cancelled, or already paid.")
+    if operation.total_amount > invoice.balance and not operation.details.get("allow_customer_credit"):
+        raise FinanceOperationError("Payment exceeds the outstanding invoice balance.")
+    if invoice.customer_id != operation.customer_id or invoice.currency != operation.currency:
+        raise FinanceOperationError("Payment customer and currency must match the invoice.")
+    from crm.services.payment_reconciliation import invoice_payment_side
+    if invoice_payment_side(invoice) != operation.side:
+        raise FinanceOperationError("Payment country must match the invoice.")
+    if is_accounting_period_closed(operation.transaction_date, operation.side):
+        raise FinanceOperationError("The accounting month is closed. Ask Finance to review the payment date.")
+    resolve_open_financial_period(operation.transaction_date, operation.side)
+    validate_customer_payment_account(payment_account=operation.to_account, side=operation.side,
+                                      currency=operation.currency, payment_method=operation.payment_method)
+    if customer_payment_reference_exists(operation.customer, operation.reference, exclude_operation=operation):
+        raise FinanceOperationError("A customer payment with this reference already exists.")
+    operation.opportunity = opportunity_for_invoice(invoice)
+    operation.production_order_id = invoice.order_id
+
+
+@transaction.atomic
+def submit_invoice_payment(invoice, payment, *, actor, payment_account, reference, submission_token):
+    """Reuse FinanceOperation as the pending receipt; InvoicePayment means verified money only."""
+    if not submission_token:
+        raise FinanceOperationError("Reload the payment form before submitting payment.")
+    number = "PAY-" + sha256(f"{invoice.pk}:{submission_token}".encode()).hexdigest()[:32]
+    if FinanceOperation.objects.filter(operation_number=number).exists():
+        raise FinanceOperationError("This payment submission was already recorded.")
+    operation = FinanceOperation(
+        operation_number=number, operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+        invoice=invoice, customer=invoice.customer, transaction_date=payment.payment_date,
+        side=payment.side, currency=payment.currency, total_amount=payment.amount,
+        rate_to_cad=((Decimal("1") / payment.rate_to_cad).quantize(Decimal("0.0000000001")) if payment.currency == "BDT" else payment.rate_to_cad),
+        rate_to_bdt=payment.rate_to_bdt, to_account=payment_account,
+        payment_method=payment.payment_method, reference=reference, notes=payment.notes,
+        business_purpose=f"Customer payment for invoice {invoice.invoice_number}",
+    )
+    return submit_operation(operation, actor=actor)
 
 
 def _snapshot_operation_currency(operation, actor):
@@ -665,9 +724,11 @@ def submit_operation(operation, *, actor):
         if not can_access_finance_operation(submitter, operation):
             raise FinanceOperationError("You do not have access to this draft.")
     _check_operation_access(operation, submitter)
+    if operation.operation_type == FinanceOperation.TYPE_CUSTOMER_PAYMENT:
+        _validate_customer_payment_submission(operation)
     operation.operation_number = operation.operation_number or operation_number()
     operation.risk_level = (
-        FinanceOperation.RISK_HIGH if operation.operation_type in HIGH_RISK_TYPES else FinanceOperation.RISK_STANDARD
+        FinanceOperation.RISK_HIGH if operation.operation_type in HIGH_RISK_TYPES or operation.details.get("allow_customer_credit") or operation.duplicate_warning else FinanceOperation.RISK_STANDARD
     )
     _snapshot_operation_currency(operation, submitter)
     operation.state = FinanceOperation.STATE_PENDING
@@ -771,6 +832,9 @@ def review_operation(operation, *, actor, action, notes, confirm_self_approval=F
             "operation_id": locked.pk,
         },
     )
+    if next_state == FinanceOperation.STATE_APPROVED and locked.operation_type == FinanceOperation.TYPE_CUSTOMER_PAYMENT and locked.risk_level == FinanceOperation.RISK_STANDARD:
+        # Verification, posting, invoice projection and opportunity sync share this transaction.
+        return post_operation(locked, actor=reviewer)
     return locked
 
 
@@ -831,7 +895,7 @@ def _post_customer(operation, actor):
             currency=operation.currency,
             side=operation.side,
             payment_method=operation.payment_method or "bank",
-            rate_to_cad=operation.rate_to_cad,
+            rate_to_cad=((Decimal("1") / operation.rate_to_cad).quantize(Decimal("0.000001")) if operation.currency == "BDT" else operation.rate_to_cad),
             rate_to_bdt=operation.rate_to_bdt,
             notes=f"Finance operation {operation.operation_number}; reference {_posting_reference(operation)}",
         )
@@ -1323,6 +1387,9 @@ def post_operation(operation, *, actor):
             ).get(pk=operation.pk)
             if locked.state != FinanceOperation.STATE_APPROVED:
                 raise FinanceOperationError("The operation is no longer awaiting posting.")
+            from crm.services.financial_permissions import accessible_financial_sides
+            if locked.operation_type == FinanceOperation.TYPE_CUSTOMER_PAYMENT and locked.side not in accessible_financial_sides(poster):
+                raise FinanceOperationError("You do not have access to this payment country.")
             source, journal = _dispatch_post(locked, poster)
             source_type = ContentType.objects.get_for_model(source, for_concrete_model=False)
             now = timezone.now()

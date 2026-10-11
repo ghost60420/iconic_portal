@@ -1328,6 +1328,19 @@ class FinanceOperation(FinancialAuditFields):
 
     @property
     def finance_status_label(self):
+        if self.operation_type == self.TYPE_CUSTOMER_PAYMENT:
+            if self.state == self.STATE_POSTED and self.invoice_id:
+                from crm.services.production_payment import invoice_payment_summary
+                return invoice_payment_summary(self.invoice, operation_states=())["payment_status"]
+            return {
+                self.STATE_DRAFT: "PAYMENT RECORDED",
+                self.STATE_PENDING: "AWAITING VERIFICATION",
+                self.STATE_EVIDENCE_REQUIRED: "AWAITING VERIFICATION",
+                self.STATE_APPROVED: "Verified, awaiting posting",
+                self.STATE_POSTED: "Verified and posted",
+                self.STATE_REJECTED: "Rejected",
+                self.STATE_REVERSED: "Reversed",
+            }.get(self.state, self.get_state_display())
         return {
             self.STATE_DRAFT: "Draft",
             self.STATE_PENDING: "Pending Approval",

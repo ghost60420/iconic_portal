@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.contrib.staticfiles import finders
-from django.db import transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import F, Q, Sum
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -69,7 +69,6 @@ from .services.payment_reconciliation import (
     delete_invoice_payment,
     invoice_payment_side,
     is_accounting_period_closed,
-    record_invoice_payment,
 )
 from .services.financial_permissions import accessible_financial_sides, can_view_financial_core, scope_invoices_for_user
 
@@ -336,23 +335,6 @@ def _calc_totals(inv: Invoice) -> None:
 def _latest_cad_to_bdt() -> Decimal:
     row = ExchangeRate.objects.order_by("-updated_at").first()
     return row.cad_to_bdt if row and row.cad_to_bdt else Decimal("0")
-
-
-def _payment_rate_initial(currency: str) -> dict:
-    currency = (currency or "").upper().strip()
-    cad_to_bdt = _latest_cad_to_bdt()
-    data = {"rate_to_cad": Decimal("0"), "rate_to_bdt": Decimal("0")}
-
-    if currency == "CAD":
-        data["rate_to_cad"] = Decimal("1")
-        if cad_to_bdt > 0:
-            data["rate_to_bdt"] = cad_to_bdt
-    elif currency == "BDT":
-        data["rate_to_bdt"] = Decimal("1")
-        if cad_to_bdt > 0:
-            data["rate_to_cad"] = cad_to_bdt
-
-    return data
 
 
 def _invoice_total_cad_equivalent(inv: Invoice) -> dict | None:
@@ -2335,7 +2317,11 @@ def invoice_view(request, pk):
         ),
         pk=pk,
     )
-    if not can_view_invoice_from_approved_quotation(request.user, inv):
+    from crm.services.financial_permissions import can_access_invoice, can_submit_finance_operation
+    from crm.models import FinanceOperation
+    from crm.services.production_payment import invoice_payment_summary
+    can_record_payment = can_submit_finance_operation(request.user, FinanceOperation.TYPE_CUSTOMER_PAYMENT) and can_access_invoice(request.user, inv)
+    if not (can_view_invoice_from_approved_quotation(request.user, inv) or can_record_payment):
         return HttpResponseForbidden("Invoice manager access or an approved quotation invoice is required.")
     payment_context = _invoice_payment_history_context(inv, request.user)
     lifecycle = inv.order_lifecycles.order_by("-updated_at", "-id").first()
@@ -2363,24 +2349,21 @@ def invoice_view(request, pk):
     )
     reference_images = _invoice_reference_images(inv)
 
-    initial = {
-        "payment_date": timezone.localdate(),
-        "currency": inv.currency or "CAD",
-        "side": invoice_payment_side(inv),
-        "production_order": inv.order_id or None,
-    }
-    initial.update(_payment_rate_initial(inv.currency))
+    pending_payments = list(inv.finance_operations.filter(
+        operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+    ).exclude(state__in=[FinanceOperation.STATE_POSTED, FinanceOperation.STATE_REJECTED, FinanceOperation.STATE_REVERSED]))
 
     return render(
         request,
         "crm/invoice/invoice_view.html",
         {
             "invoice": display_invoice,
-            "payment_form": InvoicePaymentForm(invoice=inv, user=request.user, initial=initial),
+            "can_record_payment": can_record_payment,
+            "payment_summary": invoice_payment_summary(inv, operation_states=[row.state for row in pending_payments]),
+            "pending_payments": pending_payments,
             **payment_context,
             "reference_images": reference_images,
             "primary_reference_image": reference_images[0] if reference_images else None,
-            "is_payment_month_closed": is_accounting_period_closed(timezone.localdate(), invoice_payment_side(inv)),
             "can_manage_invoice_costing": can_view_invoice_costing,
             "lifecycle": lifecycle,
             "lifecycle_profit": lifecycle_profit,
@@ -2948,127 +2931,55 @@ def invoice_pdf(request, pk):
 
 
 @login_required
-@user_passes_test(superuser_only)
 @require_http_methods(["GET", "POST"])
 def invoice_payment_add(request, pk):
-    if request.method == "GET":
-        return invoice_view(request, pk)
+    from crm.services.finance_operations import submit_invoice_payment
+    from crm.services.financial_permissions import can_access_invoice, can_submit_finance_operation
+    from crm.models import FinanceOperation
 
     inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    if not can_submit_finance_operation(request.user, FinanceOperation.TYPE_CUSTOMER_PAYMENT) or not can_access_invoice(request.user, inv):
+        return HttpResponseForbidden("Payment entry requires access to this invoice and country.")
+    def payment_screen(form):
+        from crm.services.production_payment import invoice_payment_summary
+        pending = list(inv.finance_operations.filter(operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT).exclude(state__in=[FinanceOperation.STATE_POSTED, FinanceOperation.STATE_REJECTED, FinanceOperation.STATE_REVERSED]))
+        return render(request, "crm/invoice/payment_entry.html", {
+            "invoice": inv,
+            "payment_form": form,
+            "can_record_payment": True,
+            "payment_summary": invoice_payment_summary(inv, operation_states=[row.state for row in pending]),
+            "pending_payments": pending,
+        })
+    if request.method == "GET":
+        initial = {"payment_date": timezone.localdate()}
+        return payment_screen(InvoicePaymentForm(invoice=inv, user=request.user, initial=initial))
     form = InvoicePaymentForm(request.POST, request.FILES, invoice=inv, user=request.user)
-
     if not form.is_valid():
-        payment_history = list(
-            inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
-        )
-        payment_total = sum((_d(payment.amount) for payment in payment_history), Decimal("0"))
-        legacy_paid_amount = _d(inv.paid_amount) - payment_total
-        if legacy_paid_amount < 0:
-            legacy_paid_amount = Decimal("0")
-        can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
-        display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
-        messages.error(request, "Could not save payment. Please fix the errors below.")
-        return render(
-            request,
-            "crm/invoice/invoice_view.html",
-            {
-                "invoice": display_invoice,
-                "payment_form": form,
-                "payment_history": payment_history,
-                "payment_total": payment_total,
-                "legacy_paid_amount": legacy_paid_amount,
-                "is_payment_month_closed": is_accounting_period_closed(timezone.localdate(), invoice_payment_side(inv)),
-                "can_manage_invoice_costing": can_view_invoice_costing,
-                "can_manage_invoices": True,
-                "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
-            },
-        )
-
-    payment_date = form.cleaned_data["payment_date"]
-    side = (form.cleaned_data.get("side") or invoice_payment_side(inv)).upper().strip()
-
-    if is_accounting_period_closed(payment_date, side):
-        form.add_error(
-            "payment_date",
-            f"{side} accounting is closed for {payment_date:%Y-%m}. Open the month before recording this payment.",
-        )
-        messages.error(request, "Payment blocked because the accounting month is closed.")
-        payment_history = list(
-            inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
-        )
-        payment_total = sum((_d(payment.amount) for payment in payment_history), Decimal("0"))
-        legacy_paid_amount = _d(inv.paid_amount) - payment_total
-        if legacy_paid_amount < 0:
-            legacy_paid_amount = Decimal("0")
-        can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
-        display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
-        return render(
-            request,
-            "crm/invoice/invoice_view.html",
-            {
-                "invoice": display_invoice,
-                "payment_form": form,
-                "payment_history": payment_history,
-                "payment_total": payment_total,
-                "legacy_paid_amount": legacy_paid_amount,
-                "is_payment_month_closed": True,
-                "can_manage_invoice_costing": can_view_invoice_costing,
-                "can_manage_invoices": True,
-                "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
-            },
-        )
-
-    payment = form.save(commit=False)
-    payment.side = side
+        return payment_screen(form)
     try:
         with transaction.atomic():
-            result = record_invoice_payment(
-                inv,
-                payment,
-                actor=request.user,
+            operation = submit_invoice_payment(
+                inv, form.save(commit=False), actor=request.user,
                 payment_account=form.cleaned_data["payment_account"],
                 reference=form.cleaned_data["reference"],
-                idempotency_reference=(
-                    f"INVOICE-PAYMENT-FORM:{inv.pk}:{form.cleaned_data['submission_token']}"
-                    if form.cleaned_data.get("submission_token")
-                    else ""
-                ),
+                submission_token=form.cleaned_data["submission_token"],
             )
             receipt = form.cleaned_data.get("receipt")
             if receipt:
-                source_record = result.financial_result["event"] if result.financial_result else result.payment
                 FinancialDocument.objects.create(
-                    source_record=source_record,
-                    file=receipt,
-                    document_type="CUSTOMER_RECEIPT",
-                    description=form.cleaned_data["reference"],
-                    created_by=request.user,
-                    modified_by=request.user,
+                    source_record=operation, file=receipt, document_type="CUSTOMER_RECEIPT",
+                    description=form.cleaned_data["reference"], created_by=request.user, modified_by=request.user,
                 )
-    except (PaymentWriteError, ValidationError) as exc:
-        return _invoice_payment_error_response(request, inv, str(exc), status=409)
+    except (ValueError, ValidationError, IntegrityError) as exc:
+        form.add_error(None, "Payment could not be recorded: " + str(exc))
+        return payment_screen(form)
     except OSError:
-        return _invoice_payment_error_response(
-            request,
-            inv,
-            "The receipt could not be stored. No payment or journal was created.",
-            status=409,
-        )
-    inv = result.invoice
-
-    if inv.payment_status_key == "overpaid":
-        messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
-    else:
-        customer_credit = (result.financial_result or {}).get("customer_credit", Decimal("0"))
-        if result.financial_result is None:
-            messages.success(request, "Payment received and accounting entry saved.")
-        elif customer_credit:
-            messages.success(
-                request,
-                "Payment received and posted to Customer Deposits. It did not recognize revenue while the invoice is draft.",
-            )
-        else:
-            messages.success(request, "Payment received and posted to Financial Core once.")
+        form.add_error("receipt", "The receipt could not be stored. No payment was recorded.")
+        return payment_screen(form)
+    except OperationalError:
+        form.add_error(None, "Payment could not be saved because the database is temporarily unavailable. Review payment history before retrying with this same form.")
+        return payment_screen(form)
+    messages.success(request, "PAYMENT RECORDED — AWAITING VERIFICATION. Finance or CEO must confirm receipt before balances change.")
     return redirect("invoice_view", pk=inv.pk)
 
 

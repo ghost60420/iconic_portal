@@ -61,7 +61,7 @@ def production_payment_requirement(invoice):
     if outstanding < 0:
         outstanding = Decimal("0.00")
 
-    required_percentage = Decimal("0.00")
+    required_percentage = max(Decimal("0"), min(Decimal("100"), decimal_or_zero(invoice.deposit_percentage)))
     required_amount = (total * required_percentage / Decimal("100")).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
     paid_percentage = Decimal("0.0")
     if total > 0:
@@ -89,7 +89,7 @@ def production_payment_requirement(invoice):
         "required_percentage_display": format_percentage(required_percentage),
         "remaining_to_start_display": format_finance_money(remaining_to_start, currency),
         "warning_message": "",
-        "payment_required_for_production": False,
+        "payment_required_for_production": True,
     }
 
     if getattr(invoice, "is_archived", False):
@@ -102,13 +102,17 @@ def production_payment_requirement(invoice):
         base.update(reason="zero_invoice_total", message="Invoice total must be greater than 0 before moving to Production.")
         return base
 
+    if paid <= 0 or paid < required_amount:
+        base.update(reason="deposit_required", message="Verified payment must satisfy the required deposit before production approval.")
+        return base
+
     warning_message = ""
     if outstanding > 0:
         warning_message = (
             "Production is starting with an outstanding invoice balance of "
             f"{base['outstanding_balance_display']}."
         )
-    base.update(allowed=True, reason="invoice_created", message="", warning_message=warning_message)
+    base.update(allowed=True, reason="deposit_confirmed", message="READY FOR PRODUCTION APPROVAL", warning_message=warning_message)
     return base
 
 
@@ -126,4 +130,28 @@ def select_production_payment_invoice(invoices):
 
 def production_payment_progress_for_opportunity(opportunity):
     _invoice, check = select_production_payment_invoice(invoice_queryset_for_opportunity(opportunity))
+    if check.get("invoice"):
+        check.update(invoice_payment_summary(check["invoice"], requirement=check))
     return check
+
+
+def invoice_payment_summary(invoice, *, requirement=None, operation_states=None):
+    """Read-only presentation of the existing settled balance and pending requests."""
+    check = requirement if requirement is not None else production_payment_requirement(invoice)
+    paid = decimal_or_zero(invoice.paid_amount)
+    if paid > 0 and paid >= invoice.total_amount:
+        status = "FULLY PAID"
+    elif check["allowed"]:
+        status = "DEPOSIT CONFIRMED"
+    elif paid > 0:
+        status = "PARTIALLY PAID"
+    else:
+        states = set(operation_states) if operation_states is not None else set(invoice.finance_operations.filter(operation_type="CUSTOMER_PAYMENT").exclude(
+            state__in=["REJECTED", "REVERSED", "POSTED"]
+        ).values_list("state", flat=True))
+        status = "AWAITING VERIFICATION" if states - {"DRAFT"} else "PAYMENT RECORDED" if states else "NOT PAID"
+    return {
+        "payment_status": status,
+        "production_readiness": "READY FOR PRODUCTION APPROVAL" if check["allowed"] else "AWAITING VERIFIED DEPOSIT",
+        "remaining_balance": max(invoice.total_amount - paid, Decimal("0")),
+    }

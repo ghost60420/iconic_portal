@@ -1,4 +1,7 @@
 import shutil
+from uuid import uuid4
+from crm.models import FinanceOperation
+from crm.services.finance_operations import review_operation
 import tempfile
 from datetime import date
 from decimal import Decimal
@@ -21,6 +24,7 @@ from crm.models import (
     Invoice,
     InvoiceFinancialState,
     InvoicePayment,
+    ExchangeRate,
     JournalEntry,
     JournalLine,
     ReceivableAllocation,
@@ -53,6 +57,7 @@ class InvoicePaymentLiveFixTests(TestCase):
         cls.employee.access.can_accounting_ca = False
         cls.employee.access.can_accounting_bd = False
         cls.employee.access.save(update_fields=("can_accounting_ca", "can_accounting_bd", "updated_at"))
+        ExchangeRate.objects.create(cad_to_bdt=Decimal("100"))
         bootstrap_chart_of_accounts(actor=cls.ceo)
         FinancialPeriod.objects.create(
             name="FY 2026",
@@ -140,6 +145,7 @@ class InvoicePaymentLiveFixTests(TestCase):
 
     def payment_data(self, invoice, amount, *, method="e_transfer", account=None, reference="BANK-REF-1"):
         return {
+            "submission_token": uuid4().hex,
             "payment_date": "2026-08-31",
             "amount": str(amount),
             "currency": invoice.currency,
@@ -154,10 +160,14 @@ class InvoicePaymentLiveFixTests(TestCase):
         }
 
     def post_payment(self, invoice, amount, **kwargs):
-        return self.client.post(
+        response = self.client.post(
             reverse("invoice_payment_add", args=[invoice.pk]),
             self.payment_data(invoice, amount, **kwargs),
         )
+        if response.status_code == 302:
+            operation = FinanceOperation.objects.filter(invoice=invoice, state=FinanceOperation.STATE_PENDING).latest("pk")
+            review_operation(operation, actor=self.ceo, action="APPROVE", notes="Bank receipt independently checked.", confirm_self_approval=True)
+        return response
 
     def revenue_credit_total(self):
         return JournalLine.objects.filter(
@@ -177,12 +187,12 @@ class InvoicePaymentLiveFixTests(TestCase):
         )
         for label in ("E Transfer", "PayPal", "Bank Transfer", "Cash"):
             self.assertContains(response, label)
-        self.assertContains(response, "Account / Payment Account")
+        self.assertContains(response, "Receiving account")
         self.assertContains(response, "Reference")
         self.assertContains(response, "Receipt")
         self.assertContains(
             response,
-            "Use this section when recording money received for this specific invoice.",
+            "Record the customer payment once.",
         )
         self.assertFalse(response.context["payment_form"].fields["reference"].required)
         self.assertTrue(response.context["payment_form"]["submission_token"].value())
@@ -218,9 +228,11 @@ class InvoicePaymentLiveFixTests(TestCase):
 
         first = self.client.post(reverse("invoice_payment_add", args=[invoice.pk]), data)
         second = self.client.post(reverse("invoice_payment_add", args=[invoice.pk]), data)
+        operation = FinanceOperation.objects.get(invoice=invoice)
+        review_operation(operation, actor=self.ceo, action="APPROVE", notes="Receipt verified.", confirm_self_approval=True)
 
         self.assertEqual(first.status_code, 302)
-        self.assertEqual(second.status_code, 302)
+        self.assertEqual(second.status_code, 200)
         self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
         self.assertEqual(
             JournalEntry.objects.filter(source_key__startswith="CUSTOMER-RECEIPT:").count(),

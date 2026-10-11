@@ -297,7 +297,17 @@ class ApprovalGateRegressionTests(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, "draft")
 
-    def test_payment_action_logs_paid_status_change(self):
+    @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
+    def test_verified_payment_action_logs_paid_status_change(self):
+        from datetime import date
+        from crm.models import CashBankAccount, FinancialPeriod, FinanceOperation
+        from crm.services.chart_of_accounts import bootstrap_chart_of_accounts, account_by_key
+        from crm.services.finance_operations import review_operation
+        ExchangeRate.objects.create(cad_to_bdt=Decimal("85"))
+        bootstrap_chart_of_accounts(actor=self.ceo)
+        FinancialPeriod.objects.create(name="Test year", start_date=date(2026, 1, 1), end_date=date(2026, 12, 31))
+        account = CashBankAccount.objects.create(name="Test bank", kind="BANK", side="CA", currency="CAD", gl_account=account_by_key("CANADIAN_BANK"))
+
         invoice = Invoice.objects.create(
             customer=self.customer,
             invoice_number="INV-PAID-AUDIT",
@@ -315,9 +325,11 @@ class ApprovalGateRegressionTests(TestCase):
             {
                 "payment_date": "2026-07-08",
                 "amount": "700.00",
+                "payment_account": account.pk,
+                "submission_token": "audit-payment-request",
                 "currency": "CAD",
                 "side": "CA",
-                "payment_method": "bank",
+                "payment_method": "bank_transfer",
                 "rate_to_cad": "1",
                 "rate_to_bdt": "85",
                 "production_order": "",
@@ -326,6 +338,9 @@ class ApprovalGateRegressionTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.paid_amount, Decimal("0"))
+        review_operation(FinanceOperation.objects.get(invoice=invoice), actor=self.ceo, action="APPROVE", notes="Receipt verified.", confirm_self_approval=True)
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, "paid")
         self.assertEqual(invoice.paid_amount, Decimal("700.00"))

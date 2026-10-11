@@ -15,6 +15,7 @@ from crm.models import (
     AccountingMonthClose,
     AccountingMonthLock,
     CRMAuditLog,
+    Customer,
     FinanceOperation,
     Invoice,
     InvoicePayment,
@@ -220,12 +221,18 @@ def record_invoice_payment(
     source_operation=None,
     allow_duplicate_reference=False,
 ) -> RecordedPayment:
+    if getattr(settings, "FINANCIAL_CORE_WRITES_ENABLED", False):
+        from crm.services.financial_permissions import accessible_financial_sides, can_post_finance_operation
+        if not can_post_finance_operation(actor) or invoice_payment_side(invoice) not in accessible_financial_sides(actor):
+            raise PaymentWriteError("Only authorized Finance users or CEO can verify and post payments.")
+    if invoice.customer_id:
+        Customer.objects.select_for_update().get(pk=invoice.customer_id)
     locked = Invoice.objects.select_for_update().select_related(
         "customer", "order", "financial_state"
     ).get(pk=invoice.pk)
     payment.invoice = locked
     payment.side = (payment.side or invoice_payment_side(locked)).upper().strip()
-    payment.created_by = _actor_or_none(actor)
+    payment.created_by = source_operation.created_by if source_operation else _actor_or_none(actor)
     if not payment.production_order_id and locked.order_id:
         payment.production_order = locked.order
 
@@ -309,7 +316,7 @@ def record_invoice_payment(
                 actor=actor,
                 invoices=core_invoices,
                 payment_method=payment.payment_method,
-                rate_to_cad=payment.rate_to_cad,
+                rate_to_cad=(Decimal("1") / payment.rate_to_cad if payment.currency == "BDT" else payment.rate_to_cad),
                 rate_to_bdt=payment.rate_to_bdt,
                 evidence_reference=payment_reference,
                 legacy_payment=payment,
