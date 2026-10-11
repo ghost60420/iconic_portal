@@ -2,6 +2,8 @@
 
 Date: 2026-10-11. Release status: **NOT DEPLOYED**.
 
+This is the implementation-phase snapshot. See [Final payment system preparation](FINAL_PAYMENT_SYSTEM_PREPARATION.md) for the subsequent configuration audit, backup/rollback verification, performance improvements, current tests, and release blockers.
+
 Implementation is isolated in `/Users/hossain/iconic_verified_invoice_payments`, branch `codex/verified-invoice-payments`, based on the inspected live commit `034826bc09c11288b349c448b74764b6281219dc`. The original `/Users/hossain/iconic_portal` checkout has extensive unrelated changes; none were edited, staged, reset, or committed by this task.
 
 ## A. Root cause

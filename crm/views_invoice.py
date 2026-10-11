@@ -39,7 +39,7 @@ from .services.costing_currency import CurrencyConversionError, convert_currency
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
 from .services.order_lifecycle import build_lifecycle_profit_breakdown
 from .services.product_reference_images import reference_images_for_opportunity, reference_images_for_production
-from .services.workflow_visibility import build_workflow_visibility_context
+from .services.workflow_visibility import LIFECYCLE_SELECT_RELATED, build_workflow_visibility_context
 from .services.historical_dates import (
     INVOICE_REPORTING_DATE_ALIAS,
     apply_invoice_reporting_date_filter,
@@ -2314,6 +2314,10 @@ def invoice_view(request, pk):
             "quick_costing__previous_revision",
             "quick_costing__superseded_by",
             "quick_costing__revision_root",
+            "quick_costing__created_by",
+            "quick_costing__opportunity__lead__assigned_to",
+            "opportunity__lead__assigned_to",
+            "order__lead__assigned_to",
         ),
         pk=pk,
     )
@@ -2324,7 +2328,14 @@ def invoice_view(request, pk):
     if not (can_view_invoice_from_approved_quotation(request.user, inv) or can_record_payment):
         return HttpResponseForbidden("Invoice manager access or an approved quotation invoice is required.")
     payment_context = _invoice_payment_history_context(inv, request.user)
-    lifecycle = inv.order_lifecycles.order_by("-updated_at", "-id").first()
+    lifecycle = inv.order_lifecycles.select_related(
+        *LIFECYCLE_SELECT_RELATED,
+        "lead__assigned_to", "opportunity__assigned_to", "opportunity__lead",
+        "production_order__product",
+    ).order_by("-updated_at", "-id").first()
+    if lifecycle:
+        # Reuse the already loaded invoice graph for the read-only profit panel.
+        lifecycle.invoice = inv
     user_can_manage_invoices = can_manage_invoices(request.user)
     can_view_invoice_costing = user_can_manage_invoices and can_manage_invoice_internal_costing(request.user)
     lifecycle_profit = None

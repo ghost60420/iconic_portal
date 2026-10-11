@@ -193,9 +193,12 @@ def _validate_financial_journal(event: ReceivableEvent) -> None:
     if journal.currency != event.currency or journal.journal_date != event.event_date:
         raise ReceivablesLedgerError("Financial journal currency and date must match the receivable event.")
     event_cad_rate = _decimal(event.rate_to_cad)
+    journal_cad_rate = _decimal(journal.rate_to_cad)
     if event.currency == "BDT":
-        event_cad_rate = (Decimal("1") / event_cad_rate).quantize(Decimal("0.0000000001"))
-    if _decimal(journal.rate_to_cad) != event_cad_rate:
+        # Compare in the ledger's stored six-decimal divisor representation.
+        # Inverting its rounded divisor cannot reproduce every Core multiplier.
+        journal_cad_rate = (Decimal("1") / journal_cad_rate).quantize(RATE, rounding=ROUND_HALF_UP)
+    if journal_cad_rate != event_cad_rate:
         raise ReceivablesLedgerError("Financial journal CAD rate must match the receivable event snapshot.")
     if _decimal(journal.rate_to_bdt) != _decimal(event.rate_to_bdt):
         raise ReceivablesLedgerError("Financial journal BDT rate must match the receivable event snapshot.")

@@ -1,9 +1,9 @@
 from decimal import Decimal
 
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q, Subquery
 from django.urls import NoReverseMatch, reverse
 
-from crm.models import CostingHeader, Invoice, OrderLifecycle, ProductionOrder, QuickCosting, Shipment
+from crm.models import CostingHeader, Invoice, Opportunity, OrderLifecycle, ProductionOrder, QuickCosting, Shipment
 from crm.permissions import can_view_internal_costing
 from crm.services.order_lifecycle import lifecycle_timeline_steps
 
@@ -173,6 +173,19 @@ def _first_or_none(queryset):
         return None
 
 
+def _invoice_workflow_relationships(opportunity):
+    """Read invoice workflow counts without joining independent one-to-many rows."""
+    costings = CostingHeader.objects.filter(opportunity_id=OuterRef("pk"))
+    quick_costings = QuickCosting.objects.filter(opportunity_id=OuterRef("pk"))
+    return Opportunity.objects.filter(pk=opportunity.pk).annotate(
+        advanced_count=Subquery(costings.order_by().values("opportunity_id").annotate(total=Count("pk")).values("total")),
+        quick_count=Subquery(quick_costings.order_by().values("opportunity_id").annotate(total=Count("pk")).values("total")),
+        has_active_quick=Exists(quick_costings.exclude(status__in=QuickCosting.INACTIVE_REPORTING_STATUSES)),
+        has_production=Exists(ProductionOrder.objects.filter(opportunity_id=OuterRef("pk"))),
+        has_shipment=Exists(Shipment.objects.filter(opportunity_id=OuterRef("pk"))),
+    ).values("advanced_count", "quick_count", "has_active_quick", "has_production", "has_shipment").first()
+
+
 def find_workflow_lifecycle(
     *,
     lead=None,
@@ -291,7 +304,10 @@ def _hydrate_links(
 
     if lead and not opportunity:
         opportunity = _first_or_none(lead.opportunities.order_by("-created_date", "-id"))
-    if opportunity and not costing:
+    # Invoice detail already has the linked records. One indexed lookup avoids
+    # separate count and empty-relation queries; other screens retain their path.
+    relationships = _invoice_workflow_relationships(opportunity) if invoice and opportunity else None
+    if opportunity and not costing and (relationships is None or relationships["advanced_count"]):
         costing = _first_or_none(
             CostingHeader.objects.select_related("opportunity", "customer")
             .filter(opportunity=opportunity)
@@ -299,15 +315,15 @@ def _hydrate_links(
         )
         quotation = quotation or (costing if _is_quotation(costing) else None)
     if opportunity:
-        advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
-        if not quick_costing:
+        advanced_costing_count = (relationships["advanced_count"] or 0) if relationships is not None else CostingHeader.objects.filter(opportunity=opportunity).count()
+        if not quick_costing and (relationships is None or relationships["has_active_quick"]):
             quick_costing = _first_or_none(
                 QuickCosting.objects.select_related("opportunity", "created_by")
                 .filter(opportunity=opportunity)
                 .exclude(status__in=QuickCosting.INACTIVE_REPORTING_STATUSES)
                 .order_by("-revision_number", "-updated_at", "-id")
             )
-        quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
+        quick_costing_count = (relationships["quick_count"] or 0) if relationships is not None else QuickCosting.objects.filter(opportunity=opportunity).count()
         if _is_quotation(quick_costing):
             quotation = _latest_by_updated_at(quotation, quick_costing)
     if quick_costing and not invoice and not getattr(quick_costing, "_workflow_invoice_resolved", False):
@@ -320,7 +336,7 @@ def _hydrate_links(
             costing.invoices.select_related("order", "customer", "costing_header")
             .order_by("-created_at", "-id")
         )
-    if opportunity and not production_order:
+    if opportunity and not production_order and (relationships is None or relationships["has_production"]):
         production_order = _first_or_none(
             ProductionOrder.objects.select_related("lead", "opportunity", "customer", "costing_header")
             .filter(opportunity=opportunity)
@@ -338,7 +354,7 @@ def _hydrate_links(
             production_order.shipments.select_related("order", "opportunity", "customer")
             .order_by("-ship_date", "-created_at", "-id")
         )
-    if opportunity and not shipment:
+    if opportunity and not shipment and (relationships is None or relationships["has_shipment"]):
         shipment = _first_or_none(
             Shipment.objects.select_related("order", "opportunity", "customer")
             .filter(opportunity=opportunity)

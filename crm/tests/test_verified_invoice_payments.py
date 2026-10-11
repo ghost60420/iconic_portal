@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from crm.tests.test_invoice_payment_live_fix import InvoicePaymentLiveFixTests
+from crm.tests import test_invoice_payment_live_fix
 from crm.models import FinanceOperation, InvoicePayment, JournalEntry, JournalLine, Opportunity, ProductionOrder, FinancialPeriod
 from crm.services.finance_operations import review_operation, FinanceOperationError
 from crm.services.production_payment import production_payment_requirement, invoice_payment_summary
@@ -18,10 +18,10 @@ from crm.services.payment_reconciliation import record_invoice_payment, PaymentW
 
 @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True, FINANCIAL_CORE_REPORTING_ACTIVE=True)
 class VerifiedInvoicePaymentTests(TestCase):
-    setUpTestData = classmethod(InvoicePaymentLiveFixTests.setUpTestData.__func__)
-    invoice = InvoicePaymentLiveFixTests.invoice
-    issued_invoice = InvoicePaymentLiveFixTests.issued_invoice
-    payment_data = InvoicePaymentLiveFixTests.payment_data
+    setUpTestData = classmethod(test_invoice_payment_live_fix.InvoicePaymentLiveFixTests.setUpTestData.__func__)
+    invoice = test_invoice_payment_live_fix.InvoicePaymentLiveFixTests.invoice
+    issued_invoice = test_invoice_payment_live_fix.InvoicePaymentLiveFixTests.issued_invoice
+    payment_data = test_invoice_payment_live_fix.InvoicePaymentLiveFixTests.payment_data
 
     def setUp(self):
         self.client.force_login(self.ceo)
