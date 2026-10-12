@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
@@ -10,7 +11,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from crm.tests import test_invoice_payment_live_fix
-from crm.models import FinanceOperation, InvoicePayment, JournalEntry, JournalLine, Opportunity, ProductionOrder, FinancialPeriod
+from crm.models import FinanceOperation, FinancialAuditEvent, InvoicePayment, JournalEntry, JournalLine, Opportunity, ProductionOrder, FinancialPeriod
 from crm.services.finance_operations import review_operation, FinanceOperationError
 from crm.services.production_payment import production_payment_requirement, invoice_payment_summary
 from crm.services.payment_reconciliation import record_invoice_payment, PaymentWriteError
@@ -115,6 +116,63 @@ class VerifiedInvoicePaymentTests(TestCase):
         self.assertEqual(payment.accounting_entry.amount_cad, Decimal('5.00'))
         totals = payment.receivable_event.financial_journal.lines.aggregate(debit=Sum('cad_debit'), credit=Sum('cad_credit'))
         self.assertEqual(totals, {'debit': Decimal('5'), 'credit': Decimal('5')})
+
+    def test_october_country_periods_post_all_receipt_methods_with_verification_audit(self):
+        FinancialPeriod.objects.update(end_date=date(2026, 9, 30))
+        periods = {
+            side: FinancialPeriod.objects.create(
+                name=f'October 2026 {side}', start_date=date(2026, 10, 1),
+                end_date=date(2026, 10, 31), side=side, created_by=self.ceo,
+            )
+            for side in ('CA', 'BD')
+        }
+        finance = self.finance_user()
+        cases = (
+            ('e_transfer', self.ca_bank), ('paypal', self.paypal),
+            ('bank_transfer', self.ca_bank), ('cash', self.cash),
+            ('bank_transfer', self.bd_bank),
+        )
+        for index, (method, account) in enumerate(cases):
+            with self.subTest(method=method, country=account.side):
+                invoice = self.invoice(
+                    f'OCTOBER-METHOD-{index}', total='100',
+                    side=account.side, currency=account.currency,
+                )
+                data = self.payment_data(invoice, '100', method=method, account=account, reference=f'OCTOBER-{index}')
+                data['payment_date'] = '2026-10-12'
+                response = self.client.post(reverse('invoice_payment_add', args=[invoice.pk]), data)
+                self.assertEqual(response.status_code, 302)
+                operation = FinanceOperation.objects.get(invoice=invoice)
+                invoice.refresh_from_db()
+                self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+                self.assertEqual(invoice.paid_amount, 0)
+                verifier = finance if account.side == 'CA' else self.ceo
+                posted = self.verify(operation, verifier)
+                invoice.refresh_from_db()
+                payment = InvoicePayment.objects.get(invoice=invoice)
+                journal = payment.receivable_event.financial_journal
+                self.assertEqual(journal.period_id, periods[account.side].pk)
+                self.assertEqual(journal.side, account.side)
+                self.assertEqual(journal.lines.get(native_debit__gt=0).account_id, account.gl_account_id)
+                self.assertEqual(invoice.paid_amount, Decimal('100'))
+                self.assertEqual(invoice.balance, 0)
+                self.assertEqual(posted.approved_by_id, verifier.pk)
+                self.assertIsNotNone(posted.approved_at)
+                self.assertEqual(posted.primary_journal_id, journal.pk)
+                self.assertTrue(FinancialAuditEvent.objects.filter(
+                    content_type__model='financeoperation', object_id=posted.pk,
+                    action='APPROVED', actor=verifier,
+                ).exists())
+                totals = journal.lines.aggregate(**{
+                    field: Sum(field) for field in (
+                        'native_debit', 'native_credit', 'cad_debit', 'cad_credit', 'bdt_debit', 'bdt_credit',
+                    )
+                })
+                for currency in ('native', 'cad', 'bdt'):
+                    self.assertEqual(totals[f'{currency}_debit'], totals[f'{currency}_credit'])
+                self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
+        self.assertEqual(JournalEntry.objects.filter(source_key__startswith='CUSTOMER-RECEIPT:').count(), len(cases))
+        self.assertFalse(ProductionOrder.objects.exists())
 
     def test_duplicate_verification_cannot_create_second_journal(self):
         invoice = self.invoice('VERIFY-DUP')

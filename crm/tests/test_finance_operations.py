@@ -1212,6 +1212,54 @@ class FinanceOperationsTests(TestCase):
         self.assertContains(detail, "1 CAD = 88 BDT")
         self.assertContains(detail, "CAD 5.00")
 
+    def test_october_transfer_closed_destination_rolls_back_every_journal(self):
+        self.period.end_date = date(2026, 9, 30)
+        self.period.save(update_fields=['end_date'])
+        periods = {
+            side: FinancialPeriod.objects.create(
+                name=f'October 2026 {side}', start_date=date(2026, 10, 1),
+                end_date=date(2026, 10, 31), side=side, created_by=self.approver,
+                state=FinancialPeriod.STATE_CLOSED if side == 'BD' else FinancialPeriod.STATE_OPEN,
+            )
+            for side in ('CA', 'BD')
+        }
+        form = self.transfer_form(
+            direction=TRANSFER_TYPE_CA_TO_BD, source=self.bank, destination=self.bd_bank,
+            amount_sent='1000', amount_received='88000', fee='5',
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        draft = form.build_operation()
+        draft.transaction_date = date(2026, 10, 12)
+        operation = submit_operation(draft, actor=self.submitter)
+        operation = review_operation(operation, actor=self.approver, action='APPROVE', notes='Amounts independently verified.')
+        before = (JournalEntry.objects.count(), JournalLine.objects.count())
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            with self.assertRaisesRegex(ValueError, 'October 2026 BD.*closed'):
+                post_operation(operation, actor=self.approver)
+        operation.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_APPROVED)
+        self.assertIsNone(operation.primary_journal_id)
+        self.assertEqual((JournalEntry.objects.count(), JournalLine.objects.count()), before)
+        self.assertTrue(FinancialAuditEvent.objects.filter(
+            content_type__model='financeoperation', object_id=operation.pk, action='POST_BLOCKED',
+        ).exists())
+
+        # Opening only this fixture period represents a separately authorized configuration correction.
+        periods['BD'].state = FinancialPeriod.STATE_OPEN
+        periods['BD'].save(update_fields=['state'])
+        with override_settings(FINANCIAL_CORE_WRITES_ENABLED=True):
+            posted = post_operation(operation, actor=self.approver)
+            with self.assertRaises(FinanceOperationError):
+                post_operation(posted, actor=self.approver)
+        journals = JournalEntry.objects.filter(source_key__startswith=f'FINANCE-OPERATION:{operation.pk}')
+        self.assertEqual(journals.count(), 3)
+        for journal in journals.prefetch_related('lines'):
+            self.assertEqual(journal.period_id, periods[journal.side].pk)
+            for currency in ('native', 'cad', 'bdt'):
+                debit = sum(getattr(line, f'{currency}_debit') for line in journal.lines.all())
+                credit = sum(getattr(line, f'{currency}_credit') for line in journal.lines.all())
+                self.assertEqual(debit, credit)
+
     def test_bangladesh_to_canada_preserves_reverse_effective_rate(self):
         form = self.transfer_form(
             direction=TRANSFER_TYPE_BD_TO_CA,

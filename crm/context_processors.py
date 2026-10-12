@@ -79,15 +79,18 @@ def platform_record_tools(request):
         if not descriptor:
             return payload
         content_type = ContentType.objects.get_for_model(descriptor["record"])
+        is_favorite = descriptor.get("is_favorite")
+        if is_favorite is None:
+            is_favorite = FavoriteRecord.objects.filter(
+                user=user,
+                content_type=content_type,
+                object_id=descriptor["record"].pk,
+            ).exists()
         payload["crm_current_record"] = {
                 "type_key": next(key for key, config in RECORD_CONFIGS.items() if config.model is descriptor["record"].__class__),
                 "object_id": descriptor["record"].pk,
                 "label": descriptor["record_label"],
-                "is_favorite": FavoriteRecord.objects.filter(
-                    user=user,
-                    content_type=content_type,
-                    object_id=descriptor["record"].pk,
-                ).exists(),
+                "is_favorite": is_favorite,
                 "is_archived": bool(getattr(descriptor["record"], "is_archived", False)),
                 "can_archive": can_manage_archives(user) and hasattr(descriptor["record"], "is_archived"),
             }

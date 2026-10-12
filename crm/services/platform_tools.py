@@ -120,7 +120,7 @@ def record_descriptor(user, record_type, object_id):
     return _descriptor_for_record(permitted_record(user, record_type, object_id), config)
 
 
-def remember_permitted_record(request, record_type, record):
+def remember_permitted_record(request, record_type, record, *, is_favorite=None):
     """Reuse a record that the view already loaded through its scoped queryset.
 
     This request-only hint is for display/navigation, never write authorization.
@@ -134,6 +134,8 @@ def remember_permitted_record(request, record_type, record):
         _descriptor_for_record(record, config)
         if can_access_operations_module(user, config.module) else None
     )
+    if descriptor is not None and is_favorite is not None:
+        descriptor["is_favorite"] = bool(is_favorite)
     request._crm_record_descriptor = ((user.pk, record_type, str(record.pk)), descriptor)
 
 

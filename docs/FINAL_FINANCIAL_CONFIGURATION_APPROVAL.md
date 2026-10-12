@@ -1,19 +1,19 @@
-# Financial configuration awaiting CEO approval
+# Financial configuration: authorized periods and pending account confirmation
 
-Prepared 12 October 2026 for `codex/final-crm-integration`, based on commit `5e735c1` and a read-only audit of the production backup captured at 22:08:59 UTC. No period, receiving account, ledger account, opening balance, or historical transaction was changed.
+Updated 12 October 2026 for `codex/final-crm-integration`, following explicit CEO authorization in the final financial integration request. October periods were opened at 22:48:59 UTC through the existing models and Financial Core audit helper. No receiving account, ledger account, opening balance, historical period, payment, or journal was changed. The account findings below were rechecked against the post-change production backup.
 
 ## October periods
 
-Existing periods are August 2026 and September 2026, both OPEN and global (`side=''`). The audit found **zero overlapping period pairs** and **zero October conflicts** for either Canada or Bangladesh. October is missing.
+August 2026 and September 2026 remain OPEN and global (`side=''`), unchanged. The audit found **zero overlapping period pairs** and **zero October conflicts** before opening the two country-specific periods. Country-specific CA and BD periods can share dates because they apply to separate countries.
 
-The exact proposal for CEO authorization is:
+The authorized configuration is now applied:
 
-| Name | Country / side | Start | End | Proposed state after authorization |
+| Name | Country / side | Start | End | Current state |
 | --- | --- | --- | --- | --- |
 | October 2026 — Canada | CA | 2026-10-01 | 2026-10-31 | OPEN |
 | October 2026 — Bangladesh | BD | 2026-10-01 | 2026-10-31 | OPEN |
 
-Neither period has been created or opened. Record the authorizing CEO's identity, approval date/time, and approval reference before applying configuration through the existing audited Financial Core workflow. Recheck overlaps immediately before creating each period. Do not reopen any closed period or change August/September records. Code deployment is a separate authorization.
+Canada is period **3**, Bangladesh is period **4**. Approval actor is existing CEO/Super Admin user **11 (Hossain)**. Immutable Financial Core audit events **29** and **30** record action `PERIOD_OPENED`, the exact configuration, execution timestamp, and reference `CEO-AUTH-OCT2026-CA-BD-20261012`. Both periods and audits were committed in one transaction after checking all existing periods/audits and fingerprints of the other 207 application tables. All historical rows remained unchanged. All 62 country/day combinations resolve correctly through the existing posting-period service. No closed period was reopened. Code deployment still requires separate final authorization.
 
 ## Receiving account findings
 
@@ -41,12 +41,12 @@ Bank details already present in invoice settings must be confirmed against the a
 
 ## Exact outstanding information
 
-1. Named CEO authorization for the two October periods listed above.
-2. Confirmation that receiving record 1 is the Canadian receiving bank and supports E Transfer.
-3. Whether receiving record 2 is a duplicate or a distinct instrument, and its approved asset GL if distinct.
-4. Confirmed Bangladesh bank name/instrument and masked reference for GL 1030.
-5. Confirmed PayPal instrument, country, settlement currency, and mapping to GL 1040.
-6. Confirmed cash country/currency/custodian and mapping to GL 1010; approved separate asset mappings if cash is required in both CA and BD.
-7. A separately authorized review plan for record 3's historical transfers. This release will not amend those historical records.
+1. Confirmation that receiving record 1 is the Canadian receiving bank and supports E Transfer.
+2. Whether receiving record 2 is a duplicate or a distinct instrument, and its approved asset GL if distinct.
+3. Confirmed Bangladesh bank name/instrument and masked reference for GL 1030.
+4. Confirmed PayPal instrument, country, settlement currency, and mapping to GL 1040.
+5. Confirmed cash country/currency/custodian and mapping to GL 1010; approved separate asset mappings if cash is required in both CA and BD.
 
-Until these items are resolved and the resulting configuration passes the existing validations, the release is **NOT READY FOR DEPLOYMENT**. No configuration or deployment authorization is inferred from a request to complete preparation.
+Any accounting review of record 3's historical transfers is a separate follow-up. This release will not amend those records, and that review is not a prerequisite to configuring other confirmed valid receiving instruments.
+
+Until account details are confirmed and the resulting configuration passes the existing validations, the release is **NOT READY FOR FINAL DEPLOYMENT**. The explicit October-period authorization has been applied; it is not authorization to guess receiving-account ownership/mappings or to deploy code.

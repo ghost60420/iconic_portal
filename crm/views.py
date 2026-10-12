@@ -33,7 +33,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, InventoryMovement, InventoryReorder, ProductionOrderMaterial
+from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, InventoryMovement, InventoryReorder, ProductionOrderMaterial, FavoriteRecord
 
 from .services.costing import build_variance_report, calculate_cost_sheet
 from .services.costing_currency import (
@@ -775,28 +775,29 @@ def _calendar_link_payload():
 
 
 def _opportunity_linked_record_labels(opportunity):
-    labels = []
-    if ProductionOrder.objects.filter(opportunity=opportunity).exists():
-        labels.append("production orders")
-    if Invoice.objects.filter(
-        Q(order__opportunity=opportunity)
-        | Q(costing_header__opportunity=opportunity)
-        | Q(quick_costing__opportunity=opportunity)
-    ).exists():
-        labels.append("invoices")
-    if CostingHeader.objects.filter(opportunity=opportunity).exists() or CostSheet.objects.filter(opportunity=opportunity).exists() or QuickCosting.objects.filter(opportunity=opportunity).exists():
-        labels.append("costings")
-    if Shipment.objects.filter(opportunity=opportunity).exists():
-        labels.append("shipments")
-    if OpportunityTask.objects.filter(opportunity=opportunity).exists():
-        labels.append("tasks")
-    if OpportunityFile.objects.filter(opportunity=opportunity).exists() or OpportunityDocument.objects.filter(opportunity=opportunity).exists():
-        labels.append("files")
-    if LeadComment.objects.filter(opportunity=opportunity).exists():
-        labels.append("comments")
-    if Event.objects.filter(opportunity=opportunity).exists():
-        labels.append("calendar events")
-    return labels
+    # Keep the deletion guard's existing relationships and label order while
+    # checking them in one query, including opportunities with no linked rows.
+    relationships = {
+        "production_orders": ("production orders", ProductionOrder.objects.filter(opportunity=OuterRef("pk"))),
+        "invoices": ("invoices", Invoice.objects.filter(
+            Q(order__opportunity=OuterRef("pk"))
+            | Q(costing_header__opportunity=OuterRef("pk"))
+            | Q(quick_costing__opportunity=OuterRef("pk"))
+        )),
+        "advanced_costings": ("costings", CostingHeader.objects.filter(opportunity=OuterRef("pk"))),
+        "cost_sheets": ("costings", CostSheet.objects.filter(opportunity=OuterRef("pk"))),
+        "quick_costings": ("costings", QuickCosting.objects.filter(opportunity=OuterRef("pk"))),
+        "shipments": ("shipments", Shipment.objects.filter(opportunity=OuterRef("pk"))),
+        "tasks": ("tasks", OpportunityTask.objects.filter(opportunity=OuterRef("pk"))),
+        "files": ("files", OpportunityFile.objects.filter(opportunity=OuterRef("pk"))),
+        "documents": ("files", OpportunityDocument.objects.filter(opportunity=OuterRef("pk"))),
+        "comments": ("comments", LeadComment.objects.filter(opportunity=OuterRef("pk"))),
+        "events": ("calendar events", Event.objects.filter(opportunity=OuterRef("pk"))),
+    }
+    flags = Opportunity.objects.filter(pk=opportunity.pk).annotate(
+        **{f"linked_{key}": Exists(queryset) for key, (_, queryset) in relationships.items()}
+    ).values(*(f"linked_{key}" for key in relationships)).first() or {}
+    return list(dict.fromkeys(label for key, (label, _) in relationships.items() if flags.get(f"linked_{key}")))
 
 
 def _customer_linked_record_labels(customer):
@@ -4227,12 +4228,19 @@ def _opportunity_costing_status(advanced_count, quick_count):
 def opportunity_detail(request, pk):
     opportunity = get_object_or_404(
         scope_sales_opportunities(
-            _with_opportunity_kpi_value(Opportunity.objects.select_related("lead", "lead__assigned_to", "customer", "assigned_to")),
+            _with_opportunity_kpi_value(Opportunity.objects.select_related("lead", "lead__assigned_to", "customer", "assigned_to")).annotate(
+                _current_user_favorite=Exists(FavoriteRecord.objects.filter(
+                    user_id=request.user.pk,
+                    content_type__app_label=Opportunity._meta.app_label,
+                    content_type__model=Opportunity._meta.model_name,
+                    object_id=OuterRef("pk"),
+                )),
+            ),
             request.user,
         ),
         pk=pk,
     )
-    remember_permitted_record(request, "opportunity", opportunity)
+    remember_permitted_record(request, "opportunity", opportunity, is_favorite=opportunity._current_user_favorite)
     lead = opportunity.lead
     can_view_internal_financials = can_view_lifecycle_profit(request.user)
 
@@ -4257,9 +4265,6 @@ def opportunity_detail(request, pk):
         ).order_by("-uploaded_at")
     else:
         opportunity_documents = OpportunityDocument.objects.none()
-    active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
-        "-updated_at", "-id"
-    ).first()
     costing_header = CostingHeader.objects.filter(opportunity=opportunity).annotate(
         opportunity_costing_count=models.Window(expression=Count("pk")),
     ).order_by(
@@ -4285,7 +4290,7 @@ def opportunity_detail(request, pk):
     # Loaded costings already prove this record cannot be deleted. Avoid a
     # second set of linked-record existence queries just to hide that button.
     opportunity_can_hard_delete = not (
-        quick_costings or costing_header or active_cost_sheet
+        quick_costings or costing_header
         or _opportunity_linked_record_labels(opportunity)
     )
     task_assignee_options = [
