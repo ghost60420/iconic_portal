@@ -433,9 +433,9 @@
             </article>
           {% endif %}
           <article>
-            <span>Latest quote status</span>
-            <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No quote yet{% endif %}</strong>
-            <small>{% if costing_header %}Updated {{ costing_header.updated_at|date:"Y-m-d H:i" }}{% elif can_view_internal_financials %}Create costing to generate quote outputs.{% else %}Quote outputs are managed by approved users.{% endif %}</small>
+            <span>Production quotation status</span>
+            <strong>{% if production_readiness.source.quotation_number %}{% if production_readiness.quotation_approved %}Approved{% else %}Pending{% endif %}{% else %}No quote yet{% endif %}</strong>
+            <small>{% if production_readiness.source.quotation_number %}{{ production_readiness.source.quotation_number }}{% if production_readiness.source.quoted_at %} · {{ production_readiness.source.quoted_at|date:"Y-m-d H:i" }}{% endif %}{% elif can_view_internal_financials %}Create costing to generate quote outputs.{% else %}Quote outputs are managed by approved users.{% endif %}</small>
           </article>
           {% if can_view_internal_financials %}
             <article>

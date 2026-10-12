@@ -97,10 +97,8 @@ def record_label(record, config):
     return next((part for part in parts if part), f"{config.record_type} #{record.pk}")[:220]
 
 
-def record_descriptor(user, record_type, object_id):
-    config = RECORD_CONFIGS.get(record_type)
-    record = permitted_record(user, record_type, object_id)
-    if not config or not record:
+def _descriptor_for_record(record, config):
+    if not record:
         return None
     try:
         target_url = reverse(config.detail_route, args=[record.pk])
@@ -115,13 +113,43 @@ def record_descriptor(user, record_type, object_id):
     }
 
 
+def record_descriptor(user, record_type, object_id):
+    config = RECORD_CONFIGS.get(record_type)
+    if not config:
+        return None
+    return _descriptor_for_record(permitted_record(user, record_type, object_id), config)
+
+
+def remember_permitted_record(request, record_type, record):
+    """Reuse a record that the view already loaded through its scoped queryset.
+
+    This request-only hint is for display/navigation, never write authorization.
+    The module permission is still checked here; callers must enforce row scope.
+    """
+    config = RECORD_CONFIGS.get(record_type)
+    if not config or not isinstance(record, config.model):
+        return
+    user = request.user
+    descriptor = (
+        _descriptor_for_record(record, config)
+        if can_access_operations_module(user, config.module) else None
+    )
+    request._crm_record_descriptor = ((user.pk, record_type, str(record.pk)), descriptor)
+
+
 def descriptor_from_request(request):
     match = getattr(request, "resolver_match", None)
     record_type = ROUTE_RECORD_TYPES.get(getattr(match, "url_name", ""))
     object_id = (getattr(match, "kwargs", {}) or {}).get("pk")
     if not record_type or not object_id:
         return None
-    return record_descriptor(request.user, record_type, object_id)
+    key = (request.user.pk, record_type, str(object_id))
+    cached = getattr(request, "_crm_record_descriptor", None)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    descriptor = record_descriptor(request.user, record_type, object_id)
+    request._crm_record_descriptor = (key, descriptor)
+    return descriptor
 
 
 def toggle_favorite(user, record_type, object_id):
@@ -147,16 +175,18 @@ def track_recent_record(user, descriptor):
     if not descriptor:
         return
     content_type = ContentType.objects.get_for_model(descriptor["record"])
-    RecentlyViewedRecord.objects.update_or_create(
-        user=user,
-        content_type=content_type,
-        object_id=descriptor["record"].pk,
-        defaults={
-            "record_type": descriptor["record_type"],
-            "record_label": descriptor["record_label"],
-            "target_url": descriptor["target_url"],
-        },
-    )
+    lookup = {"user": user, "content_type": content_type, "object_id": descriptor["record"].pk}
+    values = {
+        "record_type": descriptor["record_type"],
+        "record_label": descriptor["record_label"],
+        "target_url": descriptor["target_url"],
+        "viewed_at": timezone.now(),
+    }
+    # Most detail requests revisit an existing record. A single atomic UPDATE
+    # preserves its timestamp/label without a read and savepoint. The existing
+    # unique constraint and update_or_create handle concurrent first visits.
+    if not RecentlyViewedRecord.objects.filter(**lookup).update(**values):
+        RecentlyViewedRecord.objects.update_or_create(**lookup, defaults=values)
     stale_ids = list(
         RecentlyViewedRecord.objects.filter(user=user).order_by("-viewed_at", "-id").values_list("id", flat=True)[20:]
     )

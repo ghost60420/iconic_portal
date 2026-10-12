@@ -61,6 +61,13 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertNotContains(response, "READY FOR PRODUCTION")
         self.assertFalse(ProductionOrder.objects.filter(opportunity=self.opportunity).exists())
 
+    def test_commercial_quote_summary_recognizes_the_approved_quick_quotation(self):
+        response = self.detail()
+        self.assertContains(response, "Production quotation status")
+        self.assertContains(response, "QQT-READINESS")
+        self.assertNotContains(response, "No quote yet")
+        self.assertTrue(response.context["production_readiness"]["quotation_approved"])
+
     def test_sales_sees_blockers_without_ceo_or_finance_actions(self):
         response = self.detail(self.sales)
         self.assertContains(response, "Blocking production")

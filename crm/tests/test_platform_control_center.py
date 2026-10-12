@@ -2,10 +2,10 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from crm.forms_employee import EmployeeProfileForm
 from crm.models import (
@@ -24,7 +24,12 @@ from crm.models import (
 )
 from crm.permissions import role_flag_decision
 from crm.services.operations_permissions import can_access_operations_module
-from crm.services.platform_tools import record_descriptor, track_recent_record
+from crm.services.platform_tools import (
+    descriptor_from_request,
+    record_descriptor,
+    remember_permitted_record,
+    track_recent_record,
+)
 
 
 class PlatformControlCenterTests(TestCase):
@@ -144,6 +149,35 @@ class PlatformControlCenterTests(TestCase):
         restricted = client.get(reverse("global_search_suggestions"), {"q": "Restricted Customer"})
         result_names = [row["name"] for group in restricted.json()["groups"] for row in group["rows"]]
         self.assertNotIn("Restricted Customer", result_names)
+
+    def test_scoped_detail_reuses_navigation_descriptor_only_for_the_same_request_record(self):
+        url = reverse("opportunity_detail", args=[self.opportunity.pk])
+        request = RequestFactory().get(url)
+        request.user = self.sales
+        request.resolver_match = resolve(url)
+        remember_permitted_record(request, "opportunity", self.opportunity)
+        with self.assertNumQueries(0):
+            self.assertEqual(descriptor_from_request(request)["record"], self.opportunity)
+            self.assertEqual(descriptor_from_request(request)["record"], self.opportunity)
+
+        restricted = Opportunity.objects.create(lead=self.other_lead, assigned_to=self.other)
+        request.resolver_match = resolve(reverse("opportunity_detail", args=[restricted.pk]))
+        self.assertIsNone(descriptor_from_request(request))
+        request.resolver_match = resolve(url)
+        request.user = self.other
+        self.assertIsNone(descriptor_from_request(request))
+
+    def test_repeat_recent_view_updates_one_row_with_two_queries(self):
+        descriptor = record_descriptor(self.ceo, "customer", self.customer.pk)
+        track_recent_record(self.ceo, descriptor)
+        first = RecentlyViewedRecord.objects.get(user=self.ceo)
+        descriptor["record_label"] = "Updated customer label"
+        with self.assertNumQueries(2):
+            track_recent_record(self.ceo, descriptor)
+        last = RecentlyViewedRecord.objects.get(user=self.ceo)
+        self.assertEqual(last.pk, first.pk)
+        self.assertEqual(last.record_label, "Updated customer label")
+        self.assertGreater(last.viewed_at, first.viewed_at)
 
     def test_uncovered_records_archive_and_restore_without_deletion(self):
         client = Client()

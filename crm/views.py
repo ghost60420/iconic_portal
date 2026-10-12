@@ -163,7 +163,7 @@ from .services.local_sewing import (
     summarize_production_business_models,
 )
 from .services.audit_log import model_snapshot, schedule_audit
-from .services.platform_tools import can_manage_archives, dashboard_personalization
+from .services.platform_tools import can_manage_archives, dashboard_personalization, remember_permitted_record
 from .services.chatter_mentions import notify_chatter_mentions
 from .services.chatter_permissions import (
     can_access_chatter_record,
@@ -4232,6 +4232,7 @@ def opportunity_detail(request, pk):
         ),
         pk=pk,
     )
+    remember_permitted_record(request, "opportunity", opportunity)
     lead = opportunity.lead
     can_view_internal_financials = can_view_lifecycle_profit(request.user)
 
@@ -4296,7 +4297,13 @@ def opportunity_detail(request, pk):
     ]
 
     # Comments and activity
-    comments = _chatter_for_opportunity(opportunity, request.user)
+    # The initial lookup already applies the same opportunity ownership scope
+    # used by chatter. Retain module authorization without reading it again.
+    comments = (
+        _chatter_for_opportunity(opportunity)
+        if can_access_operations_module(request.user, "opportunities")
+        else LeadComment.objects.none()
+    )
 
     activities = LeadActivity.objects.filter(lead=lead).order_by("-created_at") if lead else LeadActivity.objects.none()
 
