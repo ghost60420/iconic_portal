@@ -126,18 +126,19 @@ from .services.opportunity_payment_stage import (
     opportunity_has_outstanding_invoice,
     outstanding_balance_summary_for_opportunity,
 )
-from .services.production_payment import production_payment_progress_for_opportunity
+from .services.production_payment import invoice_queryset_for_opportunity, production_payment_progress_for_opportunity
 from .services.production_approval import (
     ProductionApprovalError,
     approve_production_release,
     production_readiness,
 )
-from .services.financial_permissions import accessible_financial_sides, can_review_finance_operation
+from .services.financial_permissions import accessible_financial_sides, can_access_invoice, can_review_finance_operation, can_submit_finance_operation
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
     can_access_operations_module,
     can_approve_costing,
+    can_release_production,
     can_claim_sales_lead,
     can_manage_all_sales_records,
     can_view_local_sewing_financials,
@@ -4258,7 +4259,9 @@ def opportunity_detail(request, pk):
     active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
         "-updated_at", "-id"
     ).first()
-    costing_header = CostingHeader.objects.filter(opportunity=opportunity).order_by(
+    costing_header = CostingHeader.objects.filter(opportunity=opportunity).annotate(
+        opportunity_costing_count=models.Window(expression=Count("pk")),
+    ).order_by(
         "-updated_at", "-id"
     ).first()
     quick_costings = list(
@@ -4272,7 +4275,7 @@ def opportunity_detail(request, pk):
     ] if can_view_internal_financials else []
     latest_quick_costing_row = quick_costing_rows[0] if quick_costing_rows else None
     reporting_quick_costing_row = _preferred_quick_costing_opportunity_row(quick_costing_rows)
-    advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
+    advanced_costing_count = costing_header.opportunity_costing_count if costing_header else 0
     quick_costing_count = len(quick_costings)
     opportunity_costing_status = _opportunity_costing_status(
         advanced_costing_count,
@@ -4612,19 +4615,13 @@ def opportunity_detail(request, pk):
                 ai_messages_qs = conversation.messages.order_by("created_at")
 
     # Production totals
-    prod_orders_qs = ProductionOrder.objects.filter(opportunity=opportunity)
-    prod_totals = prod_orders_qs.aggregate(
-        total_qty=Sum("qty_total"),
-        total_reject=Sum("qty_reject"),
-        **({"total_actual_cost": Sum("actual_total_cost_bdt")} if can_view_internal_financials else {}),
+    prod_orders = list(ProductionOrder.objects.filter(opportunity=opportunity).order_by("-created_at", "-id"))
+    prod_total_qty = sum(order.qty_total or 0 for order in prod_orders)
+    prod_total_reject = sum(order.qty_reject or 0 for order in prod_orders)
+    prod_total_actual_cost = (
+        sum((order.actual_total_cost_bdt or Decimal("0") for order in prod_orders), Decimal("0"))
+        if can_view_internal_financials else None
     )
-
-    prod_total_qty = prod_totals.get("total_qty") or 0
-    prod_total_reject = prod_totals.get("total_reject") or 0
-    prod_total_actual_cost = None
-    if can_view_internal_financials:
-        prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
-    prod_orders = list(prod_orders_qs.order_by("-created_at", "-id"))
 
     costing_calc = compute_costing(costing_header.id) if costing_header and can_view_internal_financials else None
     variance_placeholder = None
@@ -4680,8 +4677,13 @@ def opportunity_detail(request, pk):
     order_value_bdt = opportunity.order_value
     currency_summary = _opportunity_currency_summary(opportunity)
     bdt_per_piece = currency_summary["bdt_per_piece"]
-    outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity)
-    production_readiness_context = production_readiness(opportunity, user=request.user)
+    readiness_invoices = list(invoice_queryset_for_opportunity(opportunity).select_related("customer"))
+    outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity, invoices=readiness_invoices)
+    fallback_source = max([item for item in (quick_costings[0] if quick_costings else None, costing_header) if item], key=lambda item: item.updated_at, default=None)
+    production_readiness_context = production_readiness(
+        opportunity, user=request.user, invoices=readiness_invoices,
+        production_orders=prod_orders, fallback_source=fallback_source,
+    )
     readiness_source = production_readiness_context.get("source")
     readiness_invoice = production_readiness_context.get("invoice")
     can_approve_production_costing = can_approve_costing(request.user)
@@ -4689,6 +4691,11 @@ def opportunity_detail(request, pk):
         readiness_invoice
         and can_review_finance_operation(request.user)
         and readiness_invoice.invoice_region in accessible_financial_sides(request.user)
+    )
+    can_record_production_payment = bool(
+        readiness_invoice
+        and can_submit_finance_operation(request.user, "CUSTOMER_PAYMENT")
+        and can_access_invoice(request.user, readiness_invoice)
     )
     production_readiness_can_create_quotation = bool(
         readiness_source
@@ -4708,6 +4715,13 @@ def opportunity_detail(request, pk):
         lead=lead,
         opportunity=opportunity,
         costing=costing_header,
+        relationship_summary={
+            "advanced_count": advanced_costing_count,
+            "quick_count": quick_costing_count,
+            "has_active_quick": any(item.status not in QuickCosting.INACTIVE_REPORTING_STATUSES for item in quick_costings),
+            "has_production": bool(prod_orders),
+            "has_shipment": bool(shipments),
+        },
     )
     if reporting_quick_costing_row and workflow_visibility.get("workflow_order_summary"):
         workflow_order_summary = dict(workflow_visibility["workflow_order_summary"])
@@ -4778,6 +4792,7 @@ def opportunity_detail(request, pk):
         "currency_summary": currency_summary,
         "outstanding_balance_summary": outstanding_balance_summary,
         "production_readiness": production_readiness_context,
+        "can_record_production_payment": can_record_production_payment,
         "can_approve_production_costing": can_approve_production_costing,
         "can_review_production_payment": can_review_production_payment,
         "production_readiness_can_create_quotation": production_readiness_can_create_quotation,
@@ -10626,8 +10641,8 @@ def _approved_costing_for_opportunity_production(opportunity):
 
 
 def _create_or_get_production_order_for_opportunity(opportunity, user):
-    if not user or not getattr(user, "is_active", False) or not can_approve_costing(user):
-        raise ProductionOrderCreationError("CEO/Admin approval is required before moving an order to Production.")
+    if not can_release_production(user):
+        raise ProductionOrderCreationError("Production access is required to release this order.")
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     if po:
         return po, False
@@ -10679,7 +10694,7 @@ def _has_broken_production_state(opportunity, production_orders=None):
 
 
 def production_from_opportunity(request, pk):
-    """Review, approve, then explicitly release through the existing production path."""
+    """Explicit operational release; only missing requirements need a CEO exception."""
     opportunity = get_object_or_404(Opportunity, pk=pk)
     if request.method != "POST":
         return redirect(reverse("opportunity_detail", args=[pk]) + "#opp-production-readiness")

@@ -15,6 +15,8 @@ LIFECYCLE_SELECT_RELATED = (
     "costing",
     "quotation",
     "invoice",
+    "invoice__quick_costing",
+    "invoice__customer",
     "production_order",
     "shipping_record",
 )
@@ -264,6 +266,7 @@ def _hydrate_links(
     invoice=None,
     production_order=None,
     shipment=None,
+    relationship_summary=None,
 ):
     advanced_costing_count = 1 if costing else 0
     quick_costing_count = 1 if quick_costing else 0
@@ -306,7 +309,9 @@ def _hydrate_links(
         opportunity = _first_or_none(lead.opportunities.order_by("-created_date", "-id"))
     # Invoice detail already has the linked records. One indexed lookup avoids
     # separate count and empty-relation queries; other screens retain their path.
-    relationships = _invoice_workflow_relationships(opportunity) if invoice and opportunity else None
+    relationships = relationship_summary
+    if relationships is None and invoice and opportunity:
+        relationships = _invoice_workflow_relationships(opportunity)
     if opportunity and not costing and (relationships is None or relationships["advanced_count"]):
         costing = _first_or_none(
             CostingHeader.objects.select_related("opportunity", "customer")
@@ -664,6 +669,7 @@ def build_workflow_visibility_context(
     production_order=None,
     shipment=None,
     lifecycle=None,
+    relationship_summary=None,
 ):
     if not lifecycle:
         lifecycle = find_workflow_lifecycle(
@@ -686,6 +692,7 @@ def build_workflow_visibility_context(
         invoice=invoice,
         production_order=production_order,
         shipment=shipment,
+        relationship_summary=relationship_summary,
     )
     can_view_costing = can_view_internal_costing(user)
     workflow_costing = _workflow_costing_record(links)

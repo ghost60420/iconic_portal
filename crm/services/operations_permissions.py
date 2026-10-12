@@ -272,6 +272,16 @@ def can_approve_costing(user):
     return ROLE_CEO.casefold() in roles or ROLE_ADMIN.casefold() in roles
 
 
+def can_release_production(user):
+    """Use the existing Production permission for the operational release action."""
+    if not user or not getattr(user, "is_authenticated", False) or not getattr(user, "is_active", False):
+        return False
+    decision = role_flag_decision(user, "can_production")
+    if decision is not None:
+        return decision
+    return bool(getattr(getattr(user, "access", None), "can_production", False))
+
+
 def can_archive_invoices(user):
     if not user or not getattr(user, "is_authenticated", False):
         return False

@@ -50,15 +50,14 @@ class ProductionApprovalWorkflowTests(TestCase):
         )
         return opportunity, quick, invoice
 
-    def test_sample_full_payment_requires_explicit_release(self):
+    def test_sample_full_payment_is_ready_without_repeat_ceo_approval(self):
         opportunity, quick, invoice = self.source(sample=True)
         readiness = production_readiness(opportunity, user=self.ceo)
         self.assertTrue(readiness["payment_verified"])
         self.assertEqual(readiness["required_amount"], Decimal("100"))
-        self.assertEqual([item["key"] for item in readiness["blockers"]], ["production_approval"])
+        self.assertEqual(readiness["blockers"], [])
+        self.assertTrue(readiness["ready"])
         self.assertFalse(ProductionOrder.objects.exists())
-        approved = approve_production_release(opportunity, user=self.ceo)
-        self.assertTrue(approved["ready"])
         self.assertTrue(assert_production_release(opportunity, source=quick, invoice=invoice, user=self.ceo)["ready"])
         self.assertFalse(ProductionOrder.objects.exists())
 
@@ -280,7 +279,7 @@ class ProductionApprovalWorkflowTests(TestCase):
         CostingLineItem.objects.filter(pk=line.pk).update(unit_price=2)
         self.assertFalse(production_readiness(opportunity)["production_approved"])
 
-    def test_advanced_invoice_conversion_reports_missing_release_without_500(self):
+    def test_advanced_invoice_conversion_reports_missing_payment_without_500(self):
         opportunity = Opportunity.objects.create(customer=self.customer)
         source = CostingHeader.objects.create(
             opportunity=opportunity, customer=self.customer, status="approved",
@@ -290,24 +289,62 @@ class ProductionApprovalWorkflowTests(TestCase):
             currency="CAD", order_quantity=10, manual_fob_per_piece=10,
         )
         CostingLineItem.objects.create(costing=source, item_name="Fabric", unit_price=1, consumption_value=1)
-        invoice = Invoice.objects.create(customer=self.customer, opportunity=opportunity, costing_header=source, invoice_number="ADV-BLOCK-INV", total_amount=100, paid_amount=100)
+        invoice = Invoice.objects.create(customer=self.customer, opportunity=opportunity, costing_header=source, invoice_number="ADV-BLOCK-INV", total_amount=100, paid_amount=0)
         self.client.force_login(self.ceo)
         response = self.client.post(reverse("invoice_convert_to_production_order", args=[invoice.pk]))
         self.assertEqual(response.status_code, 302)
-        self.assertIn("Production release approval is pending.", " ".join(str(item) for item in get_messages(response.wsgi_request)))
+        self.assertIn("required customer deposit must be verified", " ".join(str(item) for item in get_messages(response.wsgi_request)))
         self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
 
-    def test_production_employee_cannot_release_existing_order_or_mutate_history(self):
+    def test_production_employee_repeated_release_does_not_duplicate_order(self):
         opportunity, _, _ = self.source()
         order = ProductionOrder.objects.create(title="Existing approved production", opportunity=opportunity)
         actor = get_user_model().objects.create_user(username="release-production-only")
         actor.groups.add(Group.objects.get_or_create(name="Production")[0])
-        before = (Opportunity.objects.values().get(pk=opportunity.pk), ProductionOrder.objects.values().get(pk=order.pk), CRMAuditLog.objects.count())
         self.client.force_login(actor)
         response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
         self.assertEqual(response.status_code, 302)
-        self.assertIn("CEO/Admin approval is required", " ".join(str(item) for item in get_messages(response.wsgi_request)))
-        self.assertEqual(before, (Opportunity.objects.values().get(pk=opportunity.pk), ProductionOrder.objects.values().get(pk=order.pk), CRMAuditLog.objects.count()))
+        self.assertEqual(response.url, reverse("production_detail", args=[order.pk]))
+        self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_production_employee_can_release_ready_sample_and_bulk_without_approving_terms(self):
+        from crm.services.production_orders import create_production_order_from_paid_full_package_quick_costing
+        from crm.services.operations_permissions import can_approve_costing
+
+        actor = get_user_model().objects.create_user(username="authorized-production")
+        actor.groups.add(Group.objects.get_or_create(name="Production")[0])
+        self.assertFalse(can_approve_costing(actor))
+        for sample, paid in ((True, "100"), (False, "37.5")):
+            with self.subTest(sample=sample):
+                opportunity, quick, invoice = self.source(sample=sample, paid=paid, percentage="37.5")
+                ready = production_readiness(opportunity, user=actor)
+                self.assertTrue(ready["ready"])
+                self.assertTrue(ready["can_release"])
+                self.assertFalse(ready["can_exception"])
+                self.assertIsNone(ready["release_approval"])
+                order, created = create_production_order_from_paid_full_package_quick_costing(quick, invoice=invoice, user=actor)
+                self.assertTrue(created)
+                self.assertEqual(order.created_by_id, actor.pk)
+                self.assertFalse(CRMAuditLog.objects.filter(field_name=APPROVAL_FIELD).exists())
+
+    def test_production_permission_does_not_waive_commercial_requirements(self):
+        actor = get_user_model().objects.create_user(username="production-no-exception")
+        actor.groups.add(Group.objects.get_or_create(name="Production")[0])
+        opportunity, quick, invoice = self.source(sample=True, paid="0")
+        with self.assertRaisesRegex(ProductionApprovalError, "Full sample payment"):
+            assert_production_release(opportunity, source=quick, invoice=invoice, user=actor)
+        with self.assertRaises(ProductionApprovalError):
+            approve_production_release(opportunity, user=actor, reason="Attempted waiver", waived_requirements=["payment"])
+        self.assertFalse(ProductionOrder.objects.exists())
+
+    def test_sales_and_finance_cannot_release_ready_orders_without_production_permission(self):
+        opportunity, quick, invoice = self.source(sample=True)
+        for role in ("Sales", "Finance"):
+            actor = get_user_model().objects.create_user(username=f"no-production-{role}")
+            actor.groups.add(Group.objects.get_or_create(name=role)[0])
+            with self.subTest(role=role), self.assertRaisesRegex(ProductionApprovalError, "Production access"):
+                assert_production_release(opportunity, source=quick, invoice=invoice, user=actor)
+        self.assertFalse(ProductionOrder.objects.exists())
 
     def test_manual_production_add_cannot_bypass_approval_by_omitting_opportunity(self):
         actor = get_user_model().objects.create_user(username="manual-production-bypass")

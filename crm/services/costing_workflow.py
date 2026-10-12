@@ -26,7 +26,7 @@ from crm.services.order_lifecycle import (
     create_lifecycle_from_production,
     create_lifecycle_from_quotation,
 )
-from crm.services.operations_permissions import can_approve_costing
+from crm.services.operations_permissions import can_approve_costing, can_release_production
 from crm.services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
 
 
@@ -346,7 +346,13 @@ def create_invoice_from_costing(costing, user=None):
 
     with transaction.atomic():
         costing = CostingHeader.objects.select_for_update().get(pk=costing.pk)
-        if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
+        if costing.status != "approved":
+            raise CostingWorkflowError("Approve the costing before converting it to an invoice.")
+        if costing.quotation_status not in {
+            CostingHeader.QUOTATION_STATUS_APPROVED,
+            CostingHeader.QUOTATION_STATUS_SENT,
+            CostingHeader.QUOTATION_STATUS_ACCEPTED,
+        } or not costing.quotation_approved_at:
             raise CostingWorkflowError("Approve the quotation before creating an invoice.")
         convert_costing_to_quotation(costing, user=user)
 
@@ -360,6 +366,7 @@ def create_invoice_from_costing(costing, user=None):
         today = timezone.localdate()
         invoice = Invoice(
             costing_header=costing,
+            opportunity=costing.opportunity,
             customer=costing.customer,
             invoice_number=_next_invoice_number(),
             issue_date=today,
@@ -455,6 +462,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         today = timezone.localdate()
         invoice = Invoice(
             quick_costing=quick_costing,
+            opportunity=opportunity,
             order=production_order,
             customer=customer,
             invoice_number=_next_invoice_number(),
@@ -488,8 +496,8 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
 
 
 def create_or_link_production_order_from_invoice(invoice, user=None):
-    if not can_approve_costing(user):
-        raise CostingWorkflowError("CEO/Admin approval is required before production conversion.")
+    if not can_release_production(user):
+        raise CostingWorkflowError("Production access is required to release this order.")
 
     with transaction.atomic():
         invoice = (

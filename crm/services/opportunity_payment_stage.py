@@ -110,12 +110,12 @@ def _invoice_queryset_for_opportunity_ids(opportunity_ids):
     )
 
 
-def outstanding_balance_summary_for_opportunity(opportunity):
+def outstanding_balance_summary_for_opportunity(opportunity, *, invoices=None):
     if not opportunity or not getattr(opportunity, "pk", None):
         return {"rows": [], "display": "-", "invoice_count": 0}
     totals = defaultdict(lambda: {"amount": Decimal("0")})
     invoice_count = 0
-    for invoice in _invoice_queryset_for_opportunity_ids([opportunity.pk]):
+    for invoice in invoices if invoices is not None else _invoice_queryset_for_opportunity_ids([opportunity.pk]):
         if not invoice_has_outstanding_balance(invoice):
             continue
         linked = opportunity_for_invoice(invoice)

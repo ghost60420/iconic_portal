@@ -2,7 +2,10 @@
 <section class="cardx pay-section" id="invoice-payment-verification" aria-label="Payment verification">
   <div class="pad">
     <strong>{{ payment_summary.payment_status }}</strong>
-    <p>{{ payment_summary.production_readiness }}. Production requires its existing approval.</p>
+    <p>Recording or verifying a payment does not start production.
+      {% firstof invoice.opportunity_id invoice.quick_costing.opportunity_id invoice.costing_header.opportunity_id as opportunity_id %}
+      {% if opportunity_id %}<a href="{% url 'opportunity_detail' opportunity_id %}#opp-production-readiness">Review production readiness</a> for costing, quotation, and verified payment requirements.{% endif %}
+    </p>
     <p>Invoice total: {{ invoice.currency }} {{ invoice.total_amount|floatformat:2 }} · Previously paid (verified): {{ invoice.paid_amount|floatformat:2 }} · Remaining balance: {{ invoice.balance|floatformat:2 }}</p>
     <p>Current payment: <span id="invoice-current-payment">0.00</span> · Balance after verification: <span id="invoice-projected-balance">{{ invoice.balance|floatformat:2 }}</span></p>
     {% for operation in pending_payments %}

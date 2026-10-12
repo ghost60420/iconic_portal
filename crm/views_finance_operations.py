@@ -32,6 +32,7 @@ from crm.models import (
     FinancialAuditEvent,
     FinancialBudget,
     FinancialDocument,
+    Invoice,
     Supplier,
 )
 from crm.services.finance_operations import (
@@ -62,6 +63,7 @@ from crm.services.financial_permissions import (
     require_financial_permission,
     scope_finance_operations_for_approval,
     scope_finance_operations_for_user,
+    scope_invoices_for_user,
 )
 
 
@@ -481,6 +483,22 @@ def finance_operation_create(request, workflow_slug):
         if locked_side and editing_draft.side != locked_side:
             raise PermissionDenied("The draft belongs to a different business side.")
         locked_side = editing_draft.side
+    if workflow["operation_type"] == FinanceOperation.TYPE_CUSTOMER_PAYMENT and not editing_draft:
+        # New receipts have one entry screen. Existing drafts remain editable so
+        # previously recorded work and its audit history are never discarded.
+        invoice_id = request.POST.get("invoice") or request.GET.get("invoice")
+        if invoice_id:
+            if not str(invoice_id).isdigit():
+                raise Http404("Invoice not found.")
+            invoices = scope_invoices_for_user(Invoice.objects.all(), request.user)
+            if locked_side:
+                invoices = invoices.filter(invoice_region=locked_side)
+            invoice = get_object_or_404(invoices, pk=invoice_id)
+            messages.info(request, "Record this payment on the invoice. It will await Finance verification.")
+            return redirect("invoice_payment_add", pk=invoice.pk)
+        messages.info(request, "Choose the customer invoice, then select Record payment.")
+        target = reverse("invoice_list")
+        return redirect(f"{target}?side={locked_side}" if locked_side else target)
     can_manage_categories = (
         workflow["operation_type"] == FinanceOperation.TYPE_COMPANY_EXPENSE
         and can_manage_financial_transactions(request.user)

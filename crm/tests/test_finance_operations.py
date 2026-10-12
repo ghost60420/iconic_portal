@@ -27,6 +27,7 @@ from crm.models import (
     Department,
     ExpenseCategory,
     ExpenseRecord,
+    ExchangeRate,
     FactoryRunningCostDefault,
     FinanceOperation,
     FinancialAccount,
@@ -54,6 +55,7 @@ from crm.services.finance_operations import (
     build_posting_preview,
     post_operation,
     review_operation,
+    save_draft_operation,
     submit_operation,
     workflow_definition,
 )
@@ -272,6 +274,9 @@ class FinanceOperationsTests(TestCase):
         for slug, _operation_type, title, _icon, _group in WORKFLOWS:
             with self.subTest(slug=slug):
                 response = client.get(reverse("finance_operation_create", args=[slug]))
+                if slug == "customer-payment":
+                    self.assertRedirects(response, reverse("invoice_list"), fetch_redirect_response=False)
+                    continue
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, title)
         self.assertEqual(JournalEntry.objects.filter(source_key__startswith="FINANCE-OPERATION:").count(), 0)
@@ -282,6 +287,9 @@ class FinanceOperationsTests(TestCase):
         for slug, _operation_type, _title, _icon, _group in WORKFLOWS:
             with self.subTest(slug=slug):
                 response = client.get(reverse("finance_operation_create", args=[slug]))
+                if slug == "customer-payment":
+                    self.assertRedirects(response, reverse("invoice_list"), fetch_redirect_response=False)
+                    continue
                 form = response.context["form"]
                 self.assertFalse(form.fields["supporting_document"].required)
                 self.assertFalse(form.fields["reference"].required)
@@ -407,6 +415,12 @@ class FinanceOperationsTests(TestCase):
         created = []
         for slug, operation_type, values in workflows:
             with self.subTest(slug=slug):
+                if slug == "customer-payment":
+                    before = FinanceOperation.objects.count()
+                    response = client.post(f"{reverse('finance_operation_create', args=[slug])}?side=CA", {**common, **values})
+                    self.assertRedirects(response, reverse("invoice_payment_add", args=[values["invoice"]]), fetch_redirect_response=False)
+                    self.assertEqual(FinanceOperation.objects.count(), before)
+                    continue
                 response = client.post(
                     f"{reverse('finance_operation_create', args=[slug])}?side=CA",
                     {**common, **values},
@@ -420,7 +434,7 @@ class FinanceOperationsTests(TestCase):
                 self.assertEqual(operation.documents.count(), 0)
                 self.assertEqual(operation.reference, "")
                 self.assertEqual(operation.business_purpose, "")
-        self.assertEqual(len(created), 7)
+        self.assertEqual(len(created), 6)
         self.assertEqual(JournalEntry.objects.count(), protected_counts["journals"])
         self.assertEqual(ReceivableEvent.objects.count(), protected_counts["receivables"])
         self.assertEqual(SupplierBill.objects.count(), protected_counts["supplier_bills"])
@@ -429,7 +443,8 @@ class FinanceOperationsTests(TestCase):
         self.assertEqual(InventoryMovement.objects.count(), protected_counts["inventory"])
 
     @override_settings(FINANCIAL_CORE_WRITES_ENABLED=True)
-    def test_customer_payment_without_receipt_requires_confirmation_then_submits(self):
+    def test_customer_payment_uses_invoice_entry_with_optional_receipt(self):
+        ExchangeRate.objects.create(cad_to_bdt=Decimal("100"))
         invoice = self.invoice("OPS-NO-DOCUMENT-PAYMENT")
         payload = {
             "transaction_date": "2026-02-21",
@@ -451,14 +466,14 @@ class FinanceOperationsTests(TestCase):
             f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
             payload,
         )
-        self.assertEqual(warning.status_code, 200)
-        self.assertContains(warning, "No supporting document attached.")
-        self.assertContains(warning, "Continue with approval?")
+        self.assertRedirects(warning, reverse("invoice_payment_add", args=[invoice.pk]), fetch_redirect_response=False)
         self.assertEqual(FinanceOperation.objects.count(), before)
 
         submitted = client.post(
-            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
-            {**payload, "confirm_missing_document": "yes"},
+            reverse("invoice_payment_add", args=[invoice.pk]),
+            {"payment_date": payload["transaction_date"], "amount": payload["amount"],
+             "payment_method": payload["payment_method"], "payment_account": payload["payment_account"],
+             "reference": "ONE-ENTRY", "submission_token": "one-entry-optional-receipt"},
         )
         self.assertEqual(submitted.status_code, 302)
         operation = FinanceOperation.objects.latest("pk")
@@ -495,12 +510,12 @@ class FinanceOperationsTests(TestCase):
         }
         client = Client()
         client.force_login(self.submitter)
-        saved = client.post(
-            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA",
-            payload,
-        )
-        self.assertEqual(saved.status_code, 302)
-        draft = FinanceOperation.objects.latest("pk")
+        # A draft recorded before the single-entry release must remain editable.
+        form = CustomerPaymentOperationForm(data=payload, user=self.submitter, workflow=workflow_definition("customer-payment"), locked_side="CA")
+        self.assertTrue(form.is_valid(), form.errors)
+        candidate = form.build_operation()
+        candidate.details["_draft_form_values"] = form.draft_form_values()
+        draft = save_draft_operation(candidate, actor=self.submitter)
         edit_url = (
             f"{reverse('finance_operation_create', args=['customer-payment'])}"
             f"?side=CA&draft={draft.pk}"
@@ -626,13 +641,9 @@ class FinanceOperationsTests(TestCase):
             [cad_factory_costing, self.quick_costing],
         )
 
-        ca_payment = client.get(
-            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA"
-        ).context["form"]
+        ca_payment = CustomerPaymentOperationForm(user=self.submitter, workflow=workflow_definition("customer-payment"), locked_side="CA")
         self.assertQuerySetEqual(ca_payment.fields["invoice"].queryset, [ca_invoice])
-        bd_payment = client.get(
-            f"{reverse('finance_operation_create', args=['customer-payment'])}?side=BD"
-        ).context["form"]
+        bd_payment = CustomerPaymentOperationForm(user=self.submitter, workflow=workflow_definition("customer-payment"), locked_side="BD")
         self.assertQuerySetEqual(bd_payment.fields["invoice"].queryset, [bd_invoice])
 
     def test_country_query_overwrites_tampered_side_before_submission(self):

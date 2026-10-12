@@ -492,10 +492,7 @@
           {% if invoice.costing_header %}
             <a class="pill" href="{% url 'cost_sheet_detail' invoice.costing_header.pk %}">Costing</a>
             {% if can_manage_invoices and not invoice.order %}
-              <form method="post" action="{% url 'invoice_convert_to_production_order' invoice.pk %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="pill gold" style="cursor:pointer;">Convert to Production</button>
-              </form>
+              {% if invoice.costing_header.opportunity_id %}<a class="pill gold" href="{% url 'opportunity_detail' invoice.costing_header.opportunity_id %}#opp-production-readiness">Review production readiness</a>{% endif %}
             {% endif %}
           {% endif %}
           {% if invoice.quick_costing %}

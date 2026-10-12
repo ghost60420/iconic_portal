@@ -10,7 +10,7 @@ from crm.services.factory_timeline import apply_factory_timeline_to_summary
 from crm.services.order_lifecycle import create_lifecycle_from_production
 from crm.services.production_payment import select_production_payment_invoice
 from crm.services.production_approval import ProductionApprovalError, assert_production_release
-from crm.services.operations_permissions import can_approve_costing
+from crm.services.operations_permissions import can_release_production
 
 
 class ProductionOrderCreationError(CostingWorkflowError):
@@ -19,8 +19,8 @@ class ProductionOrderCreationError(CostingWorkflowError):
 
 def _lock_opportunity(source, user):
     # Serialize every source path for the same opportunity, including different revisions.
-    if not user or not getattr(user, "is_active", False) or not can_approve_costing(user):
-        raise ProductionOrderCreationError("CEO/Admin production release permission is required.")
+    if not can_release_production(user):
+        raise ProductionOrderCreationError("Production access is required to release this order.")
     if not source.opportunity_id:
         raise ProductionOrderCreationError("The costing must be linked to an opportunity.")
     return Opportunity.objects.select_for_update().get(pk=source.opportunity_id)

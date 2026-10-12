@@ -219,7 +219,7 @@ class FinanceFormUsabilityTests(TestCase):
     def test_all_finance_master_labels_are_human_readable(self):
         self.assertNotIn("object (", str(ExpenseCategory.objects.get(code="OFFICE_RENT")))
         self.assertNotIn("object (", str(self.factory_default))
-        for slug in ("customer-payment", "supplier-bill", "utility", "expense", "factory-daily-cost"):
+        for slug in ("supplier-bill", "utility", "expense", "factory-daily-cost"):
             response = self.client_for_user().get(
                 f"{reverse('finance_operation_create', args=[slug])}?side={'BD' if slug == 'factory-daily-cost' else 'CA'}"
             )
@@ -231,26 +231,15 @@ class FinanceFormUsabilityTests(TestCase):
         client.force_login(self.user)
         return client
 
-    def test_customer_payment_page_uses_sections_summary_and_search_controls(self):
+    def test_customer_payment_entry_links_to_existing_invoice_list(self):
         response = self.client_for_user().get(
             f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA"
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Transaction Details")
-        self.assertContains(response, "Customer and Invoice")
-        self.assertContains(response, "Payment Summary")
-        self.assertContains(response, "Canada Finance")
-        self.assertContains(response, "finance_form.js")
-        self.assertContains(response, 'data-parent-field="customer"')
-        self.assertContains(
-            response,
-            "Use this page when recording a customer payment from Finance. Select the customer first, then select the invoice being paid.",
-        )
+        self.assertRedirects(response, reverse("invoice_list") + "?side=CA", fetch_redirect_response=False)
 
     def test_major_finance_forms_render_one_distinct_page_guide(self):
         cases = (
-            ("customer-payment", "CA", "Record money received from a customer.", "Creating invoices, supplier payments, or refunds."),
             ("supplier-bill", "CA", "Record a bill received from a supplier.", "Recording the actual payment."),
             ("supplier-payment", "CA", "Record money paid to a supplier.", "Creating a supplier bill."),
             ("expense", "CA", "Record company operating expenses.", "Supplier bills that should be tracked through Accounts Payable"),
@@ -276,6 +265,9 @@ class FinanceFormUsabilityTests(TestCase):
             with self.subTest(slug=slug):
                 side = "BD" if slug in {"production-cost", "factory-daily-cost", "inventory-adjustment"} else "CA"
                 response = client.get(f"{reverse('finance_operation_create', args=[slug])}?side={side}")
+                if slug == "customer-payment":
+                    self.assertRedirects(response, reverse("invoice_list") + "?side=CA", fetch_redirect_response=False)
+                    continue
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, f'data-finance-guidance="{operation_type}"')
                 self.assertNotContains(response, "Complete this approved Finance workflow")
@@ -358,7 +350,7 @@ class FinanceFormUsabilityTests(TestCase):
 
     def test_country_guidance_remains_locked_and_compact(self):
         client = self.client_for_user()
-        canada = client.get(f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA")
+        canada = client.get(f"{reverse('finance_operation_create', args=['utility'])}?side=CA")
         bangladesh = client.get(f"{reverse('finance_operation_create', args=['utility'])}?side=BD")
 
         self.assertContains(canada, "Canada Finance")
@@ -421,14 +413,14 @@ class FinanceFormUsabilityTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("business side is locked", form.errors["side"][0].lower())
 
-    def test_warm_customer_payment_page_stays_within_query_budget(self):
+    def test_warm_customer_payment_redirect_stays_within_query_budget(self):
         client = self.client_for_user()
         url = f"{reverse('finance_operation_create', args=['customer-payment'])}?side=CA"
         client.get(url).content
         with CaptureQueriesContext(connection) as queries:
             response = client.get(url)
             response.content
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         self.assertLessEqual(len(queries), 8)
 
     def test_money_transfer_page_performance_profile(self):

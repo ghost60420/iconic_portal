@@ -73,6 +73,7 @@ from .services.operations_permissions import (
     ROLE_SALES,
     ROLE_SALES_MANAGER,
     can_approve_costing,
+    can_release_production,
     has_operations_role,
     operations_role_names,
 )
@@ -1882,7 +1883,7 @@ def quick_costing_approve(request, pk):
         return redirect("quick_costing_detail", pk=pk)
     messages.success(
         request,
-        "Quick costing approved. Review payment and production release approval before moving to Production."
+        "Quick costing approved. Review production readiness and verified payment before moving to Production."
         if quick_costing.is_bangladesh_local_sewing
         else "Quick costing approved and locked.",
     )
@@ -2182,8 +2183,8 @@ def quick_costing_convert_to_production(request, pk):
         QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
         pk=pk,
     )
-    if not _can_approve(request.user):
-        messages.error(request, "CEO/Admin approval is required to move an order to Production.")
+    if not can_release_production(request.user):
+        messages.error(request, "Production access is required to release this order.")
         return redirect("quick_costing_detail", pk=pk)
     if not quick_costing.is_latest_revision:
         return _quick_latest_approved_redirect(
@@ -2192,9 +2193,6 @@ def quick_costing_convert_to_production(request, pk):
             "Only the latest CEO Approved Quick Costing revision can move to Production.",
         )
     if quick_costing.is_bangladesh_local_sewing:
-        if quick_costing.status not in QUICK_COSTING_PRODUCTION_SOURCE_STATUSES or not quick_costing.approved_at:
-            messages.error(request, "CEO approval is required before production can begin.")
-            return redirect("quick_costing_detail", pk=pk)
         previous_status = quick_costing.status
         try:
             production_order, created = create_production_order_from_approved_quick_costing(
@@ -2204,15 +2202,7 @@ def quick_costing_convert_to_production(request, pk):
         except ProductionOrderCreationError as exc:
             messages.error(request, str(exc))
             return redirect("quick_costing_detail", pk=pk)
-    elif quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE:
-        if quick_costing.status not in {
-            QuickCosting.STATUS_APPROVED,
-            QuickCosting.STATUS_QUOTED,
-            QuickCosting.STATUS_INVOICED,
-            QuickCosting.STATUS_PRODUCTION,
-        } or not quick_costing.approved_at:
-            messages.error(request, "CEO approval is required before production can begin.")
-            return redirect("quick_costing_detail", pk=pk)
+    elif quick_costing.effective_pricing_type in {QuickCosting.PRICING_FULL_PACKAGE, QuickCosting.PRICING_SAMPLE}:
         previous_status = quick_costing.status
         try:
             production_order, created = create_production_order_from_paid_full_package_quick_costing(

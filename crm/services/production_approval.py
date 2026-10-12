@@ -10,7 +10,7 @@ from django.db import transaction
 from django.urls import reverse
 
 from crm.models import CRMAuditLog, CostingHeader, CostingSMV, Invoice, Opportunity, ProductionOrder, QuickCosting
-from crm.services.operations_permissions import ROLE_CEO, can_approve_costing, has_operations_role
+from crm.services.operations_permissions import ROLE_CEO, can_approve_costing, can_release_production, has_operations_role
 from crm.services.production_payment import invoice_queryset_for_opportunity, production_payment_requirement
 
 
@@ -30,7 +30,7 @@ def can_approve_production_exception(user):
     return bool(user and getattr(user, "is_active", False) and has_operations_role(user, ROLE_CEO))
 
 
-def _can_release(user):
+def _can_approve_release(user):
     return bool(user and getattr(user, "is_active", False) and can_approve_costing(user))
 
 
@@ -44,16 +44,21 @@ def _source_for_invoice(invoice):
     return None
 
 
-def _select_records(opportunity, source, invoice):
+def _select_records(opportunity, source, invoice, invoices=None, fallback_source=None):
     if invoice is None:
-        invoices = invoice_queryset_for_opportunity(opportunity)
-        if isinstance(source, QuickCosting):
-            invoices = invoices.filter(quick_costing_id=source.pk)
-        elif isinstance(source, CostingHeader):
-            invoices = invoices.filter(costing_header_id=source.pk)
-        invoice = invoices.first()
+        if invoices is not None:
+            invoice = next((item for item in invoices if source is None or (
+                item.quick_costing_id == source.pk if isinstance(source, QuickCosting) else item.costing_header_id == source.pk
+            )), None)
+        else:
+            candidates = invoice_queryset_for_opportunity(opportunity)
+            if isinstance(source, QuickCosting):
+                candidates = candidates.filter(quick_costing_id=source.pk)
+            elif isinstance(source, CostingHeader):
+                candidates = candidates.filter(costing_header_id=source.pk)
+            invoice = candidates.first()
     if source is None:
-        source = _source_for_invoice(invoice)
+        source = _source_for_invoice(invoice) or fallback_source
     if source is None and opportunity and opportunity.pk:
         quick = QuickCosting.objects.filter(opportunity=opportunity).order_by("-updated_at", "-pk").first()
         advanced = CostingHeader.objects.filter(opportunity=opportunity).order_by("-updated_at", "-pk").first()
@@ -100,9 +105,11 @@ def _fingerprint(snapshot):
     return hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def production_readiness(opportunity, *, source=None, invoice=None, user=None):
+def production_readiness(opportunity, *, source=None, invoice=None, user=None, invoices=None, production_orders=None, fallback_source=None):
+    # Optional records are request-local display inputs. Release validation calls
+    # this without them and reloads locked records from the database.
     invoice_selected_here = invoice is None
-    source, invoice = _select_records(opportunity, source, invoice)
+    source, invoice = _select_records(opportunity, source, invoice, invoices, fallback_source)
     is_quick = isinstance(source, QuickCosting)
     is_sample = bool((is_quick and source.is_sampling) or (invoice and invoice.invoice_type == "sample"))
     payment = production_payment_requirement(invoice, is_sample=is_sample)
@@ -162,7 +169,11 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None):
     waived = set()
     production_order = None
     if opportunity and opportunity.pk:
-        production_order = ProductionOrder.objects.filter(opportunity=opportunity).order_by("pk").first()
+        production_order = (
+            min(production_orders, key=lambda order: order.pk, default=None)
+            if production_orders is not None
+            else ProductionOrder.objects.filter(opportunity=opportunity).order_by("pk").first()
+        )
         candidate = CRMAuditLog.objects.filter(
             module="opportunities", record_id=str(opportunity.pk),
             action_type=CRMAuditLog.ACTION_APPROVED, field_name=APPROVAL_FIELD,
@@ -179,7 +190,7 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None):
             if (
                 payload.get("fingerprint") == fingerprint
                 and payload.get("opportunity_id") == opportunity.pk
-                and _can_release(candidate.actor)
+                and _can_approve_release(candidate.actor)
                 and candidate_waivers <= WAIVABLE_REQUIREMENTS
                 and (not candidate_waivers or (payload.get("reason", "").strip() and can_approve_production_exception(candidate.actor)))
             ):
@@ -188,8 +199,9 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None):
     unmet = list(blockers)
     blockers = [item for item in blockers if item["key"] not in waived]
     production_approved = bool(release or production_order)
-    if not production_approved:
-        block("production_approval", "Production release approval is pending.")
+    # Existing commercial approvals are sufficient. The explicit, permission-
+    # checked Move to Production POST is the operational release confirmation;
+    # a second CEO approval is not a prerequisite for a normally ready order.
     return {
         **payment,
         "source": source,
@@ -200,7 +212,7 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None):
         "quotation_approved": quotation_approved,
         "payment_verified": bool(payment.get("allowed", False)),
         "production_approved": production_approved,
-        "can_release": _can_release(user),
+        "can_release": can_release_production(user),
         "can_exception": can_approve_production_exception(user),
         "blockers": blockers,
         "waivable_blockers": [item for item in unmet if item["key"] in WAIVABLE_REQUIREMENTS],
@@ -217,7 +229,7 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None):
 
 @transaction.atomic
 def approve_production_release(opportunity, *, user, reason="", waived_requirements=()):
-    if not _can_release(user):
+    if not _can_approve_release(user):
         raise ProductionApprovalError("You do not have permission to approve production release.")
     opportunity = Opportunity.objects.select_for_update().get(pk=opportunity.pk)
     check = production_readiness(opportunity, user=user)
@@ -257,8 +269,8 @@ def approve_production_release(opportunity, *, user, reason="", waived_requireme
 
 @transaction.atomic
 def assert_production_release(opportunity, *, source=None, invoice=None, user=None):
-    if not _can_release(user):
-        raise ProductionApprovalError("CEO/Admin production release permission is required.")
+    if not can_release_production(user):
+        raise ProductionApprovalError("Production access is required to release this order.")
     if not opportunity or not opportunity.pk:
         raise ProductionApprovalError("An active opportunity is required.")
     opportunity = Opportunity.objects.select_for_update().get(pk=opportunity.pk)

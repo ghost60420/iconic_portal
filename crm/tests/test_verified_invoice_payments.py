@@ -160,6 +160,19 @@ class VerifiedInvoicePaymentTests(TestCase):
         self.assertIn('payment_date', response.context['payment_form'].errors)
         self.assertFalse(FinanceOperation.objects.filter(invoice=invoice).exists())
 
+    def test_missing_exchange_rate_shows_configuration_error_without_recording(self):
+        from crm.models import ExchangeRate
+
+        ExchangeRate.objects.all().delete()
+        invoice = self.invoice("VERIFY-NO-RATE")
+        response = self.client.get(reverse('invoice_payment_add', args=[invoice.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "An accounting exchange rate is missing")
+        response = self.client.post(reverse('invoice_payment_add', args=[invoice.pk]), self.payment_data(invoice, '10'))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FinanceOperation.objects.filter(invoice=invoice).exists())
+        self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
+
     def test_entry_and_verification_are_distinct_even_for_ceo(self):
         invoice = self.invoice('VERIFY-CEO-ENTRY')
         operation = self.submit(invoice, '100')

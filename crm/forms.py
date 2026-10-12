@@ -1888,7 +1888,7 @@ class InvoicePaymentForm(forms.ModelForm):
                 }
             except MissingExchangeRate:
                 configured = _latest_rate_bdt_per_cad()
-                if configured > 1 and invoice_currency in {"CAD", "BDT"}:
+                if configured is not None and configured > 1 and invoice_currency in {"CAD", "BDT"}:
                     rates = {"rate_to_cad": Decimal("1") if invoice_currency == "CAD" else configured,
                              "rate_to_bdt": configured if invoice_currency == "CAD" else Decimal("1")}
                 else:
@@ -1967,13 +1967,15 @@ class InvoicePaymentForm(forms.ModelForm):
         if currency == "CAD":
             cleaned["rate_to_cad"] = Decimal("1")
             if rate_to_bdt <= 0:
-                cad_to_bdt = _latest_rate_bdt_per_cad()
+                cad_to_bdt = _latest_rate_bdt_per_cad() or Decimal("0")
                 if cad_to_bdt > 0:
                     cleaned["rate_to_bdt"] = cad_to_bdt
+                else:
+                    self.add_error(None, "An accounting exchange rate is missing. Ask Finance to configure an approved rate before recording payment.")
         elif currency == "BDT":
             cleaned["rate_to_bdt"] = Decimal("1")
             if not rate_to_cad:
-                rate_to_cad = _latest_rate_bdt_per_cad()
+                rate_to_cad = _latest_rate_bdt_per_cad() or Decimal("0")
                 cleaned["rate_to_cad"] = rate_to_cad
             if rate_to_cad <= 1:
                 self.add_error(

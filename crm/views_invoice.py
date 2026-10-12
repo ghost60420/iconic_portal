@@ -61,6 +61,7 @@ from .services.operations_permissions import (
     ROLE_SALES,
     ROLE_SALES_MANAGER,
     can_archive_invoices,
+    can_release_production,
     has_operations_role,
 )
 from .services.local_sewing import calculate_local_sewing, is_bangladesh_local_sewing
@@ -1057,7 +1058,11 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
         ),
         pk=quote_pk,
     )
-    if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
+    if costing.quotation_status not in {
+        CostingHeader.QUOTATION_STATUS_APPROVED,
+        CostingHeader.QUOTATION_STATUS_SENT,
+        CostingHeader.QUOTATION_STATUS_ACCEPTED,
+    } or not costing.quotation_approved_at:
         return {"forbidden": "CEO approval is required before creating an invoice from this quotation."}
     if not can_create_invoice_from_approved_quotation(user):
         return {"forbidden": "Invoice creation from approved quotations is limited to Sales, Sales Manager, CEO/Admin, or invoice managers."}
@@ -2052,11 +2057,12 @@ def invoice_add(request):
             order = None
 
     if request.method == "POST":
-        if quotation_prefill and quotation_prefill["context"].get("has_existing_invoices"):
-            existing_invoice = quotation_prefill["context"]["existing_invoices"][0]
+        source_prefill = quotation_prefill or opportunity_prefill
+        if source_prefill and source_prefill["context"].get("has_existing_invoices"):
+            existing_invoice = source_prefill["context"]["existing_invoices"][0]
             messages.warning(
                 request,
-                f"Invoice {existing_invoice.invoice_number} already exists for this quotation. A duplicate was not created.",
+                f"Invoice {existing_invoice.invoice_number} already exists for this source. Open a different approved quotation to invoice a separate order.",
             )
             return redirect("invoice_view", pk=existing_invoice.pk)
         invoice_data = request.POST.copy()
@@ -2077,6 +2083,25 @@ def invoice_add(request):
                     inv.invoice_region = locked_side
                 source_opportunity = opportunity_prefill["context"]["opportunity"] if opportunity_prefill else None
                 source_costing = quotation_prefill["costing"] if quotation_prefill else None
+                if source_opportunity:
+                    source_opportunity = Opportunity.objects.select_for_update().get(pk=source_opportunity.pk)
+                    existing_invoice = _opportunity_invoice_existing_qs(source_opportunity).first()
+                    if existing_invoice:
+                        messages.info(request, "This opportunity already has an invoice. Use its approved quotation for a separate order.")
+                        return redirect("invoice_view", pk=existing_invoice.pk)
+                if source_costing:
+                    source_costing = CostingHeader.objects.select_for_update().get(pk=source_costing.pk)
+                    if source_costing.status != "approved" or not source_costing.quotation_approved_at or source_costing.quotation_status not in {
+                        CostingHeader.QUOTATION_STATUS_APPROVED,
+                        CostingHeader.QUOTATION_STATUS_SENT,
+                        CostingHeader.QUOTATION_STATUS_ACCEPTED,
+                    }:
+                        messages.error(request, "The costing and quotation must still be approved before invoicing.")
+                        return redirect("cost_sheet_detail", pk=source_costing.pk)
+                    existing_invoice = Invoice.objects.filter(costing_header=source_costing).order_by("-created_at", "-pk").first()
+                    if existing_invoice:
+                        messages.info(request, "This quotation already has an invoice.")
+                        return redirect("invoice_view", pk=existing_invoice.pk)
 
                 # defaults
                 if not inv.issue_date:
@@ -2101,8 +2126,7 @@ def invoice_add(request):
                 if source_costing:
                     inv.costing_header = source_costing
                     inv.opportunity = source_costing.opportunity
-                    if not inv.customer_id:
-                        inv.customer = source_costing.customer
+                    inv.customer = source_costing.customer or _opportunity_invoice_customer(source_costing.opportunity)
                     inv.sewing_charge = _d(quotation_prefill["amounts"]["labor_total"])
                     inv.other_internal_cost = _d(quotation_prefill["amounts"]["other_cost_total"])
                     inv.internal_cost_note = (
@@ -2948,7 +2972,7 @@ def invoice_payment_add(request, pk):
     from crm.services.financial_permissions import can_access_invoice, can_submit_finance_operation
     from crm.models import FinanceOperation
 
-    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer", "quick_costing", "costing_header"), pk=pk)
     if not can_submit_finance_operation(request.user, FinanceOperation.TYPE_CUSTOMER_PAYMENT) or not can_access_invoice(request.user, inv):
         return HttpResponseForbidden("Payment entry requires access to this invoice and country.")
     def payment_screen(form):
@@ -3078,7 +3102,7 @@ def invoice_approve(request, pk):
 
 
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_release_production)
 @require_POST
 def invoice_convert_to_production_order(request, pk):
     inv = get_object_or_404(Invoice.objects.select_related("costing_header", "order"), pk=pk)
