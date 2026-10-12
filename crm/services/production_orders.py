@@ -4,15 +4,39 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from crm.models import CostingAuditLog, CostingHeader, Invoice, ProductionOrder, ProductionStage, QuickCosting
+from crm.models import CostingAuditLog, CostingHeader, Invoice, Opportunity, ProductionOrder, ProductionStage, QuickCosting
 from crm.services.costing_workflow import CostingWorkflowError, get_costing_quote_amounts
 from crm.services.factory_timeline import apply_factory_timeline_to_summary
 from crm.services.order_lifecycle import create_lifecycle_from_production
 from crm.services.production_payment import select_production_payment_invoice
+from crm.services.production_approval import ProductionApprovalError, assert_production_release
+from crm.services.operations_permissions import can_approve_costing
 
 
-class ProductionOrderCreationError(Exception):
+class ProductionOrderCreationError(CostingWorkflowError):
     pass
+
+
+def _lock_opportunity(source, user):
+    # Serialize every source path for the same opportunity, including different revisions.
+    if not user or not getattr(user, "is_active", False) or not can_approve_costing(user):
+        raise ProductionOrderCreationError("CEO/Admin production release permission is required.")
+    if not source.opportunity_id:
+        raise ProductionOrderCreationError("The costing must be linked to an opportunity.")
+    return Opportunity.objects.select_for_update().get(pk=source.opportunity_id)
+
+
+def _release_requirements(source, invoice, user):
+    invoices = Invoice.objects.select_for_update()
+    if invoice is not None:
+        invoice = invoices.get(pk=invoice.pk)
+    else:
+        source_filter = {"quick_costing": source} if isinstance(source, QuickCosting) else {"costing_header": source}
+        invoice = invoices.filter(**source_filter).order_by("-issue_date", "-created_at", "-pk").first()
+    try:
+        return assert_production_release(source.opportunity, source=source, invoice=invoice, user=user)
+    except ProductionApprovalError as exc:
+        raise ProductionOrderCreationError(str(exc)) from exc
 
 
 QUICK_COSTING_PRODUCTION_SOURCE_STATUSES = (
@@ -84,7 +108,7 @@ def full_package_quick_costing_source_for_opportunity(opportunity):
         .order_by("-updated_at", "-id")
     )
     for quick_costing in quick_costings:
-        if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
+        if quick_costing.effective_pricing_type not in {QuickCosting.PRICING_FULL_PACKAGE, QuickCosting.PRICING_SAMPLE}:
             continue
         if not quick_costing.is_latest_revision:
             continue
@@ -151,6 +175,7 @@ def create_production_order_from_paid_full_package_quick_costing(
         raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
 
     with transaction.atomic():
+        _lock_opportunity(quick_costing, user)
         quick_costing = (
             QuickCosting.objects.select_for_update()
             .select_related(
@@ -159,10 +184,8 @@ def create_production_order_from_paid_full_package_quick_costing(
             )
             .get(pk=quick_costing.pk)
         )
-        if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
-            raise ProductionOrderCreationError("Only Full Package Quick Costing can use this production workflow.")
-        if not is_quick_costing_production_source(quick_costing):
-            raise ProductionOrderCreationError("CEO-approved Quick Costing is required before production conversion.")
+        if quick_costing.effective_pricing_type not in {QuickCosting.PRICING_FULL_PACKAGE, QuickCosting.PRICING_SAMPLE}:
+            raise ProductionOrderCreationError("Only Full Package or Sample Quick Costing can use this production workflow.")
         if not quick_costing.is_latest_revision:
             raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
 
@@ -190,11 +213,8 @@ def create_production_order_from_paid_full_package_quick_costing(
             create_lifecycle_from_production(existing, user=user)
             return existing, False
 
-        production_invoice, payment_check = select_production_payment_invoice(
-            _invoice_candidates_for_quick_costing(quick_costing, invoice=invoice)
-        )
-        if not production_invoice:
-            raise ProductionOrderCreationError(payment_check["message"])
+        readiness = _release_requirements(quick_costing, invoice, user)
+        production_invoice = readiness["invoice"]
 
         summary = apply_factory_timeline_to_summary(quick_costing, quick_costing.calculation_summary())
         lead = getattr(opportunity, "lead", None)
@@ -211,7 +231,7 @@ def create_production_order_from_paid_full_package_quick_costing(
                 title=title,
                 factory_location="bd",
                 order_type="fob",
-                production_order_type="sampling" if quantity <= 5 else "bulk",
+                production_order_type="sampling" if readiness["is_sample"] else "bulk",
                 qty_total=quantity,
                 style_name=quick_costing.project_name or "",
                 completed_quantity=0,
@@ -260,6 +280,7 @@ def create_production_order_from_approved_quick_costing(
         raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
 
     with transaction.atomic():
+        _lock_opportunity(quick_costing, user)
         quick_costing = (
             QuickCosting.objects.select_for_update()
             .select_related(
@@ -270,8 +291,6 @@ def create_production_order_from_approved_quick_costing(
         )
         if quick_costing.effective_pricing_type != QuickCosting.PRICING_CMT:
             raise ProductionOrderCreationError("Only CMT / Sewing Only Quick Costing creates local sewing production.")
-        if not is_quick_costing_production_source(quick_costing):
-            raise ProductionOrderCreationError("CEO approval is required before production can begin.")
         if not quick_costing.is_latest_revision:
             raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
         opportunity = quick_costing.opportunity
@@ -293,9 +312,8 @@ def create_production_order_from_approved_quick_costing(
             create_lifecycle_from_production(existing, user=user)
             return existing, False
 
-        production_invoice, payment_check = _production_invoice_for_cmt_quick_costing(quick_costing, invoice=invoice)
-        if not production_invoice:
-            raise ProductionOrderCreationError(payment_check["message"])
+        readiness = _release_requirements(quick_costing, invoice, user)
+        production_invoice = readiness["invoice"]
 
         summary = apply_factory_timeline_to_summary(quick_costing, quick_costing.calculation_summary())
         lead = getattr(opportunity, "lead", None) if opportunity else None
@@ -333,7 +351,7 @@ def create_production_order_from_approved_quick_costing(
                 title=quick_costing.project_name,
                 factory_location="bd",
                 order_type="sewing_charge",
-                production_order_type="bulk",
+                production_order_type="sampling" if readiness["is_sample"] else "bulk",
                 qty_total=quick_costing.quantity,
                 style_name=quick_costing.project_name,
                 sewing_charge_per_piece_bdt=quick_costing.sewing_charge_per_piece_bdt,
@@ -451,17 +469,23 @@ def create_production_order_from_approved_quotation(costing, user=None, *, invoi
         raise ProductionOrderCreationError("The quotation must be saved before production can begin.")
 
     with transaction.atomic():
+        _lock_opportunity(costing, user)
         costing = (
             CostingHeader.objects.select_for_update()
             .select_related("opportunity", "opportunity__lead", "customer")
             .get(pk=costing.pk)
         )
-        if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
-            raise ProductionOrderCreationError("Approve the quotation before creating a production order.")
-        if not costing.quotation_number:
-            raise ProductionOrderCreationError("The approved quotation does not have a quotation number.")
-
         existing = ProductionOrder.objects.select_for_update().filter(source_quotation=costing).first()
+        if not existing:
+            existing = ProductionOrder.objects.filter(opportunity=costing.opportunity).order_by("created_at", "id").first()
+        if (
+            existing and existing.costing_header_id == costing.pk and not existing.source_quotation_id
+            and costing.status == "approved"
+            and costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
+            and costing.quotation_approved_at
+        ):
+            # Preserve the established approved-snapshot linking path for legacy orders.
+            existing = None
         if existing:
             production_invoice, _payment_check = _production_invoice_for_costing_header(costing, invoice=invoice)
             if production_invoice and production_invoice.order_id != existing.pk:
@@ -493,9 +517,8 @@ def create_production_order_from_approved_quotation(costing, user=None, *, invoi
             create_lifecycle_from_production(legacy_order, user=user)
             return legacy_order, False
 
-        production_invoice, payment_check = _production_invoice_for_costing_header(costing, invoice=invoice)
-        if not production_invoice:
-            raise ProductionOrderCreationError(payment_check["message"])
+        readiness = _release_requirements(costing, invoice, user)
+        production_invoice = readiness["invoice"]
 
         opportunity = costing.opportunity
         lead = opportunity.lead if opportunity else None
@@ -510,7 +533,7 @@ def create_production_order_from_approved_quotation(costing, user=None, *, invoi
                     title=title,
                     factory_location="ca" if costing.factory_location == "ca" else "bd",
                     order_type="fob",
-                    production_order_type="sampling" if amounts["quantity"] <= 5 else "bulk",
+                    production_order_type="sampling" if readiness["is_sample"] else "bulk",
                     qty_total=amounts["quantity"],
                     style_name=costing.style_name or "",
                     operational_status="planning",

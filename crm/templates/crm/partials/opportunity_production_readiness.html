@@ -1,0 +1,96 @@
+{% with readiness=production_readiness %}
+<section id="opp-production-readiness" class="opp-panel" aria-label="Production readiness">
+  <div class="opp-panel-head">
+    <div>
+      <p class="opp-section-kicker">{% if readiness.is_sample %}Sampling{% else %}Bulk production{% endif %} readiness</p>
+      <h2>{% if readiness.production_order %}PRODUCTION RELEASED{% elif readiness.ready %}READY FOR PRODUCTION{% else %}PRODUCTION APPROVAL PENDING{% endif %}</h2>
+      <p class="opp-muted">{% if readiness.is_sample %}Sampling requires approved costing and quotation, full verified sample payment, and production approval.{% else %}Bulk production requires approved costing and quotation, the invoice's verified deposit, and production approval.{% endif %}</p>
+    </div>
+    {% if readiness.production_order %}
+      <a href="{% url 'production_detail' readiness.production_order.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open production</a>
+    {% endif %}
+  </div>
+
+  <div class="opp-readiness-grid">
+    <article><span>Costing</span><strong>{% if readiness.costing_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'costing' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
+    <article><span>Quotation</span><strong>{% if readiness.quotation_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'quotation' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
+    <article><span>Payment</span><strong>{% if readiness.payment_verified %}Verified{% else %}Pending{% endif %}</strong>{% if 'payment' in readiness.waived_requirements %}<small>Requirement waived; invoice payment status is unchanged</small>{% endif %}</article>
+    <article><span>{% if readiness.is_sample %}Required sample payment{% else %}Required deposit{% endif %}</span><strong>{{ readiness.required_amount_display|default:"Invoice required" }}</strong><small>{{ readiness.payment_required_percentage_display }}{% if readiness.invoice %} · {{ readiness.invoice.invoice_number }}{% endif %}</small></article>
+    <article><span>Payment received</span><strong>{{ readiness.amount_paid_display|default:"—" }}</strong><small>Verified invoice payments only</small></article>
+    <article><span>Outstanding balance</span><strong>{{ readiness.outstanding_balance_display|default:"—" }}</strong></article>
+    <article><span>Production approval</span><strong>{% if readiness.production_approved %}Approved{% else %}Pending{% endif %}</strong>{% if readiness.waived_requirements %}<small>Documented exception applies</small>{% endif %}</article>
+  </div>
+
+  {% if readiness.blockers and not readiness.production_order %}
+    <div id="opp-production-blockers" class="opp-notes-box">
+      <strong>Blocking production</strong>
+      <ul>{% for blocker in readiness.blockers %}<li>{{ blocker.label }}</li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+
+  {% if readiness.release_approval %}
+    <div class="opp-notes-box" id="opp-production-approval-history">
+      <strong>Production approval recorded</strong>
+      <p>{{ readiness.release_approval.actor.get_full_name|default:readiness.release_approval.actor.username }} · {{ readiness.release_approval.created_at|date:"Y-m-d H:i T" }} · {{ opportunity.opportunity_id }}</p>
+      {% if readiness.release_reason %}<p>Reason: {{ readiness.release_reason }}</p>{% endif %}
+      {% if readiness.waived_requirements %}<p>Requirements waived: {{ readiness.waived_requirements|join:", " }}.</p>{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="opp-action-bar" aria-label="Production approval actions">
+    {% if readiness.source and can_approve_production_costing and not readiness.production_order %}
+      {% if not readiness.costing_approved %}
+        <form method="post" action="{% if readiness.source_kind == 'quick' %}{% url 'quick_costing_approve' readiness.source.pk %}{% else %}{% url 'cost_sheet_detail' readiness.source.pk %}{% endif %}" class="opp-inline-form">
+          {% csrf_token %}{% if readiness.source_kind == 'advanced' %}<input type="hidden" name="action" value="approve">{% endif %}
+          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost">Approve costing</button>
+        </form>
+      {% endif %}
+      {% if production_readiness_can_create_quotation %}
+        <form method="post" action="{% if readiness.source_kind == 'quick' %}{% url 'quick_costing_convert_to_quotation' readiness.source.pk %}{% else %}{% url 'cost_sheet_convert_to_quotation' readiness.source.pk %}{% endif %}" class="opp-inline-form">
+          {% csrf_token %}<button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost">Create quotation</button>
+        </form>
+      {% elif readiness.source_kind == 'advanced' and readiness.costing_approved and not readiness.quotation_approved and readiness.source.quotation_number %}
+        <form method="post" action="{% url 'cost_sheet_quotation_approve' readiness.source.pk %}" class="opp-inline-form">
+          {% csrf_token %}<button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost">Approve quotation</button>
+        </form>
+      {% endif %}
+    {% endif %}
+    {% if can_review_production_payment %}
+      <a href="{% url 'invoice_view' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Review invoice payment</a>
+      {% if not readiness.payment_verified %}<a href="{% url 'finance_approval_center' %}?operation_type=CUSTOMER_PAYMENT&amp;side={{ readiness.invoice.invoice_region }}" class="opp-btn opp-btn--tiny opp-btn--ghost">Verify customer payment</a>{% endif %}
+    {% endif %}
+    {% if readiness.can_release and not readiness.production_order %}
+      {% if readiness.ready %}
+        <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-inline-form">
+          {% csrf_token %}<input type="hidden" name="action" value="release">
+          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--primary">Move to Production</button>
+        </form>
+      {% elif not readiness.production_approved and not readiness.waivable_blockers %}
+        <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-inline-form">
+          {% csrf_token %}<input type="hidden" name="action" value="approve_release">
+          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--primary">Approve production release</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {% if readiness.can_exception and readiness.waivable_blockers and not readiness.production_order and not readiness.production_approved %}
+    <details id="opp-production-exception">
+      <summary>CEO / Super Admin: review a production exception</summary>
+      <p class="opp-muted">Select every pending requirement being waived and record the reason. Approval is audited and does not mark an invoice as paid or start production.</p>
+      <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}">
+        {% csrf_token %}<input type="hidden" name="action" value="approve_release">
+        <fieldset>
+          <legend>Requirements being waived</legend>
+          {% for blocker in readiness.waivable_blockers %}
+            <label for="opp-production-waive-{{ blocker.key }}" class="opp-check-row"><input id="opp-production-waive-{{ blocker.key }}" type="checkbox" name="waived_requirements" value="{{ blocker.key }}" style="width:auto;min-height:auto;margin:0;"> {{ blocker.label }}</label>
+          {% endfor %}
+        </fieldset>
+        <label for="opp-production-exception-reason">Exception reason</label>
+        <textarea id="opp-production-exception-reason" name="reason" rows="3" required maxlength="4000" placeholder="Explain why production may proceed before these requirements are satisfied."></textarea>
+        <button type="submit" class="opp-btn opp-btn--primary">Approve documented exception</button>
+      </form>
+    </details>
+  {% endif %}
+</section>
+{% endwith %}

@@ -4880,7 +4880,12 @@ class ProductionOrder(models.Model):
                 QuickCosting.STATUS_INVOICED,
                 QuickCosting.STATUS_PRODUCTION,
             }:
-                raise ValidationError("The source Quick Costing must be CEO approved.")
+                from crm.services.production_approval import has_production_requirement_waiver
+
+                if not has_production_requirement_waiver(
+                    source.opportunity, source=source, requirement="costing"
+                ):
+                    raise ValidationError("The source Quick Costing must be CEO approved.")
 
         supplied_order_code = (self.order_code or "").strip()
         if supplied_order_code:

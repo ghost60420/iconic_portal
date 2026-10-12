@@ -62,7 +62,7 @@
       {% if prod_orders %}
         <a href="{% url 'production_detail' prod_orders.0.pk %}" class="opp-btn opp-btn--ghost">View Production</a>
       {% else %}
-        <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Move to Production</a>
+        <a href="#opp-production-readiness" class="opp-btn opp-btn--ghost">Review production readiness</a>
       {% endif %}
       <a href="{% url 'opportunities_list' %}" class="opp-btn opp-btn--ghost">Back</a>
 	      {% if can_archive_records and not opportunity.is_archived %}
@@ -112,57 +112,14 @@
         <div>
           <p class="opp-section-kicker">Production warning</p>
           <h2>Broken Production State</h2>
-          <p class="opp-muted">This opportunity is marked Production but has no linked production order. Moving to Production requires an active invoice.</p>
+          <p class="opp-muted">This opportunity is marked Production but has no linked production order. Review the approval and verified payment requirements below before moving to Production.</p>
         </div>
-        <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Review production move</a>
+        <a href="#opp-production-readiness" class="opp-btn opp-btn--tiny opp-btn--primary">Review production move</a>
       </div>
     </section>
   {% endif %}
 
-  {% if production_payment_progress %}
-    <section class="opp-panel" aria-label="Production payment progress" style="{% if production_payment_progress.allowed %}border-color:rgba(34,197,94,0.45); background:rgba(34,197,94,0.08);{% else %}border-color:rgba(251,191,36,0.45); background:rgba(120,53,15,0.14);{% endif %}">
-      <div class="opp-panel-head">
-        <div>
-          <p class="opp-section-kicker">Production payment status</p>
-          <h2>{{ production_payment_progress.production_readiness|default:"AWAITING VERIFIED DEPOSIT" }}</h2>
-          <p>{{ production_payment_progress.payment_status }}</p>
-          {% if production_payment_progress.message %}
-            <p class="opp-muted">{{ production_payment_progress.message }}</p>
-          {% elif production_payment_progress.warning_message %}
-            <p class="opp-muted">{{ production_payment_progress.warning_message }}</p>
-          {% else %}
-            <p class="opp-muted">Verified deposits satisfy the payment requirement. Existing production approval is still required.</p>
-          {% endif %}
-        </div>
-        {% if not prod_orders %}<a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny {% if production_payment_progress.allowed %}opp-btn--primary{% else %}opp-btn--ghost{% endif %}">Production approval</a>{% endif %}
-      </div>
-      {% if production_payment_progress.invoice %}
-        <div class="opp-info-grid">
-          <div>
-            <span>Invoice total</span>
-            <strong>{{ production_payment_progress.invoice_total_display }}</strong>
-          </div>
-          <div>
-            <span>Amount paid</span>
-            <strong>{{ production_payment_progress.amount_paid_display }}</strong>
-          </div>
-          <div>
-            <span>Outstanding balance</span>
-            <strong>{{ production_payment_progress.outstanding_balance_display }}</strong>
-          </div>
-          <div>
-            <span>Paid percentage</span>
-            <strong>{{ production_payment_progress.paid_percentage_display }}</strong>
-          </div>
-          <div>
-            <span>Production payment rule</span>
-            <strong>Invoice created</strong>
-            <small>Payment does not block production</small>
-          </div>
-        </div>
-      {% endif %}
-    </section>
-  {% endif %}
+  {% include "crm/partials/opportunity_production_readiness.html" %}
 
   {% include "crm/partials/workflow_quick_nav.html" %}
   {% include "crm/partials/workflow_order_summary.html" %}
@@ -592,25 +549,15 @@
       <section class="opp-panel">
         <div class="opp-panel-head">
           <div>
-            <p class="opp-section-kicker">Production readiness</p>
-            <h2>Can this move to the factory?</h2>
+            <p class="opp-section-kicker">Production records</p>
+            <h2>Production and shipments</h2>
           </div>
           {% if prod_orders %}
             <a href="{% url 'production_detail' prod_orders.0.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open production</a>
-          {% else %}
-            <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Move to production</a>
           {% endif %}
         </div>
 
         <div class="opp-readiness-grid">
-          <article>
-            <span>Sample status</span>
-            <strong>{% if opportunity.stage == "Sampling" %}In sampling{% else %}Not tracked{% endif %}</strong>
-          </article>
-          <article>
-            <span>Approval status</span>
-            <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No costing approval yet{% endif %}</strong>
-          </article>
           <article>
             <span>Production orders</span>
             <strong>{{ prod_orders|length }}</strong>
@@ -621,14 +568,6 @@
             <strong>{{ shipments|length }}</strong>
             <small>{% if can_view_internal_financials %}{% if shipping_cost_bdt %}{{ shipping_cost_bdt|finance_money:"BDT" }} shipping{% else %}No shipping cost yet{% endif %}{% else %}Shipment records linked{% endif %}</small>
           </article>
-        </div>
-
-        <div class="opp-checklist">
-          <div class="{% if opportunity.product_category %}ready{% else %}missing{% endif %}">Product category</div>
-          <div class="{% if opportunity.moq_units or lead.order_quantity %}ready{% else %}missing{% endif %}">Quantity</div>
-          <div class="{% if opportunity.order_value or opportunity.order_value_usd %}ready{% else %}missing{% endif %}">Order value</div>
-          <div class="{% if costing_header %}ready{% else %}missing{% endif %}">Costing</div>
-          <div class="{% if ship_locked %}ready{% else %}missing{% endif %}">Shipping address</div>
         </div>
 
         {% if prod_orders %}

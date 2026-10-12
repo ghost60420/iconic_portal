@@ -21,6 +21,7 @@ from crm.models import (
     OrderLifecycle,
     ProductionOrder,
 )
+from crm.services.production_approval import approve_production_release
 from crm.services.order_lifecycle import build_lifecycle_profit_breakdown
 from crm.services.costing_workflow import create_invoice_from_costing
 
@@ -111,6 +112,7 @@ class ApprovalGateRegressionTests(TestCase):
         invoice.status = "partial"
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+        approve_production_release(self.opportunity, user=self.ceo)
         self.client.force_login(self.ceo)
 
         response = self.client.post(reverse("production_from_opportunity", args=[self.opportunity.pk]))

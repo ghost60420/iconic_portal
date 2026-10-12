@@ -29,6 +29,7 @@ from crm.models import (
     Shipment,
     SystemActivityLog,
 )
+from crm.services.production_approval import approve_production_release
 from crm.services.operations_permissions import scope_production_orders, scope_sales_opportunities
 from crm.services.operations_notifications import sync_operations_notifications
 from crm.services.order_lifecycle import create_lifecycle_from_invoice
@@ -653,9 +654,10 @@ class CustomerWorkflowImprovementTests(TestCase):
             deposit_percentage=Decimal("30.00"),
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
         self.assertEqual(self.client.get(reverse("quick_costing_detail", args=[quick.pk])).status_code, 200)
-        self.assertEqual(self.client.get(reverse("production_from_opportunity", args=[opportunity.pk])).status_code, 302)
+        self.assertEqual(self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"}).status_code, 302)
         order = ProductionOrder.objects.get(opportunity=opportunity)
         self.assertIsNone(order.lead)
         self.assertEqual(order.customer, self.customer)
@@ -673,8 +675,9 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
         quick, invoice = self._paid_full_package_quick_costing(opportunity)
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -698,7 +701,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(opportunity.stage, "Production")
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
 
-        duplicate_response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        duplicate_response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
@@ -732,7 +735,9 @@ class CustomerWorkflowImprovementTests(TestCase):
                     deposit_percentage=Decimal("30.00"),
                 )
 
-                response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+                if paid_amount >= Decimal("285.00"):
+                    approve_production_release(opportunity, user=self.admin)
+                response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
                 self.assertEqual(response.status_code, 302)
                 if paid_amount < Decimal("285.00"):
@@ -767,7 +772,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"}, follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cancelled or void invoices cannot move to Production.")
@@ -794,7 +799,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         invoice.save(update_fields=["subtotal", "total_amount", "updated_at"])
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"}, follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Invoice total must be greater than 0 before moving to Production.")
@@ -832,7 +837,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"}, follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "An invoice is required before moving to Production.")
@@ -875,7 +880,8 @@ class CustomerWorkflowImprovementTests(TestCase):
                         deposit_percentage=Decimal("30.00"),
                     )
 
-                response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+                approve_production_release(opportunity, user=self.admin)
+                response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
                 self.assertEqual(response.status_code, 302)
                 order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -901,8 +907,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             status="sent",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         invoice.refresh_from_db()
@@ -978,8 +985,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             invoice_number="INV-QC-CMT-QUOTED-PAID",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -995,7 +1003,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         opportunity.refresh_from_db()
         self.assertEqual(opportunity.stage, "Production")
 
-        duplicate_response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        duplicate_response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
@@ -1017,8 +1025,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             invoice_status="partial",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -1048,8 +1057,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             status="partial",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -1080,8 +1090,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             status="partial",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -1209,6 +1220,7 @@ class CustomerWorkflowImprovementTests(TestCase):
             status="partial",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
         response = self.client.post(
             reverse("opportunity_detail", args=[opportunity.pk]),
@@ -1251,8 +1263,9 @@ class CustomerWorkflowImprovementTests(TestCase):
             deposit_percentage=Decimal("30.00"),
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+        response = self.client.post(reverse("production_from_opportunity", args=[opportunity.pk]), {"action": "release"})
 
         self.assertEqual(response.status_code, 302)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
@@ -1279,6 +1292,7 @@ class CustomerWorkflowImprovementTests(TestCase):
             invoice_number="INV-QC-FULL-PACKAGE-DETAIL",
         )
 
+        approve_production_release(opportunity, user=self.admin)
         self.client.force_login(self.admin)
         detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
         self.assertEqual(detail_response.status_code, 200)

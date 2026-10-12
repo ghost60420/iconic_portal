@@ -43,7 +43,7 @@ def invoice_queryset_for_opportunity(opportunity):
     )
 
 
-def production_payment_requirement(invoice):
+def production_payment_requirement(invoice, *, is_sample=False):
     if not invoice:
         return {
             "invoice": None,
@@ -61,7 +61,8 @@ def production_payment_requirement(invoice):
     if outstanding < 0:
         outstanding = Decimal("0.00")
 
-    required_percentage = max(Decimal("0"), min(Decimal("100"), decimal_or_zero(invoice.deposit_percentage)))
+    is_sample = is_sample or getattr(invoice, "invoice_type", "") == "sample"
+    required_percentage = Decimal("100") if is_sample else max(Decimal("0"), min(Decimal("100"), decimal_or_zero(invoice.deposit_percentage)))
     required_amount = (total * required_percentage / Decimal("100")).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
     paid_percentage = Decimal("0.0")
     if total > 0:

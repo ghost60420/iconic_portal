@@ -127,6 +127,12 @@ from .services.opportunity_payment_stage import (
     outstanding_balance_summary_for_opportunity,
 )
 from .services.production_payment import production_payment_progress_for_opportunity
+from .services.production_approval import (
+    ProductionApprovalError,
+    approve_production_release,
+    production_readiness,
+)
+from .services.financial_permissions import accessible_financial_sides, can_review_finance_operation
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
@@ -144,12 +150,10 @@ from .services.operations_permissions import (
     scope_sales_opportunities,
 )
 from .services.production_orders import (
-    QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
     create_production_order_from_paid_full_package_quick_costing,
-    full_package_quick_costing_source_for_opportunity,
 )
 from .services.local_sewing import (
     calculate_local_sewing,
@@ -4274,7 +4278,12 @@ def opportunity_detail(request, pk):
         advanced_costing_count,
         quick_costing_count,
     )
-    opportunity_can_hard_delete = not _opportunity_linked_record_labels(opportunity)
+    # Loaded costings already prove this record cannot be deleted. Avoid a
+    # second set of linked-record existence queries just to hide that button.
+    opportunity_can_hard_delete = not (
+        quick_costings or costing_header or active_cost_sheet
+        or _opportunity_linked_record_labels(opportunity)
+    )
     task_assignee_options = [
         {
             "value": _user_display_name(user),
@@ -4607,21 +4616,21 @@ def opportunity_detail(request, pk):
     prod_totals = prod_orders_qs.aggregate(
         total_qty=Sum("qty_total"),
         total_reject=Sum("qty_reject"),
+        **({"total_actual_cost": Sum("actual_total_cost_bdt")} if can_view_internal_financials else {}),
     )
 
     prod_total_qty = prod_totals.get("total_qty") or 0
     prod_total_reject = prod_totals.get("total_reject") or 0
     prod_total_actual_cost = None
     if can_view_internal_financials:
-        prod_total_actual_cost = (
-            prod_orders_qs.aggregate(total_actual_cost=Sum("actual_total_cost_bdt")).get("total_actual_cost") or 0
-        )
+        prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
+    prod_orders = list(prod_orders_qs.order_by("-created_at", "-id"))
 
     costing_calc = compute_costing(costing_header.id) if costing_header and can_view_internal_financials else None
     variance_placeholder = None
     variance_display = None
     if costing_calc:
-        latest_po = prod_orders_qs.order_by("-created_at", "-id").first()
+        latest_po = prod_orders[0] if prod_orders else None
         actual_cost_per_piece = None
         produced_qty = 0
         if latest_po and latest_po.actual_cost_per_piece_bdt is not None:
@@ -4655,7 +4664,6 @@ def opportunity_detail(request, pk):
                 "total_variance": _fmt(total_variance),
             }
 
-    prod_orders = list(prod_orders_qs.order_by("-created_at", "-id"))
     has_broken_production_state = _has_broken_production_state(opportunity, prod_orders)
 
     order_value = opportunity.order_value or 0
@@ -4673,7 +4681,24 @@ def opportunity_detail(request, pk):
     currency_summary = _opportunity_currency_summary(opportunity)
     bdt_per_piece = currency_summary["bdt_per_piece"]
     outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity)
-    production_payment_progress = production_payment_progress_for_opportunity(opportunity)
+    production_readiness_context = production_readiness(opportunity, user=request.user)
+    readiness_source = production_readiness_context.get("source")
+    readiness_invoice = production_readiness_context.get("invoice")
+    can_approve_production_costing = can_approve_costing(request.user)
+    can_review_production_payment = bool(
+        readiness_invoice
+        and can_review_finance_operation(request.user)
+        and readiness_invoice.invoice_region in accessible_financial_sides(request.user)
+    )
+    production_readiness_can_create_quotation = bool(
+        readiness_source
+        and production_readiness_context.get("costing_approved")
+        and not readiness_source.quotation_number
+        and (
+            production_readiness_context.get("source_kind") == "advanced"
+            or readiness_source.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_PRODUCTION}
+        )
+    )
 
     reference_images = list(reference_images_for_opportunity(opportunity))
     primary_reference_image = reference_images[0] if reference_images else None
@@ -4752,7 +4777,10 @@ def opportunity_detail(request, pk):
         "bdt_per_piece": bdt_per_piece,
         "currency_summary": currency_summary,
         "outstanding_balance_summary": outstanding_balance_summary,
-        "production_payment_progress": production_payment_progress,
+        "production_readiness": production_readiness_context,
+        "can_approve_production_costing": can_approve_production_costing,
+        "can_review_production_payment": can_review_production_payment,
+        "production_readiness_can_create_quotation": production_readiness_can_create_quotation,
 
         # Shipping for the template
         "ship": ship,
@@ -9760,49 +9788,13 @@ def production_list(request):
 
 
 def production_add(request):
-    """
-    Create new production order.
-    """
-    order_lines = None
-    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
-    can_edit_local_financials = can_view_local_sewing_financials(request.user)
-    if request.method == "POST":
-        form = ProductionOrderForm(
-            request.POST,
-            request.FILES,
-            can_edit_internal_costing=can_edit_internal_costing,
-            can_edit_local_sewing_financials=can_edit_local_financials,
-        )
-        if form.is_valid():
-            form.instance.created_by = request.user if request.user.is_authenticated else None
-            order = form.save()
-            _save_production_lines(order, request)
-            _apply_production_library_links(order, request)
-            create_lifecycle_from_production(order, user=request.user)
-            messages.success(request, "Production order created.")
-            return redirect("production_detail", pk=order.pk)
-        order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
-    else:
-        form = ProductionOrderForm(
-            can_edit_internal_costing=can_edit_internal_costing,
-            can_edit_local_sewing_financials=can_edit_local_financials,
-        )
-
-    return render(
+    """All new customer orders enter through the existing opportunity release gate."""
+    messages.info(
         request,
-        "crm/production_add.html",
-        {
-            "form": form,
-            "is_edit": False,
-            "order": None,
-            "order_lines": order_lines or _production_order_lines_for_form(),
-            "production_size_labels": SIZE_LABELS,
-            "production_size_group_choices": SIZE_GROUP_CHOICES,
-            "can_view_lifecycle_profit": can_edit_internal_costing,
-            "can_edit_local_sewing_financials": can_edit_local_financials,
-            **_production_library_context(),
-        },
+        "New sampling and bulk orders require opportunity approval. "
+        "Open the opportunity's Production readiness section or ask an authorized approver to release it.",
     )
+    return redirect("opportunities_list" if can_access_operations_module(request.user, "opportunities") else "production_list")
 
 
 def production_edit(request, pk):
@@ -10633,53 +10625,28 @@ def _approved_costing_for_opportunity_production(opportunity):
         return None
 
 
-def _approved_cmt_quick_costing_for_opportunity_production(opportunity):
-    try:
-        quick_costings = (
-            QuickCosting.objects.filter(
-                opportunity=opportunity,
-                approved_at__isnull=False,
-                status__in=QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
-            )
-            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
-            .order_by("-updated_at", "-id")
-        )
-        for quick_costing in quick_costings:
-            if quick_costing.is_latest_revision and quick_costing.is_bangladesh_local_sewing:
-                return quick_costing
-    except (OperationalError, ProgrammingError):
-        return None
-    return None
-
-
 def _create_or_get_production_order_for_opportunity(opportunity, user):
+    if not user or not getattr(user, "is_active", False) or not can_approve_costing(user):
+        raise ProductionOrderCreationError("CEO/Admin approval is required before moving an order to Production.")
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     if po:
         return po, False
 
-    if not can_approve_costing(user):
-        raise ProductionOrderCreationError("CEO/Admin approval is required before moving an order to Production.")
-
-    approved_costing = _approved_costing_for_opportunity_production(opportunity)
-    if approved_costing:
-        return create_production_order_from_approved_quotation(approved_costing, user=user)
-
-    cmt_quick_costing = _approved_cmt_quick_costing_for_opportunity_production(opportunity)
-    if cmt_quick_costing:
+    readiness = production_readiness(opportunity, user=user)
+    source = readiness["source"]
+    if not source:
+        raise ProductionOrderCreationError("A costing and related invoice are required before production release.")
+    if readiness["source_kind"] == "advanced":
+        return create_production_order_from_approved_quotation(source, user=user, invoice=readiness["invoice"])
+    if source.is_bangladesh_local_sewing:
         return create_production_order_from_approved_quick_costing(
-            cmt_quick_costing,
+            source,
             user=user,
+            invoice=readiness["invoice"],
         )
-
-    quick_costing, quick_invoice = full_package_quick_costing_source_for_opportunity(opportunity)
-    if quick_costing:
-        return create_production_order_from_paid_full_package_quick_costing(
-            quick_costing,
-            invoice=quick_invoice,
-            user=user,
-        )
-
-    raise ProductionOrderCreationError("A CEO-approved quotation is required before moving this opportunity to Production.")
+    return create_production_order_from_paid_full_package_quick_costing(
+        source, invoice=readiness["invoice"], user=user,
+    )
 
 
 def _pre_production_stage_for_opportunity(opportunity):
@@ -10712,16 +10679,26 @@ def _has_broken_production_state(opportunity, production_orders=None):
 
 
 def production_from_opportunity(request, pk):
-    """
-    Open or create production order from an opportunity.
-    New orders require a CEO/Admin-approved quotation and a CEO/Admin user.
-    """
+    """Review, approve, then explicitly release through the existing production path."""
     opportunity = get_object_or_404(Opportunity, pk=pk)
-    try:
-        customer = _ensure_customer_for_opportunity(opportunity)
-    except Exception:
-        logger.exception("Failed to ensure customer for opportunity %s", opportunity.pk)
-        customer = None
+    if request.method != "POST":
+        return redirect(reverse("opportunity_detail", args=[pk]) + "#opp-production-readiness")
+    action = request.POST.get("action", "release")
+    if action == "approve_release":
+        try:
+            approve_production_release(
+                opportunity,
+                user=request.user,
+                reason=request.POST.get("reason", ""),
+                waived_requirements=request.POST.getlist("waived_requirements"),
+            )
+        except ProductionApprovalError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "Production approval recorded. Review readiness, then select Move to Production to release the order.")
+        return redirect(reverse("opportunity_detail", args=[pk]) + "#opp-production-readiness")
+    if action != "release":
+        return HttpResponse("Unknown production action.", status=400)
 
     try:
         po, created = _create_or_get_production_order_for_opportunity(opportunity, request.user)
@@ -10736,6 +10713,11 @@ def production_from_opportunity(request, pk):
         messages.error(request, "Unable to create production order right now.")
         return redirect("opportunity_detail", pk=opportunity.pk)
 
+    try:
+        customer = _ensure_customer_for_opportunity(opportunity)
+    except Exception:
+        logger.exception("Failed to ensure customer for opportunity %s", opportunity.pk)
+        customer = None
     approved_costing = _approved_costing_for_opportunity_production(opportunity)
     if customer and not po.customer_id:
         po.customer = customer

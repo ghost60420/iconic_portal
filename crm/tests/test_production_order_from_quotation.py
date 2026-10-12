@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from crm.models import CostingHeader, CostingLineItem, Customer, Invoice, Lead, Opportunity, ProductionOrder
 from crm.production_forms import ProductionOrderForm
+from crm.services.production_approval import approve_production_release
 from crm.services.costing_workflow import create_invoice_from_costing, create_or_link_production_order_from_invoice
 from crm.services.production_orders import ProductionOrderCreationError
 from crm.views import production_list
@@ -98,6 +99,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.status = status
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+        approve_production_release(self.opportunity, user=self.ceo)
         order, created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
         invoice.refresh_from_db()
         return invoice, order, created
@@ -153,7 +155,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.status = "sent"
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
-        with self.assertRaisesMessage(ProductionOrderCreationError, "Verified payment"):
+        with self.assertRaisesMessage(ProductionOrderCreationError, "required customer deposit must be verified"):
             create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         self.assertTrue(invoice_created)
@@ -171,7 +173,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
 
-        with self.assertRaisesMessage(ProductionOrderCreationError, "Verified payment"):
+        with self.assertRaisesMessage(ProductionOrderCreationError, "required customer deposit must be verified"):
             create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         self.assertTrue(invoice_created)

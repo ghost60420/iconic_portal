@@ -20,6 +20,7 @@ from crm.models import (
     QuickCosting,
     Shipment,
 )
+from crm.services.production_approval import approve_production_release
 from crm.services.pipeline import with_pipeline_value
 from crm.services.production_orders import create_production_order_from_approved_quick_costing
 from crm.views_costing import _quick_profit_health, _quick_workflow_badges
@@ -1285,6 +1286,11 @@ class QuickCostingTests(TestCase):
             status="partial",
             deposit_percentage=Decimal("30.00"),
         )
+        production_quick.quotation_number = f"QQT-RELEASE-{production_quick.pk}"
+        production_quick.quoted_at = timezone.now()
+        production_quick.quoted_by = admin
+        production_quick.save(update_fields=["quotation_number", "quoted_at", "quoted_by", "updated_at"])
+        approve_production_release(production_quick.opportunity, user=admin)
         production_order, _created = create_production_order_from_approved_quick_costing(
             production_quick,
             invoice=production_invoice,
@@ -1325,6 +1331,11 @@ class QuickCostingTests(TestCase):
             status="partial",
             deposit_percentage=Decimal("30.00"),
         )
+        quick.quotation_number = f"QQT-RELEASE-{quick.pk}"
+        quick.quoted_at = timezone.now()
+        quick.quoted_by = admin
+        quick.save(update_fields=["quotation_number", "quoted_at", "quoted_by", "updated_at"])
+        approve_production_release(quick.opportunity, user=admin)
         production_order, _created = create_production_order_from_approved_quick_costing(
             quick,
             invoice=invoice,

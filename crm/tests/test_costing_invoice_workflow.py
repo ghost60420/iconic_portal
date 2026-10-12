@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from crm.models import CostingHeader, CostingLineItem, Customer, Lead, Opportunity, OrderLifecycle
+from crm.services.production_approval import approve_production_release
 from crm.services.order_lifecycle import build_lifecycle_profit_breakdown
 from crm.services.costing_workflow import (
     build_production_profit_snapshot,
@@ -102,6 +103,7 @@ class CostingInvoiceWorkflowTests(TestCase):
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
 
+        approve_production_release(self.opportunity, user=self.user)
         order, created_order = create_or_link_production_order_from_invoice(invoice, user=self.user)
         invoice.refresh_from_db()
         self.opportunity.refresh_from_db()

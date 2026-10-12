@@ -208,6 +208,20 @@ class ProductionOrderForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if not self.instance.pk:
+            self.add_error(None, "Create new production orders from the opportunity's Production readiness section.")
+        opportunity = cleaned.get("opportunity")
+        original_opportunity_id = None
+        if self.instance.pk:
+            original_opportunity_id = ProductionOrder.objects.filter(pk=self.instance.pk).values_list(
+                "opportunity_id", flat=True
+            ).first()
+        if getattr(opportunity, "pk", None) != original_opportunity_id:
+            self.add_error(
+                "opportunity",
+                "Use the opportunity's Production readiness section to approve and release its order. "
+                "An existing production order cannot be reassigned to bypass that approval.",
+            )
         is_local = (
             cleaned.get("order_type") == "sewing_charge"
             and cleaned.get("factory_location") == "bd"

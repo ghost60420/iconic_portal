@@ -505,13 +505,6 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
         quick_costing = invoice.quick_costing
 
         if costing:
-            if costing.status != "approved":
-                raise CostingWorkflowError("The linked costing must be approved before production conversion.")
-            if (
-                costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED
-                or not costing.quotation_approved_at
-            ):
-                raise CostingWorkflowError("CEO-approved quotation is required before production conversion.")
             from crm.services.production_orders import create_production_order_from_approved_quotation
 
             order, created = create_production_order_from_approved_quotation(costing, user=user, invoice=invoice)
@@ -523,8 +516,6 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
                     create_production_order_from_approved_quick_costing,
                 )
 
-                if quick_costing.status not in QUICK_COSTING_PRODUCTION_SOURCE_STATUSES or not quick_costing.approved_at:
-                    raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
                 if not quick_costing.is_latest_revision:
                     raise CostingWorkflowError("Only the latest Quick Costing revision can move to Production.")
 
@@ -536,7 +527,7 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
                     )
                 except ProductionOrderCreationError as exc:
                     raise CostingWorkflowError(str(exc)) from exc
-            elif quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE:
+            elif quick_costing.effective_pricing_type in {QuickCosting.PRICING_FULL_PACKAGE, QuickCosting.PRICING_SAMPLE}:
                 from crm.services.production_orders import (
                     ProductionOrderCreationError,
                     create_production_order_from_paid_full_package_quick_costing,

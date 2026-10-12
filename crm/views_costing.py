@@ -1882,7 +1882,7 @@ def quick_costing_approve(request, pk):
         return redirect("quick_costing_detail", pk=pk)
     messages.success(
         request,
-        "Quick costing approved. Move to Production is now available."
+        "Quick costing approved. Review payment and production release approval before moving to Production."
         if quick_costing.is_bangladesh_local_sewing
         else "Quick costing approved and locked.",
     )
