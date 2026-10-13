@@ -15,7 +15,12 @@ from crm.models import (
     AutomationNotification,
     CRMAuditLog,
     Customer,
+    FinanceOperation,
+    FinancialAuditEvent,
     Invoice,
+    InvoicePayment,
+    JournalEntry,
+    JournalLine,
     Lead,
     Opportunity,
     ProductionOrder,
@@ -45,7 +50,7 @@ class LocalSewingApprovalGateTests(TestCase):
 
     def _approve_release(self, quick, *, user=None):
         # These legacy production tests now supply explicit quotation and release
-        # approvals; the release service still validates the fixture's payment.
+        # approvals; payment remains visible without blocking release.
         if not quick.opportunity_id:
             quick.opportunity = Opportunity.objects.create(stage="Proposal", product_type="Other")
         if not quick.quotation_number:
@@ -457,7 +462,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(duplicate, order)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
 
-    def test_quoted_local_sewing_zero_payment_invoice_blocks_production(self):
+    def test_quoted_local_sewing_zero_payment_invoice_allows_production_without_financial_changes(self):
         quick = self.quick(
             status=QuickCosting.STATUS_QUOTED,
             approved_at=timezone.now(),
@@ -477,15 +482,21 @@ class LocalSewingApprovalGateTests(TestCase):
             deposit_percentage=Decimal("30.00"),
         )
 
-        with self.assertRaisesMessage(ProductionOrderCreationError, "required customer deposit must be verified"):
-            create_production_order_from_approved_quick_costing(quick, invoice=invoice, user=self.release_approver)
+        financial_models = (AccountingEntry, FinanceOperation, FinancialAuditEvent, InvoicePayment, JournalEntry, JournalLine)
+        financial_history = {model: list(model.objects.order_by("pk").values()) for model in financial_models}
+        order, created = create_production_order_from_approved_quick_costing(quick, invoice=invoice, user=self.release_approver)
 
-        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.assertTrue(created)
+        self.assertEqual(order.created_by, self.release_approver)
+        self.assertIsNotNone(order.created_at)
+        self.assertEqual(order.opportunity_id, quick.opportunity_id)
         invoice.refresh_from_db()
-        self.assertIsNone(invoice.order_id)
+        self.assertEqual(invoice.order_id, order.pk)
         self.assertEqual(invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(invoice.status, "sent")
         self.assertEqual(invoice.balance, Decimal("10000.00"))
-        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
+        self.assertEqual(financial_history, {model: list(model.objects.order_by("pk").values()) for model in financial_models})
 
     def test_local_sewing_invoice_cannot_bypass_approved_quick_costing_link(self):
         quick = self.quick(status=QuickCosting.STATUS_APPROVED, approved_at=timezone.now())

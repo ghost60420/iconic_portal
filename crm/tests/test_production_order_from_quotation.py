@@ -9,7 +9,11 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from crm.models import CostingHeader, CostingLineItem, Customer, Invoice, Lead, Opportunity, ProductionOrder
+from crm.models import (
+    AccountingEntry, CostingHeader, CostingLineItem, Customer, FinanceOperation,
+    FinancialAuditEvent, Invoice, InvoicePayment, JournalEntry, JournalLine, Lead,
+    Opportunity, ProductionOrder,
+)
 from crm.production_forms import ProductionOrderForm
 from crm.services.production_approval import approve_production_release
 from crm.services.costing_workflow import create_invoice_from_costing, create_or_link_production_order_from_invoice
@@ -147,7 +151,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(second_order, first_order)
         self.assertEqual(ProductionOrder.objects.filter(source_quotation=self.costing).count(), 1)
 
-    def test_invoice_conversion_blocks_unpaid_invoice(self):
+    def test_invoice_conversion_allows_unpaid_invoice_without_financial_changes(self):
         self._approve()
 
         invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
@@ -155,17 +159,24 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.status = "sent"
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
-        with self.assertRaisesMessage(ProductionOrderCreationError, "required customer deposit must be verified"):
-            create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+        financial_models = (AccountingEntry, FinanceOperation, FinancialAuditEvent, InvoicePayment, JournalEntry, JournalLine)
+        financial_history = {model: list(model.objects.order_by("pk").values()) for model in financial_models}
+        order, created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         self.assertTrue(invoice_created)
-        self.assertFalse(ProductionOrder.objects.filter(costing_header=self.costing).exists())
-        self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 0)
+        self.assertTrue(created)
+        self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 1)
+        self.assertEqual(order.created_by, self.ceo)
+        self.assertIsNotNone(order.created_at)
+        self.assertEqual(order.opportunity, self.opportunity)
         invoice.refresh_from_db()
-        self.assertIsNone(invoice.order_id)
+        self.assertEqual(invoice.order_id, order.pk)
+        self.assertEqual(invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(invoice.status, "sent")
         self.assertEqual(invoice.balance, Decimal("2500.00"))
+        self.assertEqual(financial_history, {model: list(model.objects.order_by("pk").values()) for model in financial_models})
 
-    def test_invoice_conversion_blocks_payment_below_deposit(self):
+    def test_invoice_conversion_allows_payment_below_deposit_without_financial_changes(self):
         self._approve()
         invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
         invoice.paid_amount = Decimal("725.00")
@@ -173,14 +184,19 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
 
-        with self.assertRaisesMessage(ProductionOrderCreationError, "required customer deposit must be verified"):
-            create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+        financial_models = (AccountingEntry, FinanceOperation, FinancialAuditEvent, InvoicePayment, JournalEntry, JournalLine)
+        financial_history = {model: list(model.objects.order_by("pk").values()) for model in financial_models}
+        order, created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         self.assertTrue(invoice_created)
-        self.assertFalse(ProductionOrder.objects.filter(costing_header=self.costing).exists())
+        self.assertTrue(created)
+        self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 1)
         invoice.refresh_from_db()
-        self.assertIsNone(invoice.order_id)
+        self.assertEqual(invoice.order_id, order.pk)
+        self.assertEqual(invoice.paid_amount, Decimal("725.00"))
+        self.assertEqual(invoice.status, "partial")
         self.assertEqual(invoice.balance, Decimal("1775.00"))
+        self.assertEqual(financial_history, {model: list(model.objects.order_by("pk").values()) for model in financial_models})
 
     def test_existing_legacy_order_is_linked_instead_of_duplicated(self):
         legacy_order = ProductionOrder.objects.create(

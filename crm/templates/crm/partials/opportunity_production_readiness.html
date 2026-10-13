@@ -4,7 +4,7 @@
     <div>
       <p class="opp-section-kicker">PRODUCTION READINESS · {% if readiness.is_sample %}Sampling{% else %}Bulk{% endif %}</p>
       <h2>{% if readiness.production_order %}PRODUCTION RELEASED{% elif readiness.ready %}READY FOR PRODUCTION{% else %}ACTION REQUIRED{% endif %}</h2>
-      <p class="opp-muted">{% if readiness.is_sample %}Sampling requires approved costing and quotation and full verified sample payment.{% else %}Bulk production requires approved costing and quotation and the invoice's verified deposit.{% endif %} Move to Production confirms operational release; payment verification does not start production.</p>
+      <p class="opp-muted">Approved costing and quotation are required. Authorized Production users may release orders while payment is pending. Move to Production confirms operational release.</p>
     </div>
     {% if readiness.production_order %}
       <a href="{% url 'production_detail' readiness.production_order.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open production</a>
@@ -15,10 +15,15 @@
     <article><span>Costing</span><strong>{% if readiness.costing_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'costing' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
     <article><span>Quotation</span><strong>{% if readiness.quotation_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'quotation' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
     <article><span>Payment</span><strong>{% if readiness.payment_verified %}Verified{% else %}Pending{% endif %}</strong>{% if 'payment' in readiness.waived_requirements %}<small>Requirement waived; invoice payment status is unchanged</small>{% endif %}</article>
-    <article><span>Required payment</span><strong>{{ readiness.required_amount_display|default:"Invoice required" }}</strong><small>{% if readiness.is_sample %}Full sample payment{% else %}Required deposit{% endif %} · {{ readiness.payment_required_percentage_display }}{% if readiness.invoice %} · {{ readiness.invoice.invoice_number }}{% endif %}</small></article>
+    <article><span>Invoice total</span><strong>{{ readiness.invoice_total_display|default:"—" }}</strong>{% if readiness.invoice %}<small>{{ readiness.invoice.invoice_number }}</small>{% endif %}</article>
+    <article><span>Invoice payment terms</span><strong>{{ readiness.required_amount_display|default:"Invoice required" }}</strong><small>{% if readiness.is_sample %}Full sample payment{% else %}Required deposit{% endif %} · {{ readiness.payment_required_percentage_display }}</small></article>
     <article><span>Payment received</span><strong>{{ readiness.amount_paid_display|default:"—" }}</strong><small>Verified invoice payments only</small></article>
     <article><span>Outstanding balance</span><strong>{{ readiness.outstanding_balance_display|default:"—" }}</strong></article>
   </div>
+
+  {% if readiness.outstanding_balance > 0 %}
+    <div id="opp-production-payment-warning" class="opp-notes-box" role="status">Payment outstanding. Production can proceed with authorization.</div>
+  {% endif %}
 
   {% if readiness.blockers and not readiness.production_order %}
     <div id="opp-production-blockers" class="opp-notes-box">
@@ -61,12 +66,10 @@
       <a href="{% url 'invoice_view' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Review invoice / record payment</a>
     {% endif %}
     {% if readiness.can_release and not readiness.production_order %}
-      {% if readiness.ready %}
-        <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-inline-form">
-          {% csrf_token %}<input type="hidden" name="action" value="release">
-          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--primary">Move to Production</button>
-        </form>
-      {% endif %}
+      <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-inline-form">
+        {% csrf_token %}<input type="hidden" name="action" value="release">
+        <button type="submit" class="opp-btn opp-btn--tiny opp-btn--primary"{% if not readiness.ready %} disabled aria-describedby="opp-production-blockers"{% endif %}>Move to Production</button>
+      </form>
     {% endif %}
   </div>
 

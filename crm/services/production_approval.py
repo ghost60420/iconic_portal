@@ -159,8 +159,8 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None, i
         block("costing", "Costing approval is pending.")
     if not quotation_approved:
         block("quotation", "Quotation approval is pending.")
-    if not payment.get("allowed", False):
-        block("payment", "Full sample payment must be verified." if is_sample else "The invoice's required customer deposit must be verified.")
+    # Temporary authorized policy: payment remains visible but does not gate
+    # production release. Commercial approvals and release permissions still apply.
 
     snapshot = _approval_snapshot(opportunity, source, invoice, is_sample)
     fingerprint = _fingerprint(snapshot)
@@ -211,6 +211,7 @@ def production_readiness(opportunity, *, source=None, invoice=None, user=None, i
         "costing_approved": costing_approved,
         "quotation_approved": quotation_approved,
         "payment_verified": bool(payment.get("allowed", False)),
+        "payment_required_for_production": False,
         "production_approved": production_approved,
         "can_release": can_release_production(user),
         "can_exception": can_approve_production_exception(user),

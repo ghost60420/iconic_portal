@@ -79,7 +79,8 @@ class OpportunityDetailPerformanceTests(TestCase):
         response, queries = self.detail()
         self.assertLessEqual(len(queries), 22)
         self.assertContains(response, self.invoice.invoice_number)
-        self.assertFalse(response.context["production_readiness"]["ready"])
+        self.assertTrue(response.context["production_readiness"]["ready"])
+        self.assertFalse(response.context["production_readiness"]["payment_verified"])
 
     def test_favorite_is_current_user_scoped_and_refreshed_each_request(self):
         self.client.force_login(self.user)

@@ -48,17 +48,22 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertEqual(response.status_code, 200)
         return response
 
-    def test_one_readiness_section_shows_full_sample_requirement_and_exact_blockers(self):
+    def test_one_readiness_section_shows_payment_truth_without_blocking_release(self):
         response = self.detail()
         self.assertContains(response, 'id="opp-production-readiness"', count=1)
-        self.assertContains(response, "Full sample payment must be verified.")
-        self.assertContains(response, "ACTION REQUIRED")
+        self.assertContains(response, "Payment outstanding. Production can proceed with authorization.")
+        self.assertNotContains(response, "Full sample payment must be verified.")
+        self.assertNotContains(response, "Blocking production")
         self.assertNotContains(response, "Production release approval is pending.")
-        self.assertContains(response, "Required payment")
+        self.assertContains(response, "Invoice total")
+        self.assertContains(response, "Payment received")
+        self.assertContains(response, "Outstanding balance")
         self.assertEqual(response.context["production_readiness"]["required_amount"], Decimal("500"))
-        self.assertNotContains(response, "Payment does not block production")
         self.assertNotContains(response, "Can this move to the factory?")
-        self.assertNotContains(response, "READY FOR PRODUCTION")
+        self.assertContains(response, "READY FOR PRODUCTION")
+        self.assertContains(response, 'name="action" value="release"')
+        self.assertContains(response, ">Move to Production</button>")
+        self.assertFalse(response.context["production_readiness"]["payment_verified"])
         self.assertFalse(ProductionOrder.objects.filter(opportunity=self.opportunity).exists())
 
     def test_commercial_quote_summary_recognizes_the_approved_quick_quotation(self):
@@ -68,9 +73,11 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertNotContains(response, "No quote yet")
         self.assertTrue(response.context["production_readiness"]["quotation_approved"])
 
-    def test_sales_sees_blockers_without_ceo_or_finance_actions(self):
+    def test_sales_sees_payment_warning_without_production_ceo_or_finance_actions(self):
         response = self.detail(self.sales)
-        self.assertContains(response, "Blocking production")
+        self.assertContains(response, "Payment outstanding. Production can proceed with authorization.")
+        self.assertNotContains(response, ">Move to Production</button>")
+        self.assertNotContains(response, 'name="action" value="release"')
         self.assertNotContains(response, 'id="opp-production-exception"')
         self.assertNotContains(response, "Approve production release")
         self.assertNotContains(response, "Verify customer payment")
@@ -89,10 +96,12 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_ceo_exception_remains_visibly_unpaid_and_requires_a_separate_release_post(self):
-        approve_production_release(self.opportunity, user=self.ceo, reason="Customer sample deadline approved.", waived_requirements=["payment"])
+        QuickCosting.objects.filter(pk=self.quick.pk).update(quotation_number="", quoted_at=None)
+        approve_production_release(self.opportunity, user=self.ceo, reason="Customer sample deadline approved.", waived_requirements=["quotation"])
         response = self.detail()
         self.assertContains(response, "READY FOR PRODUCTION")
-        self.assertContains(response, "Requirement waived; invoice payment status is unchanged")
+        self.assertContains(response, "Requirement waived by CEO / Super Admin")
+        self.assertContains(response, "Payment outstanding. Production can proceed with authorization.")
         self.assertContains(response, "Customer sample deadline approved.")
         self.assertContains(response, "readiness-ceo")
         self.assertContains(response, 'name="action" value="release"')
@@ -107,6 +116,8 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertContains(response, "Quotation approval is pending.")
         self.assertContains(response, "Create quotation")
         self.assertNotContains(response, "READY FOR PRODUCTION")
+        self.assertContains(response, "Move to Production</button>")
+        self.assertContains(response, " disabled")
 
     def test_ceo_gets_existing_costing_approval_action_and_required_exception_reason(self):
         QuickCosting.objects.filter(pk=self.quick.pk).update(status=QuickCosting.STATUS_SUBMITTED, approved_at=None, approved_by=None)
@@ -116,13 +127,21 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertContains(response, 'id="opp-production-exception-reason" name="reason" rows="3" required')
         self.assertContains(response, 'name="waived_requirements" value="costing"')
 
-    def test_manager_can_move_paid_sample_without_repeated_commercial_approval(self):
+    def test_manager_can_move_unpaid_partial_and_paid_sample_without_repeated_commercial_approval(self):
         self.sales.groups.add(Group.objects.get_or_create(name="Manager")[0])
-        Invoice.objects.filter(pk=self.invoice.pk).update(paid_amount=Decimal("500"))
-        response = self.detail(self.sales)
-        self.assertContains(response, "READY FOR PRODUCTION")
-        self.assertContains(response, 'name="action" value="release"')
-        self.assertNotContains(response, "Approve production release")
-        self.assertNotContains(response, "Approve quotation")
-        self.assertNotContains(response, 'id="opp-production-exception"')
-        self.assertFalse(ProductionOrder.objects.exists())
+        for paid in ("0", "400", "500"):
+            with self.subTest(paid=paid):
+                Invoice.objects.filter(pk=self.invoice.pk).update(paid_amount=Decimal(paid))
+                response = self.detail(self.sales)
+                self.assertContains(response, "READY FOR PRODUCTION")
+                self.assertContains(response, 'name="action" value="release"')
+                self.assertContains(response, ">Move to Production</button>")
+                self.assertNotContains(response, "Approve production release")
+                self.assertNotContains(response, "Approve quotation")
+                self.assertNotContains(response, 'id="opp-production-exception"')
+                warning = "Payment outstanding. Production can proceed with authorization."
+                if paid == "500":
+                    self.assertNotContains(response, warning)
+                else:
+                    self.assertContains(response, warning)
+                self.assertFalse(ProductionOrder.objects.exists())

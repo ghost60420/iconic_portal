@@ -11,7 +11,6 @@ from crm.models import CRMAuditLog, FinanceOperation, Invoice, InvoicePayment, J
 from crm.services.costing_workflow import create_invoice_from_quick_costing
 from crm.services.finance_operations import FinanceOperationError, review_operation
 from crm.services.production_approval import APPROVAL_FIELD, production_readiness
-from crm.services.production_orders import ProductionOrderCreationError, create_production_order_from_paid_full_package_quick_costing
 from crm.tests import test_invoice_payment_live_fix
 
 
@@ -75,9 +74,9 @@ class FinalCRMIntegrationTests(TestCase):
             before = JournalEntry.objects.count()
             with self.assertRaises(FinanceOperationError):
                 review_operation(operation, actor=sales, action="APPROVE", notes="Unauthorized")
-            self.assertFalse(production_readiness(opportunity)["ready"])
-            with self.assertRaises(ProductionOrderCreationError):
-                create_production_order_from_paid_full_package_quick_costing(quick, invoice=invoice, user=operator)
+            self.assertTrue(production_readiness(opportunity)["ready"])
+            self.assertFalse(production_readiness(opportunity)["payment_verified"])
+            self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
             verifier = finance if index == 0 else self.ceo
             posted = review_operation(operation, actor=verifier, action="APPROVE", notes="Bank receipt verified", confirm_self_approval=True)
             self.assertEqual(posted.state, FinanceOperation.STATE_POSTED)
