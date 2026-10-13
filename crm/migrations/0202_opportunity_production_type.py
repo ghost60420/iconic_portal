@@ -12,17 +12,18 @@ class Migration(migrations.Migration):
                 blank=True,
                 choices=[("", "Unset"), ("in_house", "In House"), ("third_party", "Third Party")],
                 default="",
+                db_default="",
                 max_length=20,
             ),
         ),
         migrations.AddField(
             model_name="opportunity",
             name="third_party_name",
-            field=models.CharField(blank=True, default="", max_length=200),
+            field=models.CharField(blank=True, default="", db_default="", max_length=200),
         ),
         migrations.AddField(
             model_name="opportunity",
             name="third_party_notes",
-            field=models.TextField(blank=True, default=""),
+            field=models.TextField(blank=True, default="", db_default=""),
         ),
     ]

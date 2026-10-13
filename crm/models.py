@@ -1313,10 +1313,10 @@ class Opportunity(models.Model):
 
     # Unknown historical assignments stay unset; production reads these via its opportunity.
     production_type = models.CharField(
-        max_length=20, choices=PRODUCTION_TYPE_CHOICES, blank=True, default=""
+        max_length=20, choices=PRODUCTION_TYPE_CHOICES, blank=True, default="", db_default=""
     )
-    third_party_name = models.CharField(max_length=200, blank=True, default="")
-    third_party_notes = models.TextField(blank=True, default="")
+    third_party_name = models.CharField(max_length=200, blank=True, default="", db_default="")
+    third_party_notes = models.TextField(blank=True, default="", db_default="")
 
     order_currency = models.CharField(
         max_length=3,
