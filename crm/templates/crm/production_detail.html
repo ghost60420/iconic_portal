@@ -37,6 +37,7 @@
           <span>{{ order.get_factory_location_display|default:"Factory not set" }}</span>
         </div>
         <div class="production-hero-badges">
+          {% include "crm/partials/production_type_indicator.html" with production_opportunity=order.opportunity only %}
           <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
           <span class="production-priority-badge {{ priority_badge.tone }}">{{ priority_badge.label }} priority</span>
           {% if order_delayed %}
@@ -193,6 +194,15 @@
       </div>
       <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
     </div>
+
+    {% if opportunity.production_type == "third_party" %}
+      {% if opportunity.third_party_name or opportunity.third_party_notes %}
+        <div id="production-third-party-summary" style="padding:0 18px 16px; overflow-wrap:anywhere;">
+          <strong>Third Party{% if opportunity.third_party_name %}: {{ opportunity.third_party_name }}{% endif %}</strong>
+          {% if opportunity.third_party_notes %}<p>{{ opportunity.third_party_notes|linebreaksbr }}</p>{% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
 
     {% if operational_status == "cancelled" %}
       <div class="production-empty-inline">This production order is cancelled.</div>

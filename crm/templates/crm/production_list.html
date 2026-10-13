@@ -309,6 +309,7 @@
                         <span class="production-type-badge production-type-badge--{{ order.production_order_type }}">
                           {{ order.get_production_order_type_display|default:"Bulk Production" }}
                         </span>
+                        {% include "crm/partials/production_type_indicator.html" with production_opportunity=order.opportunity only %}
                         <span>{{ order.get_factory_location_display|default:"Factory not set" }} / {{ order.get_order_type_display|default:"Order type not set" }}</span>
                       </div>
                     </div>

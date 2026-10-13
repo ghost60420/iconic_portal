@@ -257,6 +257,7 @@ def _opportunity_currency_summary(opportunity):
 
 from .forms import (
     BDStaffMonthForm,
+    OpportunityProductionTypeForm,
     EventForm,
     LeadForm,
     ShipmentForm,
@@ -8709,6 +8710,7 @@ def opportunity_edit(request, pk):
         scope_sales_opportunities(Opportunity.objects.select_related("lead", "customer"), request.user),
         pk=pk,
     )
+    opportunity_production_form = OpportunityProductionTypeForm(instance=opportunity)
 
     product_type_choices = Opportunity.PRODUCT_TYPE_CHOICES
     product_category_choices = Opportunity.PRODUCT_CATEGORY_CHOICES
@@ -8733,6 +8735,15 @@ def opportunity_edit(request, pk):
     ]
 
     if request.method == "POST":
+        # Older clients omit these fields; retain their existing assignment.
+        if "production_type" in request.POST:
+            opportunity_production_form = OpportunityProductionTypeForm(request.POST, instance=opportunity)
+            if not opportunity_production_form.is_valid():
+                for field_errors in opportunity_production_form.errors.values():
+                    messages.error(request, "; ".join(field_errors))
+                return redirect("opportunity_edit", pk=pk)
+            opportunity_production_form.save(commit=False)
+
         reference_payload = reference_image_payload_from_request(request)
         if any(item.get("image") for item in reference_payload):
             try:
@@ -8813,6 +8824,7 @@ def opportunity_edit(request, pk):
         "crm/opportunity_edit.html",
         {
             "opportunity": opportunity,
+            "opportunity_production_form": opportunity_production_form,
             "product_type_choices": product_type_choices,
             "product_category_choices": product_category_choices,
             "order_currency_choices": order_currency_choices,

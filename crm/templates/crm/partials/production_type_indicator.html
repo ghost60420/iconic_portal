@@ -1,0 +1,7 @@
+{% if production_opportunity.production_type == "in_house" %}
+  <span class="iconic-production-type iconic-production-type--in-house" style="display:inline-flex; width:fit-content; padding:4px 9px; border:1px solid #15803d; border-radius:999px; background:#14532d; color:#dcfce7; font-size:11px; font-weight:800; line-height:1.4;" aria-label="Production type: In House">IN HOUSE</span>
+{% elif production_opportunity.production_type == "third_party" %}
+  <span class="iconic-production-type iconic-production-type--third-party" style="display:inline-flex; width:fit-content; padding:4px 9px; border:1px solid #9333ea; border-radius:999px; background:#581c87; color:#f3e8ff; font-size:11px; font-weight:800; line-height:1.4;" aria-label="Production type: Third Party">THIRD PARTY</span>
+{% else %}
+  <span class="iconic-production-type iconic-production-type--unset" style="display:inline-flex; width:fit-content; padding:4px 9px; border:1px solid #64748b; border-radius:999px; background:#334155; color:#f1f5f9; font-size:11px; font-weight:800; line-height:1.4;" aria-label="Production type: Unset">Unset</span>
+{% endif %}

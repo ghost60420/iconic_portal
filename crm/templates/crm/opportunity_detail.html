@@ -24,6 +24,7 @@
       <div class="opp-hero-badges">
         <span class="opp-stage-badge" data-stage="{{ opportunity.stage }}">{{ opportunity.get_stage_display }}</span>
         <span class="opp-status-pill {{ opportunity.status_key }}">{{ opportunity.status_label }}</span>
+        {% include "crm/partials/production_type_indicator.html" with production_opportunity=opportunity only %}
         {% if opportunity.opportunity_date %}
           <span class="opp-badge">HISTORICAL ENTRY</span>
         {% endif %}
@@ -279,6 +280,16 @@
             <strong>{% if currency_summary.cad_per_piece_display %}{{ currency_summary.cad_per_piece_display }}{% else %}Conversion unavailable{% endif %}</strong>
           </div>
         </div>
+
+        {% if opportunity.production_type == "third_party" %}
+          {% if opportunity.third_party_name or opportunity.third_party_notes %}
+            <div class="opp-notes-box" id="opportunity-third-party-summary" style="overflow-wrap:anywhere;">
+              <span>Third Party</span>
+              {% if opportunity.third_party_name %}<p><strong>{{ opportunity.third_party_name }}</strong></p>{% endif %}
+              {% if opportunity.third_party_notes %}<p>{{ opportunity.third_party_notes|linebreaksbr }}</p>{% endif %}
+            </div>
+          {% endif %}
+        {% endif %}
 
         <div class="opp-notes-box">
           <span>Opportunity notes</span>

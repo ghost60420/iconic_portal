@@ -332,6 +332,33 @@
         </div>
       </section>
 
+      <section class="opp-edit-card" id="opportunity-production-assignment">
+        <div class="opp-edit-card-header">
+          <h2>Production Type</h2>
+          <p>Select the confirmed production assignment. Leave it unset when unknown.</p>
+        </div>
+        <div class="opp-edit-card-body">
+          {{ opportunity_production_form.non_field_errors }}
+          <div class="opp-edit-field">
+            <label for="{{ opportunity_production_form.production_type.id_for_label }}">Production Type</label>
+            {{ opportunity_production_form.production_type }}
+            {{ opportunity_production_form.production_type.errors }}
+          </div>
+          <div id="opportunity-third-party-details"{% if opportunity_production_form.production_type.value != "third_party" %} hidden{% endif %}>
+            <div class="opp-edit-field" style="margin-top:16px;">
+              <label for="{{ opportunity_production_form.third_party_name.id_for_label }}">Third Party Name (optional)</label>
+              {{ opportunity_production_form.third_party_name }}
+              {{ opportunity_production_form.third_party_name.errors }}
+            </div>
+            <div class="opp-edit-field" style="margin-top:16px;">
+              <label for="{{ opportunity_production_form.third_party_notes.id_for_label }}">Notes (optional)</label>
+              {{ opportunity_production_form.third_party_notes }}
+              {{ opportunity_production_form.third_party_notes.errors }}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="opp-edit-card">
         <div class="opp-edit-card-header">
           <h2>Notes</h2>
@@ -428,6 +455,16 @@
 
 <script>
   (function () {
+    const productionType = document.querySelector("#opportunity-production-assignment select[name='production_type']");
+    const thirdPartyDetails = document.getElementById("opportunity-third-party-details");
+    if (productionType && thirdPartyDetails) {
+      function updateProductionDetails() {
+        thirdPartyDetails.hidden = productionType.value !== "third_party";
+      }
+      productionType.addEventListener("change", updateProductionDetails);
+      updateProductionDetails();
+    }
+
     function parseNum(value) {
       const number = parseFloat(value);
       return Number.isFinite(number) ? number : 0;

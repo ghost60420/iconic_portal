@@ -1164,6 +1164,12 @@ class LeadResearchJob(models.Model):
 # -----------------------------------
 
 class Opportunity(models.Model):
+    PRODUCTION_TYPE_CHOICES = [
+        ("", "Unset"),
+        ("in_house", "In House"),
+        ("third_party", "Third Party"),
+    ]
+
     ORDER_CURRENCY_CHOICES = [
         ("CAD", "CAD"),
         ("USD", "USD"),
@@ -1304,6 +1310,13 @@ class Opportunity(models.Model):
     )
 
     moq_units = models.IntegerField(null=True, blank=True)
+
+    # Unknown historical assignments stay unset; production reads these via its opportunity.
+    production_type = models.CharField(
+        max_length=20, choices=PRODUCTION_TYPE_CHOICES, blank=True, default=""
+    )
+    third_party_name = models.CharField(max_length=200, blank=True, default="")
+    third_party_notes = models.TextField(blank=True, default="")
 
     order_currency = models.CharField(
         max_length=3,

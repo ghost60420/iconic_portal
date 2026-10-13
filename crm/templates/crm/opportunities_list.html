@@ -263,6 +263,7 @@
               <td data-label="Stage">
                 <span class="opp-stage-badge" data-stage="{{ opp.stage }}">{{ opp.stage }}</span>
                 <span class="opp-status-pill {{ opp.status_key }}">{{ opp.status_label }}</span>
+                {% include "crm/partials/production_type_indicator.html" with production_opportunity=opp only %}
               </td>
 
               <td data-label="Expected / follow up">

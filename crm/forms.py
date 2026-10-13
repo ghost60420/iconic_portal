@@ -59,6 +59,25 @@ from .services.receivable_accounting import (
 )
 
 # --------------------------------------------------
+# Opportunity production assignment
+# --------------------------------------------------
+class OpportunityProductionTypeForm(forms.ModelForm):
+    """Optional production assignment on the existing opportunity edit screen."""
+
+    class Meta:
+        model = Opportunity
+        fields = ("production_type", "third_party_name", "third_party_notes")
+        labels = {
+            "production_type": "Production Type",
+            "third_party_name": "Third Party Name (optional)",
+            "third_party_notes": "Notes (optional)",
+        }
+        widgets = {
+            "third_party_notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+
+# --------------------------------------------------
 # Shared multi file widgets
 # --------------------------------------------------
 class MultiFileInput(forms.ClearableFileInput):
