@@ -1878,8 +1878,26 @@ class InvoicePaymentForm(forms.ModelForm):
                     gl_account__system_key__isnull=False,
                 ).select_related("gl_account").order_by("kind", "name")
             self.fields["payment_account"].queryset = accounts
-            account_choices = [(account.pk, str(account)) for account in accounts]
+            eligible_accounts = list(accounts)
+            account_choices = [(account.pk, str(account)) for account in eligible_accounts]
             self.fields["payment_account"].choices = [("", "Select receiving account"), *account_choices]
+            if core_writes_enabled and not self.instance.pk:
+                account_kinds = {account.kind for account in eligible_accounts}
+                available_methods = [
+                    (method, label) for method, label in CUSTOMER_PAYMENT_METHOD_CHOICES
+                    if account_kinds & PAYMENT_METHOD_ACCOUNT_KINDS.get(method, set())
+                ]
+                self.fields["payment_method"].choices = available_methods
+                self.fields["payment_method"].initial = available_methods[0][0] if available_methods else ""
+                self.fields["payment_method"].error_messages["invalid_choice"] = (
+                    "This payment method is unavailable: no eligible receiving account is configured for this invoice's country and currency. Ask Finance to confirm the account and asset mapping."
+                )
+                unavailable_labels = [label for method, label in CUSTOMER_PAYMENT_METHOD_CHOICES
+                                      if not account_kinds & PAYMENT_METHOD_ACCOUNT_KINDS.get(method, set())]
+                if unavailable_labels and account_choices:
+                    self.configuration_warnings.append(
+                        f"{', '.join(unavailable_labels)} unavailable for {invoice_side}/{invoice_currency}: no eligible receiving account. Ask Finance to confirm an active account and its Financial Core asset mapping. Available payment methods can still be used."
+                    )
             if not account_choices:
                 self.configuration_warnings.append(
                     f"No eligible {invoice_side}/{invoice_currency} receiving account is available. Ask Finance to configure an active bank, PayPal or cash account mapped to an active Financial Core asset account. No account will be guessed."

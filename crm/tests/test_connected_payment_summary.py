@@ -2,14 +2,15 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
-from django.db import connection
+from django.db import connection, transaction
+from django.db.models import Sum
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from crm.models import FinanceOperation, Invoice, InvoicePayment, Opportunity, ProductionOrder, QuickCosting
-from crm.services.finance_operations import review_operation
+from crm.models import FinanceOperation, Invoice, InvoicePayment, JournalEntry, Opportunity, ProductionOrder, QuickCosting
+from crm.services.finance_operations import FinanceOperationError, review_operation
 from crm.tests import test_invoice_payment_live_fix
 
 
@@ -89,6 +90,47 @@ class ConnectedPaymentSummaryTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["production_payment_rows"], [])
         self.assertNotContains(response, 'id="production-invoice-payment-summary"')
+
+    def test_remaining_cad_100_posts_once_and_simulation_rolls_back(self):
+        # Synthetic equivalent of Invoice69; never access the real customer record.
+        self.invoice.subtotal = self.invoice.total_amount = Decimal("500")
+        self.invoice.save(update_fields=["subtotal", "total_amount"])
+        initial = self.record("400", "SYNTHETIC-PRIOR-400")
+        review_operation(initial, actor=self.ceo, action="APPROVE", notes="Synthetic prior receipt verified")
+        finance = type(self.ceo).objects.create_user(username="summary-finance")
+        finance.groups.add(Group.objects.get_or_create(name="Finance")[0])
+        finance.access.role = "CA"
+        finance.access.can_accounting_ca = True
+        finance.access.can_accounting_bd = False
+        finance.access.save()
+        before = (JournalEntry.objects.count(), InvoicePayment.objects.count(), FinanceOperation.objects.count())
+        with transaction.atomic():
+            remaining = self.record("100", "SYNTHETIC-REMAINING-100")
+            self.invoice.refresh_from_db()
+            self.assertEqual(self.invoice.balance, Decimal("100"))
+            self.client.force_login(finance)
+            response = self.client.post(reverse("finance_operation_review", args=[remaining.pk, "approve"]), {
+                "notes": "Synthetic remaining CAD100 received and verified",
+            })
+            self.assertEqual(response.status_code, 302)
+            remaining.refresh_from_db()
+            self.assertEqual(remaining.state, FinanceOperation.STATE_POSTED)
+            self.assertEqual(JournalEntry.objects.count(), before[0] + 1)
+            totals = remaining.primary_journal.lines.aggregate(debit=Sum("native_debit"), credit=Sum("native_credit"))
+            self.assertEqual(totals, {"debit": Decimal("100"), "credit": Decimal("100")})
+            readiness, row = self.summaries()
+            self.assertEqual(readiness["payment_status"], "FULLY PAID")
+            self.assertEqual(readiness["outstanding_balance"], Decimal("0"))
+            self.assertEqual(row["summary"]["remaining_balance"], Decimal("0"))
+            self.assertEqual(ProductionOrder.objects.count(), 1)
+            with self.assertRaises(FinanceOperationError):
+                review_operation(remaining, actor=finance, action="APPROVE", notes="Duplicate must be rejected")
+            self.assertEqual(JournalEntry.objects.count(), before[0] + 1)
+            transaction.set_rollback(True)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.paid_amount, Decimal("400"))
+        self.assertEqual(self.invoice.balance, Decimal("100"))
+        self.assertEqual((JournalEntry.objects.count(), InvoicePayment.objects.count(), FinanceOperation.objects.count()), before)
 
     def test_summary_permissions_and_pending_states_do_not_query_per_invoice(self):
         self.client.force_login(self.ceo)

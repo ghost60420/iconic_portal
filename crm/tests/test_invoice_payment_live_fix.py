@@ -278,6 +278,37 @@ class InvoicePaymentLiveFixTests(TestCase):
                 )
                 self.assertEqual(form.is_valid(), expected, form.errors.as_text())
 
+    def test_canadian_bank_works_when_other_receiving_methods_are_unconfigured(self):
+        CashBankAccount.objects.exclude(pk__in=[self.ca_bank.pk, self.invalid_expense_account.pk]).update(is_active=False)
+        invoice = self.invoice("LIMITED-CA", total="100")
+        page = self.client.get(reverse("invoice_payment_add", args=[invoice.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(list(page.context["payment_form"].fields["payment_method"].choices), [
+            ("e_transfer", "E Transfer"), ("bank_transfer", "Bank Transfer"),
+        ])
+        self.assertContains(page, "PayPal, Cash unavailable for CA/CAD")
+        for method in ("paypal", "cash"):
+            rejected = self.client.post(reverse("invoice_payment_add", args=[invoice.pk]), self.payment_data(
+                invoice, "10", method=method, reference=f"UNAVAILABLE-{method}",
+            ))
+            self.assertEqual(rejected.status_code, 200)
+            self.assertContains(rejected, "This payment method is unavailable")
+        self.assertFalse(FinanceOperation.objects.filter(invoice=invoice).exists())
+        for method in ("e_transfer", "bank_transfer"):
+            self.assertEqual(self.post_payment(invoice, "10", method=method, reference=f"AVAILABLE-{method}").status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.paid_amount, Decimal("20"))
+        self.assertEqual(invoice.balance, Decimal("80"))
+
+    def test_missing_bangladesh_receiving_configuration_has_no_selectable_method(self):
+        self.bd_bank.is_active = False
+        self.bd_bank.save(update_fields=["is_active"])
+        invoice = self.invoice("LIMITED-BD", side="BD", currency="BDT")
+        page = self.client.get(reverse("invoice_payment_add", args=[invoice.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(list(page.context["payment_form"].fields["payment_method"].choices), [])
+        self.assertContains(page, "No eligible BD/BDT receiving account is available")
+
     def test_live_draft_case_posts_customer_deposit_without_revenue(self):
         invoice = self.invoice("INV00049", total="380.00")
         revenue_before = self.revenue_credit_total()
