@@ -753,6 +753,18 @@ def finance_operation_review(request, pk, action):
                 notes=notes,
                 confirm_self_approval=request.POST.get("confirm_self_approval") == "yes",
             )
+        except (FinanceOperationError, ValueError, ValidationError) as exc:
+            messages.error(request, str(exc))
+        except Exception as exc:
+            if operation.operation_type != FinanceOperation.TYPE_CUSTOMER_PAYMENT:
+                raise
+            # review_operation rolls verification and posting back together.
+            logger.exception(
+                "Customer payment verification failed; transaction rolled back",
+                extra={"finance_operation_id": operation.pk},
+            )
+            messages.error(request, f"Payment review failed. No payment was posted or balance changed: {exc}")
+        else:
             if action == "APPROVE":
                 if operation.state == FinanceOperation.STATE_POSTED:
                     messages.success(request, "Payment verified and posted successfully.")
@@ -784,8 +796,6 @@ def finance_operation_review(request, pk, action):
             else:
                 messages.success(request, "Transaction rejected.")
             return redirect("finance_operation_detail", pk=operation.pk)
-        except (FinanceOperationError, ValueError, ValidationError) as exc:
-            messages.error(request, str(exc))
     return render(
         request,
         "crm/finance_operations/confirm.html",

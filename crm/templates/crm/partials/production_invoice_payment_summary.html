@@ -1,0 +1,26 @@
+{% if production_payment_rows %}
+<section class="production-panel" id="production-invoice-payment-summary" aria-label="Customer payment summary">
+  <div class="production-panel-head">
+    <div>
+      <h2>Customer payment summary</h2>
+      <p>Uses the linked invoice and verified payment history. Payment status does not block authorized production movement.</p>
+    </div>
+  </div>
+  {% for row in production_payment_rows %}
+    <div class="production-approved-grid">
+      <article><span>Invoice</span><strong><a href="{% url 'invoice_view' row.invoice.pk %}">{{ row.invoice.invoice_number }}</a></strong></article>
+      <article><span>Invoice total</span><strong>{{ row.payment_total_display }}</strong></article>
+      <article><span>Verified payments</span><strong>{{ row.verified_paid_display }}</strong></article>
+      <article><span>Outstanding balance</span><strong>{{ row.outstanding_display }}</strong></article>
+      <article><span>Payment status</span><strong>{{ row.summary.payment_status }}</strong></article>
+    </div>
+    <div class="production-doc-links">
+      {% if row.can_record_payment %}
+        <a href="{% url 'invoice_payment_add' row.invoice.pk %}" class="production-btn production-btn--ghost">VIEW INVOICE / RECORD PAYMENT</a>
+      {% else %}
+        <a href="{% url 'invoice_view' row.invoice.pk %}" class="production-btn production-btn--ghost">VIEW INVOICE</a>
+      {% endif %}
+    </div>
+  {% endfor %}
+</section>
+{% endif %}

@@ -5,7 +5,7 @@
   {% include "crm/finance_operations/_nav.html" %}
   {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
   <section class="fc-confirm">
-    <h1 class="fc-title">{% if mode == 'post' %}Confirm Ledger Posting{% elif action == 'APPROVE' %}Confirm Approval{% elif action == 'REJECT' %}Confirm Rejection{% else %}Return for More Information{% endif %}</h1>
+    <h1 class="fc-title">{% if mode == 'post' %}Confirm Ledger Posting{% elif operation.operation_type == 'CUSTOMER_PAYMENT' and action == 'APPROVE' %}VERIFY PAYMENT{% elif operation.operation_type == 'CUSTOMER_PAYMENT' and action == 'REJECT' %}REJECT PAYMENT{% elif action == 'APPROVE' %}Confirm Approval{% elif action == 'REJECT' %}Confirm Rejection{% else %}Return for More Information{% endif %}</h1>
     <p><strong>{{ operation.operation_number }}</strong><br>{{ operation.get_operation_type_display }} · {{ operation.currency }} {{ operation.total_amount }} · {{ operation.get_risk_level_display }} risk</p>
     {% if operation.operation_type == 'CUSTOMER_PAYMENT' and action == 'APPROVE' %}
       <p><strong>Verify that the money has arrived in the receiving account.</strong> Confirmation records you as verifier and automatically posts a standard payment. An employee's payment entry alone is not confirmation of receipt.</p>

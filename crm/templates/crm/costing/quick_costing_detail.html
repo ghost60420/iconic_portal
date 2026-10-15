@@ -994,10 +994,7 @@
         {% if invoice %}
           <a class="quick-btn quick-btn-primary" href="{% url 'invoice_view' invoice.pk %}">Open Invoice</a>
         {% elif can_convert_to_invoice %}
-          <form method="post" action="{% url 'quick_costing_convert_to_invoice' quick_costing.pk %}" class="quick-inline-form">
-            {% csrf_token %}
-            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Invoice</button>
-          </form>
+          <a class="quick-btn quick-btn-primary" href="{% url 'invoice_add' %}?quick_quotation_id={{ quick_costing.pk }}">CREATE INVOICE</a>
         {% endif %}
       {% elif can_create_quick_quotation %}
         <form method="post" action="{% url 'quick_costing_convert_to_quotation' quick_costing.pk %}" class="quick-inline-form">

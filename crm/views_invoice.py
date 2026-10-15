@@ -36,7 +36,14 @@ from .models import (
 from .forms import InvoiceForm, InvoicePaymentForm, InvoiceSettingsForm
 from .permissions import can_view_internal_costing, get_access
 from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
-from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
+from .services.costing_workflow import (
+    CostingWorkflowError,
+    build_quick_quotation_invoice,
+    create_invoice_from_quick_costing,
+    create_or_link_production_order_from_invoice,
+    get_costing_quote_amounts,
+)
+from .services.employee_identity import employee_lead_ownership_q
 from .services.order_lifecycle import build_lifecycle_profit_breakdown
 from .services.product_reference_images import reference_images_for_opportunity, reference_images_for_production
 from .services.workflow_visibility import LIFECYCLE_SELECT_RELATED, build_workflow_visibility_context
@@ -71,7 +78,7 @@ from .services.payment_reconciliation import (
     invoice_payment_side,
     is_accounting_period_closed,
 )
-from .services.financial_permissions import accessible_financial_sides, can_view_financial_core, scope_invoices_for_user
+from .services.financial_permissions import accessible_financial_sides, can_view_financial_core, scope_by_financial_side, scope_invoices_for_user
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -177,7 +184,11 @@ def can_view_invoice_from_approved_quotation(user, inv):
     if not can_create_invoice_from_approved_quotation(user):
         return False
     costing = getattr(inv, "costing_header", None)
-    if costing and costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED:
+    if costing and costing.quotation_approved_at and costing.quotation_status in {
+        CostingHeader.QUOTATION_STATUS_APPROVED,
+        CostingHeader.QUOTATION_STATUS_SENT,
+        CostingHeader.QUOTATION_STATUS_ACCEPTED,
+    }:
         return True
     quick_costing = getattr(inv, "quick_costing", None)
     if quick_costing and quick_costing.quotation_number and quick_costing.status in {
@@ -1040,6 +1051,80 @@ def _quotation_invoice_region(costing):
     return "CA"
 
 
+def _can_access_invoice_source(user, source, region):
+    """Apply existing Finance country and Sales ownership rules to invoice sources."""
+    if not can_create_invoice_from_approved_quotation(user):
+        return False
+    if can_manage_invoices(user):
+        return region in accessible_financial_sides(user)
+    if getattr(source, "salesperson_id", None) == user.pk:
+        return True
+    opportunity_id = getattr(source, "opportunity_id", None)
+    return bool(opportunity_id and Opportunity.objects.filter(pk=opportunity_id).filter(
+        Q(assigned_to=user) | employee_lead_ownership_q(user, "lead__")
+    ).exists())
+
+
+def _build_quick_quotation_invoice_prefill(quotation_id, user):
+    try:
+        quote_pk = int(quotation_id)
+    except (TypeError, ValueError):
+        return {"forbidden": "A valid approved quotation is required before creating this invoice."}
+    quick = get_object_or_404(
+        QuickCosting.objects.select_related(
+            "opportunity", "opportunity__lead", "opportunity__customer",
+            "opportunity__lead__customer", "production_order", "production_order__customer",
+        ), pk=quote_pk,
+    )
+    # This builder uses the same amounts, market and currency as direct conversion.
+    try:
+        draft = build_quick_quotation_invoice(quick)
+    except CostingWorkflowError as exc:
+        return {"error": str(exc), "redirect": reverse("quick_costing_client_quotation", args=[quick.pk])}
+    if not _can_access_invoice_source(user, quick, draft.invoice_region):
+        return {"forbidden": "You do not have access to invoice this quotation."}
+    existing = list(Invoice.objects.filter(quick_costing=quick).order_by("-created_at", "-pk")[:1])
+    if not existing and (
+        not quick.approved_at or not quick.is_latest_revision or quick.quotation_revision_required
+        or quick.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED, QuickCosting.STATUS_PRODUCTION}
+        or not quick.quotation_number or not quick.quoted_at
+    ):
+        return {"forbidden": "Only the latest approved quick quotation can create an invoice."}
+    opportunity, customer = draft.opportunity, draft.customer
+    lead = getattr(opportunity, "lead", None)
+    initial = {
+        name: getattr(draft, name) for name in (
+            "order", "customer", "issue_date", "due_date", "currency", "invoice_market", "invoice_type",
+            "deposit_percentage", "subtotal", "shipping_amount", "discount_amount", "tax_amount",
+            "paid_amount", "status", "notes", "sewing_charge", "other_internal_cost", "internal_cost_note",
+        )
+    }
+    quantity = quick.quantity or 0
+    context = {
+        "source_title": f"Invoice from Quotation {quick.quotation_number}",
+        "source_quick_quotation_id": quick.pk, "quick_quotation": quick,
+        "quotation_label": quick.quotation_number, "opportunity": opportunity,
+        "source_opportunity_id": opportunity.pk if opportunity else "", "lead": lead, "customer": customer,
+        "production_order": draft.order, "existing_invoices": existing,
+        "has_existing_invoices": bool(existing), "duplicate_blocked": bool(existing),
+        "opportunity_label": getattr(opportunity, "opportunity_id", "") or "Unavailable",
+        "lead_label": getattr(lead, "lead_id", "") or "Unavailable",
+        "account_or_brand": getattr(customer, "account_brand", "") or quick.buyer_name or "Unavailable",
+        "contact_person": getattr(customer, "contact_name", "") or getattr(lead, "contact_name", "") or "Unavailable",
+        "email": getattr(customer, "email", "") or getattr(lead, "email", "") or "Unavailable",
+        "phone": getattr(customer, "phone", "") or getattr(lead, "phone", "") or "Unavailable",
+        "product_type": quick.project_name or getattr(opportunity, "product_type", "") or "Unavailable",
+        "product_category": getattr(opportunity, "product_category", "") or "Unavailable",
+        "quantity": quantity, "currency": draft.currency, "market": draft.invoice_market,
+        "unit_price_display": format_finance_money(draft.subtotal / quantity, draft.currency) if quantity else "Unavailable",
+        "order_amount_display": format_finance_money(draft.subtotal, draft.currency),
+        "invoice_type_label": draft.get_invoice_type_display(),
+        "production_message": "Invoice uses the approved quotation. Production release remains a separate authorized action.",
+        "conversion_note": "Approved quotation calculations and currency conversion are preserved.",
+    }
+    return {"initial": initial, "context": context, "quick_costing": quick, "draft": draft}
+
+
 def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     if not quotation_id:
         return None
@@ -1058,6 +1143,8 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
         ),
         pk=quote_pk,
     )
+    if not _can_access_invoice_source(user, costing, _quotation_invoice_region(costing)):
+        return {"forbidden": "You do not have access to invoice this quotation."}
     if costing.quotation_status not in {
         CostingHeader.QUOTATION_STATUS_APPROVED,
         CostingHeader.QUOTATION_STATUS_SENT,
@@ -1113,6 +1200,8 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
         "tax_amount": _money(0),
         "paid_amount": _money(0),
         "status": "draft",
+        "issue_date": timezone.localdate(),
+        "due_date": timezone.localdate() + timedelta(days=14),
         "deposit_percentage": _default_deposit_for(market, invoice_type, defaults=deposit_defaults),
         "notes": "\n".join(references),
         "sewing_charge": _money(amounts["labor_total"]),
@@ -1122,6 +1211,9 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     context = {
         "source_title": f"Invoice from Quotation {quotation_label}",
         "source_quotation_id": costing.pk,
+        "quotation_label": quotation_label,
+        "quantity": costing.order_quantity,
+        "unit_price_display": format_finance_money(amounts["unit_price"], currency),
         "quotation": costing,
         "opportunity": opportunity,
         "lead": lead,
@@ -1165,6 +1257,19 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
         "production_message": "Invoice will be linked to this CEO-approved quotation. Production conversion still requires the existing approval workflow.",
     }
     return {"initial": initial, "context": context, "amounts": amounts, "costing": costing}
+
+
+def _lock_quotation_invoice_form(form, source_prefill, *, invoice_manager):
+    if not source_prefill:
+        return
+    for name in ("customer", "order", "currency", "invoice_market", "invoice_type", "subtotal"):
+        form.fields[name].disabled = True
+    # Keep approved pricing intact for Sales; accounting adjustments keep their existing access.
+    if not invoice_manager:
+        for name in ("shipping_amount", "discount_amount", "tax_amount"):
+            form.fields[name].disabled = True
+    if source_prefill["initial"].get("invoice_type") == "sewing_charge":
+        form.fields["invoice_type"].choices = Invoice.INVOICE_TYPE_CHOICES
 
 
 def _scope_opportunity_invoice_form_choices(form, opportunity_prefill):
@@ -2013,8 +2118,11 @@ def invoice_add(request):
     order_id = request.GET.get("order_id")
     opportunity_id = request.GET.get("opportunity_id") or request.POST.get("source_opportunity_id")
     quotation_id = request.GET.get("quotation_id") or request.POST.get("source_quotation_id")
+    quick_quotation_id = request.GET.get("quick_quotation_id") or request.POST.get("source_quick_quotation_id")
+    if quotation_id and quick_quotation_id:
+        return HttpResponseForbidden("Choose one quotation source for this invoice.")
     user_can_manage_invoices = can_manage_invoices(request.user)
-    if not user_can_manage_invoices and not quotation_id:
+    if not user_can_manage_invoices and not (quotation_id or quick_quotation_id):
         return HttpResponseForbidden("Invoice manager access or a CEO-approved quotation is required.")
 
     deposit_defaults = _invoice_default_deposit_values()
@@ -2024,7 +2132,7 @@ def invoice_add(request):
             currency="BDT" if locked_side == "BD" else "CAD",
             invoice_market="bangladesh" if locked_side == "BD" else "north_america",
         )
-    quotation_prefill = _build_quotation_invoice_prefill(
+    quotation_prefill = _build_quick_quotation_invoice_prefill(quick_quotation_id, request.user) if quick_quotation_id else _build_quotation_invoice_prefill(
         quotation_id,
         request.user,
         deposit_defaults=deposit_defaults,
@@ -2036,18 +2144,23 @@ def invoice_add(request):
             messages.error(request, quotation_prefill["error"])
             return redirect(quotation_prefill.get("redirect") or "invoice_list")
         initial.update(quotation_prefill["initial"])
+        source_side = "BD" if initial["invoice_market"] == "bangladesh" else "CA"
+        if locked_side and source_side != locked_side:
+            raise PermissionDenied("This quotation belongs to a different business side.")
+        if quotation_prefill["context"]["has_existing_invoices"]:
+            return redirect("invoice_view", pk=quotation_prefill["context"]["existing_invoices"][0].pk)
     opportunity_prefill = None
     if not quotation_prefill:
         opportunity_prefill = _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=deposit_defaults)
     if opportunity_prefill:
         initial.update(opportunity_prefill["initial"])
     local_order = _local_sewing_order(order_id)
-    if local_order:
+    if local_order and not quotation_prefill:
         initial.update(_local_sewing_invoice_initial(local_order))
     can_edit_internal_costs = user_can_manage_invoices and can_manage_invoice_internal_costing(request.user)
     can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
 
-    if order_id:
+    if order_id and not quotation_prefill:
         try:
             order = ProductionOrder.objects.select_related("customer").get(pk=int(order_id))
             initial["order"] = order
@@ -2075,6 +2188,23 @@ def invoice_add(request):
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
         _lock_invoice_form_side(form, locked_side)
+        _lock_quotation_invoice_form(form, quotation_prefill, invoice_manager=user_can_manage_invoices)
+        if form.is_valid() and quick_quotation_id:
+            details = {name: form.cleaned_data[name] for name in (
+                "invoice_number", "issue_date", "due_date", "deposit_percentage", "notes",
+                "shipping_amount", "discount_amount", "tax_amount",
+            )}
+            if "invoice_date" in form.cleaned_data:
+                details["invoice_date"] = form.cleaned_data["invoice_date"]
+            try:
+                inv, created = create_invoice_from_quick_costing(
+                    quotation_prefill["quick_costing"], user=request.user, invoice_details=details,
+                )
+            except CostingWorkflowError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, "Invoice created." if created else "This quotation already has an invoice.")
+                return redirect("invoice_view", pk=inv.pk)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -2082,7 +2212,7 @@ def invoice_add(request):
                     inv.invoice_market = "bangladesh" if locked_side == "BD" else "north_america"
                     inv.invoice_region = locked_side
                 source_opportunity = opportunity_prefill["context"]["opportunity"] if opportunity_prefill else None
-                source_costing = quotation_prefill["costing"] if quotation_prefill else None
+                source_costing = quotation_prefill.get("costing") if quotation_prefill else None
                 if source_opportunity:
                     source_opportunity = Opportunity.objects.select_for_update().get(pk=source_opportunity.pk)
                     existing_invoice = _opportunity_invoice_existing_qs(source_opportunity).first()
@@ -2164,6 +2294,7 @@ def invoice_add(request):
     )
     _scope_opportunity_invoice_form_choices(form, opportunity_prefill_context)
     _lock_invoice_form_side(form, locked_side)
+    _lock_quotation_invoice_form(form, quotation_prefill, invoice_manager=user_can_manage_invoices)
     context = {
         "form": form,
         "mode": "add",
@@ -2322,8 +2453,12 @@ def invoice_edit(request, pk):
 
 @login_required
 def invoice_view(request, pk):
+    invoices = scope_invoices_for_user(Invoice.objects.all(), request.user)
+    if can_manage_invoices(request.user) and not can_view_financial_core(request.user):
+        # Retain legacy invoice-manager access within their existing country flags.
+        invoices = scope_by_financial_side(Invoice.objects.all(), request.user, "invoice_region")
     inv = get_object_or_404(
-        Invoice.objects.select_related(
+        invoices.select_related(
             "order",
             "order__opportunity",
             "order__lead",
@@ -3014,7 +3149,7 @@ def invoice_payment_add(request, pk):
     except OperationalError:
         form.add_error(None, "Payment could not be saved because the database is temporarily unavailable. Review payment history before retrying with this same form.")
         return payment_screen(form)
-    messages.success(request, "PAYMENT RECORDED — AWAITING VERIFICATION. Finance or CEO must confirm receipt before balances change.")
+    messages.success(request, "PAYMENT RECORDED — PENDING VERIFICATION. Finance or CEO must confirm receipt before balances change.")
     return redirect("invoice_view", pk=inv.pk)
 
 

@@ -45,6 +45,9 @@ class InternalCostingPermissionTests(TestCase):
         )
         self.restricted.access.can_costing = True
         self.restricted.access.can_view_internal_costing = False
+        self.restricted.access.role = "CA"
+        self.restricted.access.can_accounting_ca = True
+        self.restricted.access.can_accounting_bd = False
         self.restricted.access.save()
 
         self.customer = Customer.objects.create(
@@ -131,6 +134,7 @@ class InternalCostingPermissionTests(TestCase):
             status="booked",
         )
         self.invoice = Invoice.objects.create(
+            invoice_region="CA",
             invoice_number="INV-PERM-001",
             customer=self.customer,
             costing_header=self.costing,

@@ -308,6 +308,11 @@
     font-weight:800;
     line-height:1.4;
   }
+  .invoice-extra-options{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px;min-width:0}
+  .invoice-extra-options>summary{cursor:pointer;font-weight:800;color:var(--text)}
+  .invoice-extra-options[open]>summary{margin-bottom:12px}
+  .grid2>div,.row2>div{min-width:0}
+  .prefillItem,.help{overflow-wrap:anywhere}
 </style>
 
 <div class="container-fluid">
@@ -354,6 +359,9 @@
             {% if opportunity_prefill.source_quotation_id %}
               <input type="hidden" name="source_quotation_id" value="{{ opportunity_prefill.source_quotation_id }}">
             {% endif %}
+            {% if opportunity_prefill.source_quick_quotation_id %}
+              <input type="hidden" name="source_quick_quotation_id" value="{{ opportunity_prefill.source_quick_quotation_id }}">
+            {% endif %}
             <div class="prefillBox" id="opportunityInvoicePrefill">
               <div class="prefillHead">
                 <strong>
@@ -367,16 +375,23 @@
               </div>
               <div class="prefillGrid">
                 <div class="prefillItem"><span>Customer / brand</span><b>{{ opportunity_prefill.account_or_brand }}</b></div>
+                <div class="prefillItem"><span>Quotation reference</span><b>{{ opportunity_prefill.quotation_label|default:"No quotation linked" }}</b></div>
+                <div class="prefillItem"><span>Opportunity reference</span><b>{{ opportunity_prefill.opportunity_label }}</b></div>
+                <div class="prefillItem"><span>Product</span><b>{{ opportunity_prefill.product_type }}</b></div>
+                {% if opportunity_prefill.quantity %}<div class="prefillItem"><span>Quantity</span><b>{{ opportunity_prefill.quantity }}</b></div>{% endif %}
+                {% if opportunity_prefill.unit_price_display %}<div class="prefillItem"><span>Approved unit price</span><b>{{ opportunity_prefill.unit_price_display }}</b></div>{% endif %}
+                <div class="prefillItem"><span>Invoice amount</span><b>{{ opportunity_prefill.order_amount_display }}</b></div>
+                <div class="prefillItem"><span>Currency</span><b>{{ opportunity_prefill.currency }}</b></div>
+              </div>
+              <details class="invoice-extra-options" id="invoice-source-details">
+                <summary>Customer and source details</summary>
+                <div class="prefillGrid">
                 <div class="prefillItem"><span>Lead ID</span><b>{{ opportunity_prefill.lead_label }}</b></div>
-                <div class="prefillItem"><span>Opportunity ID</span><b>{{ opportunity_prefill.opportunity_label }}</b></div>
                 <div class="prefillItem"><span>Contact</span><b>{{ opportunity_prefill.contact_person }}</b></div>
                 <div class="prefillItem"><span>Email</span><b>{{ opportunity_prefill.email }}</b></div>
                 <div class="prefillItem"><span>Phone</span><b>{{ opportunity_prefill.phone }}</b></div>
-                <div class="prefillItem"><span>Product type</span><b>{{ opportunity_prefill.product_type }}</b></div>
                 <div class="prefillItem"><span>Product category</span><b>{{ opportunity_prefill.product_category }}</b></div>
                 <div class="prefillItem"><span>Invoice type</span><b>{{ opportunity_prefill.invoice_type_label }}</b></div>
-                <div class="prefillItem"><span>Order value</span><b>{{ opportunity_prefill.order_amount_display }}</b></div>
-                <div class="prefillItem"><span>Currency</span><b>{{ opportunity_prefill.currency }}</b></div>
                 <div class="prefillItem"><span>Market</span><b>{{ opportunity_prefill.market }}</b></div>
                 {% if opportunity_prefill.production_order %}
                   <div class="prefillItem"><span>Production Order</span><b>{{ opportunity_prefill.production_order.purchase_order_number }}</b></div>
@@ -395,12 +410,13 @@
                 {% if opportunity_prefill.cad_per_piece_display %}
                   <div class="prefillItem"><span>CAD per piece</span><b>{{ opportunity_prefill.cad_per_piece_display }}</b></div>
                 {% endif %}
-              </div>
+                </div>
+              </details>
               <div class="prefillNotice">{{ opportunity_prefill.production_message }}</div>
               <div class="prefillNotice">{{ opportunity_prefill.conversion_note }}</div>
               {% if opportunity_prefill.has_existing_invoices %}
                 <div class="prefillWarning">
-                  Existing invoice found for this {% if opportunity_prefill.source_quotation_id %}quotation{% else %}opportunity{% endif %}:
+                  Existing invoice found for this {% if opportunity_prefill.source_quotation_id or opportunity_prefill.source_quick_quotation_id %}quotation{% else %}opportunity{% endif %}:
                   {% for existing_invoice in opportunity_prefill.existing_invoices %}
                     <a href="{% url 'invoice_view' existing_invoice.pk %}">{{ existing_invoice.invoice_number }}</a>{% if not forloop.last %}, {% endif %}
                   {% endfor %}
@@ -413,20 +429,21 @@
           <div class="grid2">
 
             <div>
-              <p class="rowTitle">Links</p>
+              <p class="rowTitle">Customer and terms</p>
 
-              <div class="mb-3">
+              <details class="invoice-extra-options" id="invoice-production-link"{% if form.order.errors %} open{% endif %}>
+                <summary>Production order link (optional)</summary>
                 <label for="{{ form.order.id_for_label }}">Order</label>
                 {{ form.order }}
                 {% if form.order.errors %}<div class="err">{{ form.order.errors }}</div>{% endif %}
                 <div class="help">Optional. Link to a production order.</div>
-              </div>
+              </details>
 
               <div class="mb-3">
                 <label for="{{ form.customer.id_for_label }}">Customer</label>
                 {{ form.customer }}
                 {% if form.customer.errors %}<div class="err">{{ form.customer.errors }}</div>{% endif %}
-                <div class="help">Optional. Choose customer if available.</div>
+                <div class="help">Loaded from the approved quotation when available.</div>
               </div>
 
               <p class="rowTitle">Basics</p>
@@ -453,6 +470,8 @@
               </div>
 
               {% if form.invoice_date %}
+                <details class="invoice-extra-options" id="invoice-historical-options"{% if form.invoice_date.errors or form.historical_entry_mode.errors %} open{% endif %}>
+                  <summary>Historical reporting dates</summary>
                 {% if form.historical_entry_mode %}
                   <div class="mb-3">
                     <label for="{{ form.historical_entry_mode.id_for_label }}">
@@ -468,10 +487,12 @@
                   {{ form.invoice_date }}
                   {% if form.invoice_date.errors %}<div class="err">{{ form.invoice_date.errors }}</div>{% endif %}
                   <div class="help">Used for historical revenue reports; original created date stays unchanged.</div>
-                  <div class="help">Future CSV import support: Customer, Opportunity Date, Invoice Date, Amount, Currency, Status.</div>
                 </div>
+                </details>
               {% endif %}
 
+              <details class="invoice-extra-options" id="invoice-market-options"{% if form.invoice_market.errors or form.invoice_type.errors %} open{% endif %}>
+                <summary>Market and invoice type</summary>
               <div class="row2">
                 <div class="mb-3">
                   <label for="{{ form.invoice_market.id_for_label }}">Market</label>
@@ -485,6 +506,7 @@
                   {% if form.invoice_type.errors %}<div class="err">{{ form.invoice_type.errors }}</div>{% endif %}
                 </div>
               </div>
+              </details>
 
               <div class="row2">
                 <div class="mb-3">
@@ -503,29 +525,29 @@
               </div>
 
               <div class="mb-3">
-                <label for="{{ form.deposit_percentage.id_for_label }}">Deposit / advance percentage</label>
+                <label for="{{ form.deposit_percentage.id_for_label }}">Payment terms — deposit / advance percentage</label>
                 {{ form.deposit_percentage }}
                 {% if form.deposit_percentage.errors %}<div class="err">{{ form.deposit_percentage.errors }}</div>{% endif %}
-                <div class="help">Sample invoices normally use 100%. Bulk invoices normally use 50%, but you can enter any agreed percentage.</div>
+                <div class="help">Use the agreed invoice deposit terms. An outstanding balance does not block authorized production release.</div>
               </div>
             </div>
 
             <div>
               <p class="rowTitle">Amounts</p>
 
-              <div class="row2">
-                <div class="mb-3">
-                  <label for="{{ form.subtotal.id_for_label }}">Subtotal</label>
-                  {{ form.subtotal }}
-                  {% if form.subtotal.errors %}<div class="err">{{ form.subtotal.errors }}</div>{% endif %}
-                </div>
+              <div class="mb-3">
+                <label for="{{ form.subtotal.id_for_label }}">Invoice subtotal</label>
+                {{ form.subtotal }}
+                {% if form.subtotal.errors %}<div class="err">{{ form.subtotal.errors }}</div>{% endif %}
+              </div>
 
+              <details class="invoice-extra-options" id="invoice-amount-options"{% if form.shipping_amount.errors or form.discount_amount.errors or form.tax_amount.errors %} open{% endif %}>
+                <summary>Shipping, discount and tax</summary>
                 <div class="mb-3">
                   <label for="{{ form.shipping_amount.id_for_label }}">Shipping</label>
                   {{ form.shipping_amount }}
                   {% if form.shipping_amount.errors %}<div class="err">{{ form.shipping_amount.errors }}</div>{% endif %}
                 </div>
-              </div>
 
               <div class="row2">
                 <div class="mb-3">
@@ -540,9 +562,10 @@
                   {% if form.tax_amount.errors %}<div class="err">{{ form.tax_amount.errors }}</div>{% endif %}
                 </div>
               </div>
+              </details>
 
               <div class="mb-3">
-                <label for="{{ form.total_amount.id_for_label }}">Total amount</label>
+                <label for="{{ form.total_amount.id_for_label }}">Invoice amount</label>
                 {{ form.total_amount }}
                 {% if form.total_amount.errors %}<div class="err">{{ form.total_amount.errors }}</div>{% endif %}
                 <div class="help">Auto rule: subtotal + shipping + tax minus discount.</div>
@@ -551,12 +574,13 @@
                 </div>
               </div>
 
-              <div class="mb-3">
-                <label for="{{ form.paid_amount.id_for_label }}">Opening / legacy received amount</label>
+              <details class="invoice-extra-options" id="invoice-recorded-balance"{% if form.paid_amount.errors %} open{% endif %}>
+                <summary>Recorded payment balance (read only)</summary>
+                <label for="{{ form.paid_amount.id_for_label }}">Previously recorded amount</label>
                 {{ form.paid_amount }}
                 {% if form.paid_amount.errors %}<div class="err">{{ form.paid_amount.errors }}</div>{% endif %}
-                <div class="help">Use the invoice detail page to record new payment received entries with history.</div>
-              </div>
+                <div class="help">Use RECORD PAYMENT on the invoice for new payments and verification history.</div>
+              </details>
 
               <div class="previewBox" id="previewBox">
                 <div><span>Balance preview</span></div>
@@ -581,8 +605,8 @@
               </div>
 
               {% if can_manage_invoice_costing and form.sewing_charge %}
-                <div class="internalCostBox">
-                  <p class="internalCostTitle">Internal Costing</p>
+                <details class="internalCostBox invoice-extra-options" id="invoice-internal-costs"{% if form.sewing_charge.errors or form.other_internal_cost.errors or form.internal_cost_note.errors %} open{% endif %}>
+                  <summary class="internalCostTitle">Internal Costing</summary>
                   <div class="internalCostWarn">
                     Internal only. This information will not appear on the client invoice or PDF.
                   </div>
@@ -606,7 +630,7 @@
                     {{ form.internal_cost_note }}
                     {% if form.internal_cost_note.errors %}<div class="err">{{ form.internal_cost_note.errors }}</div>{% endif %}
                   </div>
-                </div>
+                </details>
               {% endif %}
 
             </div>
@@ -622,6 +646,8 @@
               <a class="btnx btn-cancel" href="{% url 'invoice_list' %}">Cancel</a>
             {% elif opportunity_prefill.quotation %}
               <a class="btnx btn-cancel" href="{% url 'cost_sheet_client_quotation' opportunity_prefill.quotation.pk %}">Cancel</a>
+            {% elif opportunity_prefill.quick_quotation %}
+              <a class="btnx btn-cancel" href="{% url 'quick_costing_client_quotation' opportunity_prefill.quick_quotation.pk %}">Cancel</a>
             {% else %}
               <a class="btnx btn-cancel" href="{% url 'ceo_quotation_approval_queue' %}">Cancel</a>
             {% endif %}

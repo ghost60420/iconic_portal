@@ -14,10 +14,10 @@
   <div class="opp-readiness-grid">
     <article><span>Costing</span><strong>{% if readiness.costing_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'costing' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
     <article><span>Quotation</span><strong>{% if readiness.quotation_approved %}Approved{% else %}Pending{% endif %}</strong>{% if 'quotation' in readiness.waived_requirements %}<small>Requirement waived by CEO / Super Admin</small>{% endif %}</article>
-    <article><span>Payment</span><strong>{% if readiness.payment_verified %}Verified{% else %}Pending{% endif %}</strong>{% if 'payment' in readiness.waived_requirements %}<small>Requirement waived; invoice payment status is unchanged</small>{% endif %}</article>
+    <article><span>Payment status</span><strong>{{ readiness.payment_status|default:"No linked invoice" }}</strong>{% if 'payment' in readiness.waived_requirements %}<small>Requirement waived; invoice payment status is unchanged</small>{% endif %}</article>
     <article><span>Invoice total</span><strong>{{ readiness.invoice_total_display|default:"—" }}</strong>{% if readiness.invoice %}<small>{{ readiness.invoice.invoice_number }}</small>{% endif %}</article>
     <article><span>Invoice payment terms</span><strong>{{ readiness.required_amount_display|default:"Invoice required" }}</strong><small>{% if readiness.is_sample %}Full sample payment{% else %}Required deposit{% endif %} · {{ readiness.payment_required_percentage_display }}</small></article>
-    <article><span>Payment received</span><strong>{{ readiness.amount_paid_display|default:"—" }}</strong><small>Verified invoice payments only</small></article>
+    <article><span>Verified payments</span><strong>{{ readiness.amount_paid_display|default:"—" }}</strong><small>Verified invoice payments only</small></article>
     <article><span>Outstanding balance</span><strong>{{ readiness.outstanding_balance_display|default:"—" }}</strong></article>
   </div>
 
@@ -59,11 +59,13 @@
         </form>
       {% endif %}
     {% endif %}
+    {% if can_record_production_payment %}
+      <a href="{% url 'invoice_payment_add' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">VIEW INVOICE / RECORD PAYMENT</a>
+    {% elif can_review_production_payment %}
+      <a href="{% url 'invoice_view' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">VIEW INVOICE</a>
+    {% endif %}
     {% if can_review_production_payment %}
-      <a href="{% url 'invoice_view' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Review invoice payment</a>
       {% if not readiness.payment_verified %}<a href="{% url 'finance_approval_center' %}?operation_type=CUSTOMER_PAYMENT&amp;side={{ readiness.invoice.invoice_region }}" class="opp-btn opp-btn--tiny opp-btn--ghost">Verify customer payment</a>{% endif %}
-    {% elif can_record_production_payment %}
-      <a href="{% url 'invoice_view' readiness.invoice.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Review invoice / record payment</a>
     {% endif %}
     {% if readiness.can_release and not readiness.production_order %}
       <form method="post" action="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-inline-form">

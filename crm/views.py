@@ -126,13 +126,19 @@ from .services.opportunity_payment_stage import (
     opportunity_has_outstanding_invoice,
     outstanding_balance_summary_for_opportunity,
 )
-from .services.production_payment import invoice_queryset_for_opportunity, production_payment_progress_for_opportunity
+from .services.production_payment import (
+    invoice_payment_summary,
+    invoice_queryset_for_opportunity,
+    production_payment_progress_for_opportunity,
+    production_payment_requirement,
+    with_invoice_payment_summary_states,
+)
 from .services.production_approval import (
     ProductionApprovalError,
     approve_production_release,
     production_readiness,
 )
-from .services.financial_permissions import accessible_financial_sides, can_access_invoice, can_review_finance_operation, can_submit_finance_operation
+from .services.financial_permissions import accessible_financial_sides, can_access_invoice, can_review_finance_operation, can_submit_finance_operation, scope_invoices_for_user
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
@@ -4690,7 +4696,9 @@ def opportunity_detail(request, pk):
     order_value_bdt = opportunity.order_value
     currency_summary = _opportunity_currency_summary(opportunity)
     bdt_per_piece = currency_summary["bdt_per_piece"]
-    readiness_invoices = list(invoice_queryset_for_opportunity(opportunity).select_related("customer"))
+    readiness_invoices = list(with_invoice_payment_summary_states(
+        invoice_queryset_for_opportunity(opportunity).select_related("customer")
+    ))
     outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity, invoices=readiness_invoices)
     fallback_source = max([item for item in (quick_costings[0] if quick_costings else None, costing_header) if item], key=lambda item: item.updated_at, default=None)
     production_readiness_context = production_readiness(
@@ -4699,6 +4707,8 @@ def opportunity_detail(request, pk):
     )
     readiness_source = production_readiness_context.get("source")
     readiness_invoice = production_readiness_context.get("invoice")
+    if readiness_invoice:
+        production_readiness_context["payment_status"] = invoice_payment_summary(readiness_invoice)["payment_status"]
     can_approve_production_costing = can_approve_costing(request.user)
     can_review_production_payment = bool(
         readiness_invoice
@@ -10019,8 +10029,12 @@ def production_detail(request, pk):
         ),
         Prefetch(
             "invoices",
-            queryset=Invoice.objects.select_related("costing_header", "customer").order_by(
-                "-created_at", "-id"
+            queryset=with_invoice_payment_summary_states(
+                Invoice.objects.select_related("costing_header", "customer").annotate(
+                    payment_summary_visible=Exists(scope_invoices_for_user(
+                        Invoice.objects.filter(pk=OuterRef("pk")), request.user
+                    )),
+                ).order_by("-created_at", "-id")
             ),
         ),
         Prefetch(
@@ -10215,6 +10229,20 @@ def production_detail(request, pk):
             logger.exception("production_detail: failed to build variance report for order %s", order.pk)
             variance_report = None
     invoices = list(order.invoices.all())
+    can_record_customer_payment = can_submit_finance_operation(request.user, "CUSTOMER_PAYMENT")
+    production_payment_rows = []
+    for invoice in invoices:
+        if not invoice.payment_summary_visible:
+            continue
+        requirement = production_payment_requirement(invoice)
+        production_payment_rows.append({
+            "invoice": invoice,
+            "summary": invoice_payment_summary(invoice, requirement=requirement),
+            "payment_total_display": requirement["invoice_total_display"],
+            "verified_paid_display": requirement["amount_paid_display"],
+            "outstanding_display": requirement["outstanding_balance_display"],
+            "can_record_payment": can_record_customer_payment,
+        })
     latest_invoice = invoices[0] if invoices else None
     lifecycle = None
     lifecycle_profit = None
@@ -10499,6 +10527,7 @@ def production_detail(request, pk):
         "order_lines": order_lines,
         "attachments": attachments,
         "invoices": invoices,
+        "production_payment_rows": production_payment_rows,
         "progress_photo_stage_choices": ProductionProgressPhoto.STAGE_CHOICES,
         "progress_photo_sections": progress_photo_sections,
         "shipments": shipments,

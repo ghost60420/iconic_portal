@@ -132,7 +132,7 @@ class ApprovalGateRegressionTests(TestCase):
         response = self.client.get(reverse("cost_sheet_client_quotation", args=[costing.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create Invoice")
+        self.assertContains(response, "CREATE INVOICE")
         self.assertContains(response, f"{reverse('invoice_add')}?quotation_id={costing.pk}")
 
     def test_approved_quotation_invoice_prefill_uses_two_decimal_money_values(self):
@@ -377,9 +377,10 @@ class ApprovalGateRegressionTests(TestCase):
         self.client.force_login(self.sales)
 
         get_response = self.client.get(f"{reverse('invoice_add')}?quotation_id={costing.pk}")
-        self.assertEqual(get_response.status_code, 200)
-        self.assertContains(get_response, "Existing invoice found for this quotation")
-        self.assertContains(get_response, existing.invoice_number)
+        self.assertRedirects(
+            get_response, reverse("invoice_view", args=[existing.pk]),
+            fetch_redirect_response=False,
+        )
 
         post_response = self.client.post(
             f"{reverse('invoice_add')}?quotation_id={costing.pk}",
@@ -675,10 +676,14 @@ class InvoiceDeleteVoidControlTests(TestCase):
         self.sales.groups.add(Group.objects.get_or_create(name="Sales")[0])
         self.accounts = user_model.objects.create_user(username="invoice-accounts", password="pass")
         self.accounts.groups.add(Group.objects.get_or_create(name="Accounts")[0])
+        self.accounts.access.role = "CA"
+        self.accounts.access.can_accounting_ca = True
+        self.accounts.access.save(update_fields=["role", "can_accounting_ca"])
         self.customer = Customer.objects.create(account_brand="Invoice Client", contact_name="Invoice Buyer")
         self.invoice = Invoice.objects.create(
             customer=self.customer,
             invoice_number="INV-GATE-001",
+            invoice_region="CA",
             currency="CAD",
             subtotal=Decimal("100.00"),
             total_amount=Decimal("100.00"),

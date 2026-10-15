@@ -4,7 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth.models import Group
-from django.db import connection
+from django.db import IntegrityError, connection
 from django.db.models import Sum
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -13,7 +13,7 @@ from django.urls import reverse
 from crm.tests import test_invoice_payment_live_fix
 from crm.models import FinanceOperation, FinancialAuditEvent, InvoicePayment, JournalEntry, JournalLine, Opportunity, ProductionOrder, FinancialPeriod
 from crm.services.finance_operations import review_operation, FinanceOperationError
-from crm.services.production_payment import production_payment_requirement, invoice_payment_summary
+from crm.services.production_payment import production_payment_requirement, invoice_payment_summary, with_invoice_payment_summary_states
 from crm.services.payment_reconciliation import record_invoice_payment, PaymentWriteError
 
 
@@ -63,7 +63,7 @@ class VerifiedInvoicePaymentTests(TestCase):
         self.assertEqual(invoice.paid_amount, 0)
         self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
         self.assertFalse(production_payment_requirement(invoice)['allowed'])
-        self.assertEqual(invoice_payment_summary(invoice)['payment_status'], 'AWAITING VERIFICATION')
+        self.assertEqual(invoice_payment_summary(invoice)['payment_status'], 'PENDING VERIFICATION')
         with self.assertRaises(FinanceOperationError):
             self.verify(operation, self.employee)
         posted = self.verify(operation, self.finance_user())
@@ -273,7 +273,7 @@ class VerifiedInvoicePaymentTests(TestCase):
         with CaptureQueriesContext(connection) as queries:
             labels = [row.finance_status_label for row in FinanceOperation.objects.select_related('invoice')]
         self.assertEqual(len(queries), 1)
-        self.assertIn('AWAITING VERIFICATION', labels)
+        self.assertIn('PENDING VERIFICATION', labels)
 
     def test_payment_entry_preserves_other_roles_permissions(self):
         from crm.services.financial_permissions import can_submit_finance_operation
@@ -291,3 +291,145 @@ class VerifiedInvoicePaymentTests(TestCase):
         with self.assertRaises(PaymentWriteError):
             record_invoice_payment(invoice, payment, actor=self.employee, payment_account=self.ca_bank)
         self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
+
+    def test_unexpected_posting_failure_renders_error_without_verifying_payment(self):
+        for index, error in enumerate((RuntimeError('Receipt journal unavailable'), IntegrityError('Receipt journal conflict'))):
+            with self.subTest(error=type(error).__name__):
+                invoice = self.invoice(f'REVIEW-FAILED-{index}')
+                operation = self.submit(invoice, '100', reference=f'FAILED-{index}')
+                journals_before = JournalEntry.objects.count()
+                with patch('crm.services.receivable_accounting.post_journal', side_effect=error), patch('crm.views_finance_operations.logger.exception') as logger:
+                    response = self.client.post(
+                        reverse('finance_operation_review', args=[operation.pk, 'approve']),
+                        {'notes': 'Bank receipt checked.', 'confirm_self_approval': 'yes'},
+                    )
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, str(error))
+                self.assertContains(response, 'No payment was posted or balance changed')
+                logger.assert_called_once()
+                operation.refresh_from_db()
+                invoice.refresh_from_db()
+                self.assertEqual(operation.state, FinanceOperation.STATE_PENDING)
+                self.assertIsNone(operation.approved_by_id)
+                self.assertIsNone(operation.primary_journal_id)
+                self.assertEqual(invoice.paid_amount, 0)
+                self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
+                self.assertEqual(JournalEntry.objects.count(), journals_before)
+                self.assertFalse(FinancialAuditEvent.objects.filter(
+                    content_type__model='financeoperation', object_id=operation.pk,
+                    action__in=['APPROVED', 'POSTED'],
+                ).exists())
+
+    def test_finance_and_ceo_review_pages_post_once_without_second_entry(self):
+        finance = self.finance_user()
+        ceo = type(self.ceo).objects.create_user(username='payment-role-ceo')
+        ceo.groups.add(Group.objects.get_or_create(name='CEO')[0])
+        for index, actor in enumerate((finance, ceo)):
+            with self.subTest(role=actor.username):
+                self.client.force_login(self.ceo)
+                invoice = self.invoice(f'REVIEW-POST-{index}')
+                operation = self.submit(invoice, '40', reference=f'REVIEW-{index}')
+                self.assertEqual(operation.finance_status_label, 'PENDING VERIFICATION')
+                self.client.force_login(actor)
+                url = reverse('finance_operation_review', args=[operation.pk, 'approve'])
+                response = self.client.post(url, {'notes': 'Receipt confirmed against bank statement.'})
+                self.assertEqual(response.status_code, 302)
+                operation.refresh_from_db()
+                invoice.refresh_from_db()
+                self.assertEqual(operation.state, FinanceOperation.STATE_POSTED)
+                self.assertEqual(operation.approved_by_id, actor.pk)
+                self.assertEqual(operation.posted_by_id, actor.pk)
+                self.assertEqual(invoice.paid_amount, Decimal('40'))
+                self.assertEqual(invoice.balance, invoice.total_amount - Decimal('40'))
+                self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
+                journal_count = JournalEntry.objects.count()
+                duplicate = self.client.post(url, {'notes': 'Repeated verification request.'})
+                self.assertEqual(duplicate.status_code, 200)
+                self.assertContains(duplicate, 'Only pending or evidence-required operations can be reviewed')
+                self.assertEqual(InvoicePayment.objects.filter(invoice=invoice).count(), 1)
+                self.assertEqual(JournalEntry.objects.count(), journal_count)
+                self.assertFalse(ProductionOrder.objects.exists())
+
+    def test_rejected_invoice_payment_preserves_balance_and_audit_history(self):
+        invoice = self.invoice('REVIEW-REJECTED')
+        operation = self.submit(invoice, '25', reference='REJECTED-RECEIPT')
+        journals_before = JournalEntry.objects.count()
+        finance = self.finance_user()
+        self.client.force_login(finance)
+        response = self.client.post(
+            reverse('finance_operation_review', args=[operation.pk, 'reject']),
+            {'notes': 'Funds did not arrive in the receiving account.'},
+        )
+        self.assertEqual(response.status_code, 302)
+        operation.refresh_from_db()
+        invoice.refresh_from_db()
+        self.assertEqual(operation.state, FinanceOperation.STATE_REJECTED)
+        self.assertEqual(invoice.paid_amount, 0)
+        self.assertEqual(invoice.balance, invoice.total_amount)
+        self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
+        self.assertEqual(JournalEntry.objects.count(), journals_before)
+        self.assertTrue(FinancialAuditEvent.objects.filter(
+            content_type__model='financeoperation', object_id=operation.pk,
+            action='REJECTED', actor=finance,
+        ).exists())
+
+    def test_sales_and_wrong_country_finance_cannot_review_customer_payment(self):
+        self.employee.groups.add(Group.objects.get_or_create(name='Sales')[0])
+        self.employee.access.role = 'CA'
+        self.employee.access.save()
+        opportunity = Opportunity.objects.create(assigned_to=self.employee, customer=self.customer)
+        invoice = self.invoice('REVIEW-PERMISSIONS')
+        invoice.opportunity = opportunity
+        invoice.save(update_fields=['opportunity'])
+        operation = self.submit(invoice, '10', reference='PERMISSIONS-CA')
+        self.client.force_login(self.employee)
+        for action in ('approve', 'reject'):
+            response = self.client.post(
+                reverse('finance_operation_review', args=[operation.pk, action]),
+                {'notes': 'Employee must not verify own payment.'},
+            )
+            self.assertEqual(response.status_code, 404)
+        self.client.force_login(self.ceo)
+        bd_invoice = self.invoice('REVIEW-PERMISSIONS-BD', side='BD', currency='BDT')
+        bd_operation = self.submit(bd_invoice, '100', method='bank_transfer', account=self.bd_bank)
+        self.client.force_login(self.finance_user())
+        response = self.client.post(
+            reverse('finance_operation_review', args=[bd_operation.pk, 'approve']),
+            {'notes': 'Canada Finance must not verify Bangladesh receipts.'},
+        )
+        self.assertEqual(response.status_code, 404)
+        for pending in (operation, bd_operation):
+            pending.refresh_from_db()
+            self.assertEqual(pending.state, FinanceOperation.STATE_PENDING)
+            self.assertIsNone(pending.approved_by_id)
+        self.assertFalse(InvoicePayment.objects.exists())
+
+    def test_invoice_summaries_reuse_one_query_for_pending_and_recorded_states(self):
+        invoices = []
+        expected = {}
+        for index, state in enumerate((
+            FinanceOperation.STATE_DRAFT,
+            FinanceOperation.STATE_PENDING,
+            FinanceOperation.STATE_EVIDENCE_REQUIRED,
+            FinanceOperation.STATE_REJECTED,
+            FinanceOperation.STATE_REVERSED,
+        )):
+            invoice = self.invoice(f'SUMMARY-STATE-{index}')
+            operation = self.submit(invoice, '10', reference=f'SUMMARY-{index}')
+            # Synthetic states exercise read-only presentation; no ledger is written.
+            FinanceOperation.objects.filter(pk=operation.pk).update(state=state)
+            invoices.append(invoice.pk)
+            expected[invoice.pk] = invoice_payment_summary(invoice)['payment_status']
+        empty = self.invoice('SUMMARY-NO-PAYMENT')
+        invoices.append(empty.pk)
+        expected[empty.pk] = 'NOT PAID'
+        for count in (1, len(invoices)):
+            with self.assertNumQueries(1):
+                statuses = {
+                    invoice.pk: invoice_payment_summary(invoice)['payment_status']
+                    for invoice in with_invoice_payment_summary_states(
+                        type(empty).objects.filter(pk__in=invoices[:count])
+                    )
+                }
+            self.assertEqual(statuses, {pk: expected[pk] for pk in invoices[:count]})
+        self.assertEqual(set(expected.values()), {'NOT PAID', 'PAYMENT RECORDED', 'PENDING VERIFICATION'})

@@ -2,12 +2,13 @@
 {% block content %}
 <main style="max-width:900px;margin:auto;padding:20px">
   <h1>Customer payment — {{ invoice.invoice_number }}</h1>
+  <p>Customer: <strong>{{ invoice.customer.account_brand|default:invoice.customer.contact_name|default:"Customer not linked — contact Finance" }}</strong></p>
   <p><a href="{% url 'invoice_view' invoice.pk %}">Back to invoice</a></p>
   {% include "crm/invoice/partials/payment_verification.html" %}
   {% include "crm/invoice/partials/payment_entry.html" %}
 </main>
 <style>
-  .pay-form-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .pay-form-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:16px}
   .pay-field label {display:block;margin-bottom:6px}.pay-field input,.pay-field select,.pay-field textarea {width:100%;max-width:100%;box-sizing:border-box}
   .pay-field--wide {grid-column:1/-1}.pay-section {padding:20px;margin:16px 0;border:1px solid #64748b;border-radius:12px}
   .pay-alert,.pay-error {padding:10px;color:#b45309}.pay-actions {margin-top:20px}.pay-save {padding:12px 18px}

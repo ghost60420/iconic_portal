@@ -1334,8 +1334,8 @@ class FinanceOperation(FinancialAuditFields):
                 return invoice_payment_summary(self.invoice, operation_states=())["payment_status"]
             return {
                 self.STATE_DRAFT: "PAYMENT RECORDED",
-                self.STATE_PENDING: "AWAITING VERIFICATION",
-                self.STATE_EVIDENCE_REQUIRED: "AWAITING VERIFICATION",
+                self.STATE_PENDING: "PENDING VERIFICATION",
+                self.STATE_EVIDENCE_REQUIRED: "PENDING VERIFICATION",
                 self.STATE_APPROVED: "Verified, awaiting posting",
                 self.STATE_POSTED: "Verified and posted",
                 self.STATE_REJECTED: "Rejected",

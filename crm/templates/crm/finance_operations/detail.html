@@ -7,7 +7,7 @@
   {% if messages %}{% for message in messages %}<div class="fc-alert {% if message.tags == 'error' %}bad{% elif message.tags == 'warning' %}warn{% else %}good{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
 
   <div class="ops-toolbar">
-    <div><h2 style="margin:0">{{ operation.operation_number }}</h2><p class="ops-form-note">{{ operation.get_operation_type_display }}</p></div>
+    <div style="min-width:0;max-width:100%"><h2 style="margin:0;overflow-wrap:anywhere">{{ operation.operation_number }}</h2><p class="ops-form-note">{{ operation.get_operation_type_display }}</p></div>
     <span class="ops-state {{ operation.state|lower }}">{{ operation.finance_status_label }}</span>
   </div>
   {% include "crm/finance_operations/_page_guidance.html" with guidance_key="OPERATION_DETAIL" country_side=operation.side %}
@@ -77,9 +77,9 @@
           <a class="fc-btn" href="{% url 'finance_posting_preview' operation.pk %}"><i data-lucide="eye"></i>Posting Preview</a>
         {% endif %}
         {% if can_review and operation.state == 'PENDING' or can_review and operation.state == 'EVIDENCE_REQUIRED' %}
-          <a class="fc-btn good" href="{% url 'finance_operation_review' operation.pk 'approve' %}"><i data-lucide="check"></i>{% if operation.operation_type == 'CUSTOMER_PAYMENT' %}Verify receipt{% else %}Approve{% endif %}</a>
+          <a class="fc-btn good" href="{% url 'finance_operation_review' operation.pk 'approve' %}"><i data-lucide="check"></i>{% if operation.operation_type == 'CUSTOMER_PAYMENT' %}VERIFY PAYMENT{% else %}Approve{% endif %}</a>
           <a class="fc-btn" href="{% url 'finance_operation_review' operation.pk 'evidence_required' %}"><i data-lucide="reply"></i>Return for More Information</a>
-          <a class="fc-btn danger" href="{% url 'finance_operation_review' operation.pk 'reject' %}"><i data-lucide="x"></i>Reject</a>
+          <a class="fc-btn danger" href="{% url 'finance_operation_review' operation.pk 'reject' %}"><i data-lucide="x"></i>{% if operation.operation_type == 'CUSTOMER_PAYMENT' %}REJECT PAYMENT{% else %}Reject{% endif %}</a>
         {% endif %}
         {% if can_post_operations and operation.state == 'APPROVED' %}
           <a class="fc-btn primary" href="{% url 'finance_operation_post' operation.pk %}"><i data-lucide="send"></i>Post Transaction</a>

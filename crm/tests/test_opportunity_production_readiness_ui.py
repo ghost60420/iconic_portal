@@ -56,7 +56,7 @@ class OpportunityProductionReadinessUITests(TestCase):
         self.assertNotContains(response, "Blocking production")
         self.assertNotContains(response, "Production release approval is pending.")
         self.assertContains(response, "Invoice total")
-        self.assertContains(response, "Payment received")
+        self.assertContains(response, "Verified payments")
         self.assertContains(response, "Outstanding balance")
         self.assertEqual(response.context["production_readiness"]["required_amount"], Decimal("500"))
         self.assertNotContains(response, "Can this move to the factory?")

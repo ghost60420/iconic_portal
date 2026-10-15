@@ -401,7 +401,71 @@ def create_invoice_from_costing(costing, user=None):
         return invoice, True
 
 
-def create_invoice_from_quick_costing(quick_costing, user=None):
+def build_quick_quotation_invoice(quick_costing):
+    """Build an unsaved invoice with the established quick quotation calculations."""
+    summary = quick_costing.calculation_summary()
+    market, currency = _quick_costing_market_and_currency(quick_costing)
+    region = "BD" if market == "bangladesh" else "CA"
+    source_currency = normalize_costing_currency(summary.get("currency"))
+    exchange_rate = summary.get("exchange_rate")
+    subtotal = _quick_money_for_invoice(
+        summary.get("revenue"), source_currency, currency, exchange_rate
+    )
+    # Quick Costing selling price already includes shipping. Internal
+    # shipping remains in the costing profit calculation, not the invoice.
+    shipping = Decimal("0")
+    total = _money(subtotal)
+    invoice_type = (
+        "sewing_charge"
+        if quick_costing.is_bangladesh_local_sewing
+        else ("sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk")
+    )
+    deposit_percentage = _default_invoice_deposit_percentage(invoice_type=invoice_type, invoice_market=market)
+    opportunity = quick_costing.opportunity
+    lead = getattr(opportunity, "lead", None) if opportunity else None
+    customer = None
+    if opportunity:
+        customer = getattr(opportunity, "customer", None)
+    if not customer and lead:
+        customer = getattr(lead, "customer", None)
+    production_order = getattr(quick_costing, "production_order", None)
+    if not customer and production_order:
+        customer = production_order.customer
+
+    today = timezone.localdate()
+    invoice = Invoice(
+        quick_costing=quick_costing,
+        opportunity=opportunity,
+        order=production_order,
+        customer=customer,
+        invoice_number="",
+        issue_date=today,
+        due_date=today + timezone.timedelta(days=14),
+        currency=currency,
+        invoice_region=region,
+        invoice_market=market,
+        invoice_type=invoice_type,
+        deposit_percentage=deposit_percentage,
+        subtotal=subtotal,
+        shipping_amount=shipping,
+        discount_amount=Decimal("0"),
+        tax_amount=Decimal("0"),
+        total_amount=total,
+        paid_amount=Decimal("0"),
+        status="draft",
+        notes=(
+            f"Bangladesh Local Sewing · CMT / Sewing Charge · {quick_costing.quotation_number}"
+            if quick_costing.is_bangladesh_local_sewing
+            else f"Converted from quick quotation {quick_costing.quotation_number or 'QC-' + str(quick_costing.pk)}."
+        ),
+        sewing_charge=Decimal("0"),
+        other_internal_cost=Decimal("0"),
+        internal_cost_note="",
+    )
+    return invoice
+
+
+def create_invoice_from_quick_costing(quick_costing, user=None, *, invoice_details=None):
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
@@ -429,66 +493,21 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
         if not quick_costing.quotation_number or not quick_costing.quoted_at:
             raise CostingWorkflowError("Create a quotation before creating an invoice.")
+        if invoice_details is not None and not quick_costing.approved_at:
+            raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
 
-        summary = quick_costing.calculation_summary()
-        market, currency = _quick_costing_market_and_currency(quick_costing)
-        region = "BD" if market == "bangladesh" else "CA"
-        source_currency = normalize_costing_currency(summary.get("currency"))
-        exchange_rate = summary.get("exchange_rate")
-        subtotal = _quick_money_for_invoice(
-            summary.get("revenue"), source_currency, currency, exchange_rate
-        )
-        # Quick Costing selling price already includes shipping. Internal
-        # shipping remains in the costing profit calculation, not the invoice.
-        shipping = Decimal("0")
-        total = _money(subtotal)
-        invoice_type = (
-            "sewing_charge"
-            if quick_costing.is_bangladesh_local_sewing
-            else ("sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk")
-        )
-        deposit_percentage = _default_invoice_deposit_percentage(invoice_type=invoice_type, invoice_market=market)
-        opportunity = quick_costing.opportunity
-        lead = getattr(opportunity, "lead", None) if opportunity else None
-        customer = None
-        if opportunity:
-            customer = getattr(opportunity, "customer", None)
-        if not customer and lead:
-            customer = getattr(lead, "customer", None)
-        production_order = getattr(quick_costing, "production_order", None)
-        if not customer and production_order:
-            customer = production_order.customer
-
-        today = timezone.localdate()
-        invoice = Invoice(
-            quick_costing=quick_costing,
-            opportunity=opportunity,
-            order=production_order,
-            customer=customer,
-            invoice_number=_next_invoice_number(),
-            issue_date=today,
-            due_date=today + timezone.timedelta(days=14),
-            currency=currency,
-            invoice_region=region,
-            invoice_market=market,
-            invoice_type=invoice_type,
-            deposit_percentage=deposit_percentage,
-            subtotal=subtotal,
-            shipping_amount=shipping,
-            discount_amount=Decimal("0"),
-            tax_amount=Decimal("0"),
-            total_amount=total,
-            paid_amount=Decimal("0"),
-            status="draft",
-            notes=(
-                f"Bangladesh Local Sewing · CMT / Sewing Charge · {quick_costing.quotation_number}"
-                if quick_costing.is_bangladesh_local_sewing
-                else f"Converted from quick quotation {quick_costing.quotation_number or 'QC-' + str(quick_costing.pk)}."
-            ),
-            sewing_charge=Decimal("0"),
-            other_internal_cost=Decimal("0"),
-            internal_cost_note="",
-        )
+        invoice = build_quick_quotation_invoice(quick_costing)
+        for field, value in (invoice_details or {}).items():
+            if field not in {"invoice_number", "issue_date", "due_date", "invoice_date", "deposit_percentage", "notes", "shipping_amount", "discount_amount", "tax_amount"}:
+                raise CostingWorkflowError("Unsupported invoice detail.")
+            setattr(invoice, field, value)
+        if not invoice.invoice_number:
+            invoice.invoice_number = _next_invoice_number()
+        if invoice_details is not None:
+            invoice.total_amount = max(
+                Decimal("0"),
+                invoice.subtotal + invoice.shipping_amount + invoice.tax_amount - invoice.discount_amount,
+            )
         create_draft_invoice(invoice, actor=user)
         quick_costing.status = QuickCosting.STATUS_INVOICED
         quick_costing.save(update_fields=["status", "updated_at"])

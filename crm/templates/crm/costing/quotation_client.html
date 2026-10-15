@@ -230,7 +230,7 @@
     {% if invoice %}
       <a class="quote-btn" href="{% url 'invoice_view' invoice.pk %}" title="An invoice already exists for this quotation.">Existing invoice {{ invoice.invoice_number }}</a>
     {% elif can_convert_to_invoice %}
-      <a class="quote-btn primary" href="{% url 'invoice_add' %}?quotation_id={{ costing.pk }}">Create Invoice</a>
+      <a class="quote-btn primary" href="{% url 'invoice_add' %}?quotation_id={{ costing.pk }}">CREATE INVOICE</a>
     {% elif user_can_convert_to_invoice %}
       <span class="quote-btn" title="Approve the quotation before creating an invoice.">Invoice locked until approved</span>
     {% endif %}

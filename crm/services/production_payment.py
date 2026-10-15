@@ -1,8 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
-from crm.models import Invoice
+from crm.models import FinanceOperation, Invoice
 from crm.services.costing_currency import format_finance_money
 
 
@@ -136,6 +136,23 @@ def production_payment_progress_for_opportunity(opportunity):
     return check
 
 
+def with_invoice_payment_summary_states(queryset):
+    """Load receipt state alongside invoices without a query for each summary."""
+    payments = FinanceOperation.objects.filter(
+        invoice_id=OuterRef("pk"),
+        operation_type=FinanceOperation.TYPE_CUSTOMER_PAYMENT,
+    )
+    return queryset.annotate(
+        _payment_pending=Exists(payments.exclude(state__in=(
+            FinanceOperation.STATE_DRAFT,
+            FinanceOperation.STATE_POSTED,
+            FinanceOperation.STATE_REJECTED,
+            FinanceOperation.STATE_REVERSED,
+        ))),
+        _payment_recorded=Exists(payments.filter(state=FinanceOperation.STATE_DRAFT)),
+    )
+
+
 def invoice_payment_summary(invoice, *, requirement=None, operation_states=None):
     """Read-only presentation of the existing settled balance and pending requests."""
     check = requirement if requirement is not None else production_payment_requirement(invoice)
@@ -147,10 +164,16 @@ def invoice_payment_summary(invoice, *, requirement=None, operation_states=None)
     elif paid > 0:
         status = "PARTIALLY PAID"
     else:
+        if operation_states is None and hasattr(invoice, "_payment_pending") and hasattr(invoice, "_payment_recorded"):
+            operation_states = []
+            if invoice._payment_pending:
+                operation_states.append(FinanceOperation.STATE_PENDING)
+            if invoice._payment_recorded:
+                operation_states.append(FinanceOperation.STATE_DRAFT)
         states = set(operation_states) if operation_states is not None else set(invoice.finance_operations.filter(operation_type="CUSTOMER_PAYMENT").exclude(
             state__in=["REJECTED", "REVERSED", "POSTED"]
         ).values_list("state", flat=True))
-        status = "AWAITING VERIFICATION" if states - {"DRAFT"} else "PAYMENT RECORDED" if states else "NOT PAID"
+        status = "PENDING VERIFICATION" if states - {"DRAFT"} else "PAYMENT RECORDED" if states else "NOT PAID"
     return {
         "payment_status": status,
         "production_readiness": "READY FOR PRODUCTION APPROVAL" if check["allowed"] else "AWAITING VERIFIED DEPOSIT",

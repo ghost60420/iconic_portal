@@ -2,9 +2,9 @@
       <div class="cardx pay-section noPrint" id="payment-received-form">
         <div class="pad">
           <div class="pay-section-title">
-            <span>Record customer payment</span>
+            <span>RECORD PAYMENT</span>
           </div>
-          <p class="pay-help">Record the customer payment once. Finance or CEO verifies receipt and posts it automatically. Unverified payments do not reduce the balance or unlock production.</p>
+          <p class="pay-help">Record the customer payment once. Its status is PENDING VERIFICATION until Finance or CEO confirms receipt and Financial Core posts it. Unverified payments do not reduce the balance. Production release follows its existing approval requirements independently of payment.</p>
           {% for warning in payment_form.configuration_warnings %}<div class="pay-alert pay-alert--warn">{{ warning }}</div>{% endfor %}
 
           {% if payment_form.non_field_errors %}
@@ -22,7 +22,7 @@
               </div>
 
               <div class="pay-field">
-                <label for="{{ payment_form.amount.id_for_label }}">Amount received</label>
+                <label for="{{ payment_form.amount.id_for_label }}">New payment amount</label>
                 {{ payment_form.amount }}
                 {% if payment_form.amount.errors %}<div class="pay-error">{{ payment_form.amount.errors }}</div>{% endif %}
               </div>
@@ -40,7 +40,7 @@
               </div>
 
               <div class="pay-field">
-                <label for="{{ payment_form.reference.id_for_label }}">Reference <span class="pay-help">Optional</span></label>
+                <label for="{{ payment_form.reference.id_for_label }}">Reference number <span class="pay-help">Optional</span></label>
                 {{ payment_form.reference }}
                 {% if payment_form.reference.help_text %}<div class="pay-help">{{ payment_form.reference.help_text }}</div>{% endif %}
                 {% if payment_form.reference.errors %}<div class="pay-error">{{ payment_form.reference.errors }}</div>{% endif %}
@@ -64,7 +64,7 @@
             </div>
 
             <div class="pay-actions">
-              <button class="pay-save" type="submit">Record payment for verification</button>
+              <button class="pay-save" type="submit">RECORD PAYMENT</button>
             </div>
           </form>
         </div>
