@@ -197,6 +197,23 @@ class InvoicePaymentLiveFixTests(TestCase):
         self.assertFalse(response.context["payment_form"].fields["reference"].required)
         self.assertTrue(response.context["payment_form"]["submission_token"].value())
 
+    def test_invoice_list_payment_action_opens_the_existing_entry_form(self):
+        import re
+        from urllib.parse import urlsplit
+
+        invoice = self.invoice("PAYMENT-LIST-NAVIGATION")
+        listing = self.client.get(reverse("invoice_list"), {"q": invoice.invoice_number})
+        self.assertEqual(listing.status_code, 200)
+        action = re.search(r'<a[^>]+href="([^"]+)"[^>]*>Payment</a>', listing.content.decode())
+        self.assertIsNotNone(action)
+        payment_page = self.client.get(urlsplit(action.group(1)).path)
+        self.assertContains(payment_page, 'name="payment_account"')
+        self.assertContains(payment_page, 'name="payment_method"')
+        self.assertContains(payment_page, 'name="submission_token"')
+        self.assertEqual(payment_page.context["invoice"].pk, invoice.pk)
+        self.assertFalse(FinanceOperation.objects.filter(invoice=invoice).exists())
+        self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
+
     def test_reference_is_optional_and_missing_period_is_shown_inline(self):
         invoice = self.invoice("LIVE-OPTIONAL-REFERENCE", total="50.00")
 
