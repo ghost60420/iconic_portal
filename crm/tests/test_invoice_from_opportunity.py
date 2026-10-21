@@ -137,7 +137,7 @@ class InvoiceFromOpportunityTests(TestCase):
         opportunity.refresh_from_db()
         self.assertNotEqual(opportunity.stage, "Production")
 
-    def test_existing_invoice_warning_does_not_create_duplicate_on_get(self):
+    def test_existing_invoice_is_reused_without_creating_duplicate_on_get(self):
         opportunity = self.opportunity()
         existing = Invoice.objects.create(
             opportunity=opportunity,
@@ -150,9 +150,7 @@ class InvoiceFromOpportunityTests(TestCase):
 
         response = self.client.get(f"{reverse('invoice_add')}?opportunity_id={opportunity.pk}")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Existing invoice found for this opportunity")
-        self.assertContains(response, existing.invoice_number)
+        self.assertRedirects(response, reverse("invoice_view", args=[existing.pk]), fetch_redirect_response=False)
         self.assertEqual(Invoice.objects.filter(opportunity=opportunity).count(), 1)
 
     def test_invoice_type_defaults_from_sample_sewing_and_bulk_context(self):

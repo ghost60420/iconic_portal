@@ -22,6 +22,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import (
     CRMAuditLog,
+    CostingAuditLog,
     CostingHeader,
     Customer,
     ExchangeRate,
@@ -38,6 +39,7 @@ from .permissions import can_view_internal_costing, get_access
 from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
 from .services.costing_workflow import (
     CostingWorkflowError,
+    _quick_costing_market_and_currency,
     build_quick_quotation_invoice,
     create_invoice_from_quick_costing,
     create_or_link_production_order_from_invoice,
@@ -1065,6 +1067,44 @@ def _can_access_invoice_source(user, source, region):
     ).exists())
 
 
+def _opportunity_invoice_source(opportunity_id):
+    """Resolve the existing opportunity entry point without guessing between quotes."""
+    opportunity = get_object_or_404(Opportunity, pk=opportunity_id)
+    existing = _opportunity_invoice_existing_qs(opportunity).first()
+    if existing:
+        return {"existing_invoice": existing}
+    quick_ids = list(QuickCosting.objects.filter(
+        opportunity=opportunity, superseded_by__isnull=True,
+        approved_at__isnull=False, quoted_at__isnull=False, quotation_revision_required=False,
+        status__in=[QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED, QuickCosting.STATUS_PRODUCTION],
+    ).exclude(quotation_number="").values_list("pk", flat=True)[:2])
+    costing_ids = list(CostingHeader.objects.filter(
+        opportunity=opportunity, is_archived=False, status="approved", quotation_approved_at__isnull=False,
+        quoted_at__isnull=False, quotation_status__in=[
+            CostingHeader.QUOTATION_STATUS_APPROVED, CostingHeader.QUOTATION_STATUS_SENT,
+            CostingHeader.QUOTATION_STATUS_ACCEPTED,
+        ],
+    ).exclude(quotation_number="").values_list("pk", flat=True)[:2])
+    if len(quick_ids) + len(costing_ids) > 1:
+        return {
+            "error": "More than one approved quotation exists. Open the required quotation and select Create Invoice.",
+            "redirect": reverse("opportunity_detail", args=[opportunity.pk]),
+        }
+    if quick_ids:
+        return {"quick_quotation_id": quick_ids[0]}
+    if costing_ids:
+        return {"quotation_id": costing_ids[0]}
+    return {}
+
+
+def _reuse_invoice(request, invoice, locked_side):
+    # A source link is not permission to view an invoice in another employee/country scope.
+    invoice = get_object_or_404(scope_invoices_for_user(Invoice.objects.all(), request.user), pk=invoice.pk)
+    if locked_side and _invoice_region(invoice) != locked_side:
+        raise PermissionDenied("This invoice belongs to a different business side.")
+    return redirect("invoice_view", pk=invoice.pk)
+
+
 def _build_quick_quotation_invoice_prefill(quotation_id, user):
     try:
         quote_pk = int(quotation_id)
@@ -1076,15 +1116,18 @@ def _build_quick_quotation_invoice_prefill(quotation_id, user):
             "opportunity__lead__customer", "production_order", "production_order__customer",
         ), pk=quote_pk,
     )
-    # This builder uses the same amounts, market and currency as direct conversion.
+    market, _currency = _quick_costing_market_and_currency(quick)
+    if not _can_access_invoice_source(user, quick, "BD" if market == "bangladesh" else "CA"):
+        return {"forbidden": "You do not have access to invoice this quotation."}
+    existing = Invoice.objects.filter(quick_costing=quick).order_by("-created_at", "-pk").first()
+    if existing:
+        return {"existing_invoice": existing}
+    # Reuse an existing invoice before calculating a new draft (which may need FX configuration).
     try:
         draft = build_quick_quotation_invoice(quick)
     except CostingWorkflowError as exc:
         return {"error": str(exc), "redirect": reverse("quick_costing_client_quotation", args=[quick.pk])}
-    if not _can_access_invoice_source(user, quick, draft.invoice_region):
-        return {"forbidden": "You do not have access to invoice this quotation."}
-    existing = list(Invoice.objects.filter(quick_costing=quick).order_by("-created_at", "-pk")[:1])
-    if not existing and (
+    if (
         not quick.approved_at or not quick.is_latest_revision or quick.quotation_revision_required
         or quick.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED, QuickCosting.STATUS_PRODUCTION}
         or not quick.quotation_number or not quick.quoted_at
@@ -1103,10 +1146,11 @@ def _build_quick_quotation_invoice_prefill(quotation_id, user):
     context = {
         "source_title": f"Invoice from Quotation {quick.quotation_number}",
         "source_quick_quotation_id": quick.pk, "quick_quotation": quick,
+        "costing_label": f"QC-{quick.pk}",
         "quotation_label": quick.quotation_number, "opportunity": opportunity,
         "source_opportunity_id": opportunity.pk if opportunity else "", "lead": lead, "customer": customer,
-        "production_order": draft.order, "existing_invoices": existing,
-        "has_existing_invoices": bool(existing), "duplicate_blocked": bool(existing),
+        "production_order": draft.order, "existing_invoices": [],
+        "has_existing_invoices": False, "duplicate_blocked": False,
         "opportunity_label": getattr(opportunity, "opportunity_id", "") or "Unavailable",
         "lead_label": getattr(lead, "lead_id", "") or "Unavailable",
         "account_or_brand": getattr(customer, "account_brand", "") or quick.buyer_name or "Unavailable",
@@ -1145,6 +1189,9 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     )
     if not _can_access_invoice_source(user, costing, _quotation_invoice_region(costing)):
         return {"forbidden": "You do not have access to invoice this quotation."}
+    existing = Invoice.objects.filter(costing_header=costing).order_by("-created_at", "-pk").first()
+    if existing:
+        return {"existing_invoice": existing}
     if costing.quotation_status not in {
         CostingHeader.QUOTATION_STATUS_APPROVED,
         CostingHeader.QUOTATION_STATUS_SENT,
@@ -1169,11 +1216,7 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     market = "bangladesh" if region == "BD" else "north_america"
     invoice_type = "bulk"
     quotation_label = costing.quotation_number or f"COST-{costing.pk}"
-    existing_invoices = list(
-        Invoice.objects.select_related("order", "customer")
-        .filter(costing_header=costing)
-        .order_by("-issue_date", "-created_at", "-id")[:5]
-    )
+    existing_invoices = []
 
     references = [
         f"Quotation: {quotation_label}",
@@ -1211,6 +1254,7 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     context = {
         "source_title": f"Invoice from Quotation {quotation_label}",
         "source_quotation_id": costing.pk,
+        "costing_label": f"COST-{costing.pk}",
         "quotation_label": quotation_label,
         "quantity": costing.order_quantity,
         "unit_price_display": format_finance_money(amounts["unit_price"], currency),
@@ -2122,6 +2166,20 @@ def invoice_add(request):
     if quotation_id and quick_quotation_id:
         return HttpResponseForbidden("Choose one quotation source for this invoice.")
     user_can_manage_invoices = can_manage_invoices(request.user)
+    if opportunity_id and not (quotation_id or quick_quotation_id):
+        if not can_create_invoice_from_approved_quotation(request.user):
+            return HttpResponseForbidden("Invoice manager access or a CEO-approved quotation is required.")
+        try:
+            source = _opportunity_invoice_source(int(opportunity_id))
+        except (TypeError, ValueError):
+            return HttpResponseForbidden("A valid opportunity is required.")
+        if source.get("existing_invoice"):
+            return _reuse_invoice(request, source["existing_invoice"], locked_side)
+        if source.get("error"):
+            messages.error(request, source["error"])
+            return redirect(source["redirect"])
+        quotation_id = source.get("quotation_id")
+        quick_quotation_id = source.get("quick_quotation_id")
     if not user_can_manage_invoices and not (quotation_id or quick_quotation_id):
         return HttpResponseForbidden("Invoice manager access or a CEO-approved quotation is required.")
 
@@ -2140,6 +2198,8 @@ def invoice_add(request):
     if quotation_prefill:
         if quotation_prefill.get("forbidden"):
             return HttpResponseForbidden(quotation_prefill["forbidden"])
+        if quotation_prefill.get("existing_invoice"):
+            return _reuse_invoice(request, quotation_prefill["existing_invoice"], locked_side)
         if quotation_prefill.get("error"):
             messages.error(request, quotation_prefill["error"])
             return redirect(quotation_prefill.get("redirect") or "invoice_list")
@@ -2276,6 +2336,13 @@ def invoice_add(request):
                 _calc_totals(inv)
                 create_draft_invoice(inv, actor=request.user)
                 form.save_m2m()
+                if source_costing:
+                    CostingAuditLog.objects.create(
+                        costing=source_costing,
+                        action="invoice_created",
+                        changed_by=request.user,
+                        note=inv.invoice_number,
+                    )
 
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)

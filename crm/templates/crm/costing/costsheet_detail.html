@@ -368,10 +368,7 @@
         {% if workflow.invoice %}
           <a class="btnx btnx-soft" href="{% url 'invoice_view' workflow.invoice.pk %}">Open Invoice</a>
         {% elif workflow.is_quotation and workflow.can_convert_to_invoice %}
-          <form method="post" action="{% url 'cost_sheet_convert_to_invoice' costing.pk %}" style="display:inline;">
-            {% csrf_token %}
-            <button type="submit" class="btnx btnx-soft">Convert to Invoice</button>
-          </form>
+          <a class="btnx btnx-soft" href="{% url 'invoice_add' %}?quotation_id={{ costing.pk }}">Create Invoice</a>
         {% endif %}
         {% if workflow.production_order %}
           <a class="btnx btnx-soft" href="{% url 'production_detail' workflow.production_order.pk %}">Open Production Order</a>

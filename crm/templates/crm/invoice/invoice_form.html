@@ -376,6 +376,7 @@
               <div class="prefillGrid">
                 <div class="prefillItem"><span>Customer / brand</span><b>{{ opportunity_prefill.account_or_brand }}</b></div>
                 <div class="prefillItem"><span>Quotation reference</span><b>{{ opportunity_prefill.quotation_label|default:"No quotation linked" }}</b></div>
+                {% if opportunity_prefill.costing_label %}<div class="prefillItem"><span>Costing reference</span><b>{{ opportunity_prefill.costing_label }}</b></div>{% endif %}
                 <div class="prefillItem"><span>Opportunity reference</span><b>{{ opportunity_prefill.opportunity_label }}</b></div>
                 <div class="prefillItem"><span>Product</span><b>{{ opportunity_prefill.product_type }}</b></div>
                 {% if opportunity_prefill.quantity %}<div class="prefillItem"><span>Quantity</span><b>{{ opportunity_prefill.quantity }}</b></div>{% endif %}
@@ -452,7 +453,7 @@
                 <label for="{{ form.invoice_number.id_for_label }}">Invoice number</label>
                 {{ form.invoice_number }}
                 {% if form.invoice_number.errors %}<div class="err">{{ form.invoice_number.errors }}</div>{% endif %}
-                <div class="help">Must be unique.</div>
+                <div class="help">Generated automatically if left blank.</div>
               </div>
 
               <div class="row2">
