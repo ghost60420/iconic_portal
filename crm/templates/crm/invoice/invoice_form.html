@@ -313,6 +313,9 @@
   .invoice-extra-options[open]>summary{margin-bottom:12px}
   .grid2>div,.row2>div{min-width:0}
   .prefillItem,.help{overflow-wrap:anywhere}
+  .invoice-calculator-result{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:12px;line-height:1.5}
+  .invoice-calculator-result output{font-weight:900}
+  #invoice-adjustment-approval input[type="checkbox"]{width:auto !important;margin-right:6px}
 </style>
 
 <div class="container-fluid">
@@ -381,7 +384,7 @@
                 <div class="prefillItem"><span>Product</span><b>{{ opportunity_prefill.product_type }}</b></div>
                 {% if opportunity_prefill.quantity %}<div class="prefillItem"><span>Quantity</span><b>{{ opportunity_prefill.quantity }}</b></div>{% endif %}
                 {% if opportunity_prefill.unit_price_display %}<div class="prefillItem"><span>Approved unit price</span><b>{{ opportunity_prefill.unit_price_display }}</b></div>{% endif %}
-                <div class="prefillItem"><span>Invoice amount</span><b>{{ opportunity_prefill.order_amount_display }}</b></div>
+                <div class="prefillItem"><span>Approved quotation amount</span><b>{{ opportunity_prefill.order_amount_display }}</b></div>
                 <div class="prefillItem"><span>Currency</span><b>{{ opportunity_prefill.currency }}</b></div>
               </div>
               <details class="invoice-extra-options" id="invoice-source-details">
@@ -391,13 +394,15 @@
                 <div class="prefillItem"><span>Contact</span><b>{{ opportunity_prefill.contact_person }}</b></div>
                 <div class="prefillItem"><span>Email</span><b>{{ opportunity_prefill.email }}</b></div>
                 <div class="prefillItem"><span>Phone</span><b>{{ opportunity_prefill.phone }}</b></div>
+                <div class="prefillItem"><span>Customer address</span><b>{{ opportunity_prefill.customer_address|default:"Not provided"|linebreaksbr }}</b></div>
+                <div class="prefillItem"><span>Customer PO number</span><b>{{ opportunity_prefill.customer_po_number|default:"Not provided" }}</b></div>
                 <div class="prefillItem"><span>Product category</span><b>{{ opportunity_prefill.product_category }}</b></div>
                 <div class="prefillItem"><span>Invoice type</span><b>{{ opportunity_prefill.invoice_type_label }}</b></div>
                 <div class="prefillItem"><span>Market</span><b>{{ opportunity_prefill.market }}</b></div>
                 {% if opportunity_prefill.production_order %}
-                  <div class="prefillItem"><span>Production Order</span><b>{{ opportunity_prefill.production_order.purchase_order_number }}</b></div>
+                  <div class="prefillItem"><span>Internal production order number</span><b>{{ opportunity_prefill.production_order.purchase_order_number }}</b></div>
                 {% else %}
-                  <div class="prefillItem"><span>Production Order</span><b>No production order linked yet</b></div>
+                  <div class="prefillItem"><span>Internal production order number</span><b>No production order linked yet</b></div>
                 {% endif %}
                 {% if opportunity_prefill.bdt_total_display %}
                   <div class="prefillItem"><span>Total Order Value BDT</span><b>{{ opportunity_prefill.bdt_total_display }}</b></div>
@@ -430,11 +435,11 @@
           <div class="grid2">
 
             <div>
-              <p class="rowTitle">Customer and terms</p>
+              <p class="rowTitle">Customer Information</p>
 
               <details class="invoice-extra-options" id="invoice-production-link"{% if form.order.errors %} open{% endif %}>
-                <summary>Production order link (optional)</summary>
-                <label for="{{ form.order.id_for_label }}">Order</label>
+                <summary>Internal production order link (optional)</summary>
+                <label for="{{ form.order.id_for_label }}">Internal production order</label>
                 {{ form.order }}
                 {% if form.order.errors %}<div class="err">{{ form.order.errors }}</div>{% endif %}
                 <div class="help">Optional. Link to a production order.</div>
@@ -446,6 +451,36 @@
                 {% if form.customer.errors %}<div class="err">{{ form.customer.errors }}</div>{% endif %}
                 <div class="help">Loaded from the approved quotation when available.</div>
               </div>
+
+              {% if form.customer_po_number %}
+                <div class="mb-3">
+                  <label for="{{ form.customer_po_number.id_for_label }}">Customer PO number</label>
+                  {{ form.customer_po_number }}
+                  {% if form.customer_po_number.errors %}<div class="err">{{ form.customer_po_number.errors }}</div>{% endif %}
+                  <div class="help">The customer's reference, separate from the internal production order number.</div>
+                </div>
+              {% endif %}
+
+              {% if form.style_count or form.production_quantity %}
+                <p class="rowTitle">Product Details</p>
+                <div class="row2" id="invoice-production-inputs">
+                  {% if form.style_count %}
+                    <div class="mb-3">
+                      <label for="{{ form.style_count.id_for_label }}">Number of styles</label>
+                      {{ form.style_count }}
+                      {% if form.style_count.errors %}<div class="err">{{ form.style_count.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.production_quantity %}
+                    <div class="mb-3">
+                      <label for="{{ form.production_quantity.id_for_label }}">Production quantity</label>
+                      {{ form.production_quantity }}
+                      {% if form.production_quantity.errors %}<div class="err">{{ form.production_quantity.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="help">Production quantities do not change the approved customer price.</div>
+              {% endif %}
 
               <p class="rowTitle">Basics</p>
 
@@ -534,7 +569,7 @@
             </div>
 
             <div>
-              <p class="rowTitle">Amounts</p>
+              <p class="rowTitle">Invoice Summary</p>
 
               <div class="mb-3">
                 <label for="{{ form.subtotal.id_for_label }}">Invoice subtotal</label>
@@ -543,9 +578,9 @@
               </div>
 
               <details class="invoice-extra-options" id="invoice-amount-options"{% if form.shipping_amount.errors or form.discount_amount.errors or form.tax_amount.errors %} open{% endif %}>
-                <summary>Shipping, discount and tax</summary>
+                <summary>Customer shipping, discount and tax</summary>
                 <div class="mb-3">
-                  <label for="{{ form.shipping_amount.id_for_label }}">Shipping</label>
+                  <label for="{{ form.shipping_amount.id_for_label }}">Customer shipping charge</label>
                   {{ form.shipping_amount }}
                   {% if form.shipping_amount.errors %}<div class="err">{{ form.shipping_amount.errors }}</div>{% endif %}
                 </div>
@@ -575,6 +610,33 @@
                 </div>
               </div>
 
+              {% if form.invoice_adjustment_reason or form.invoice_adjustment_approved %}
+                <details class="invoice-extra-options" id="invoice-adjustment-approval"{% if form.invoice_adjustment_reason.errors or form.invoice_adjustment_approved.errors %} open{% endif %}>
+                  <summary>Authorized price adjustment</summary>
+                  <div class="help">The approved quotation price is preserved. Any adjustment requires a reason and an authorized approver; the original and new amounts are recorded in audit history.</div>
+                  {% if form.approved_source_total != None %}
+                    <div class="invoice-calculator-result">
+                      Original approved amount: <strong>{{ form.approved_source_total|floatformat:2 }}</strong><br>
+                      New invoice amount: <output id="invoice-adjusted-total-preview">{{ form.total_amount.value|default_if_none:"0.00" }}</output>
+                    </div>
+                  {% endif %}
+                  {% if form.invoice_adjustment_reason %}
+                    <div class="mb-3" style="margin-top:12px;">
+                      <label for="{{ form.invoice_adjustment_reason.id_for_label }}">Reason for adjustment</label>
+                      {{ form.invoice_adjustment_reason }}
+                      {% if form.invoice_adjustment_reason.errors %}<div class="err">{{ form.invoice_adjustment_reason.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.can_approve_invoice_adjustment and form.invoice_adjustment_approved %}
+                    <label for="{{ form.invoice_adjustment_approved.id_for_label }}">
+                      {{ form.invoice_adjustment_approved }} I approve this price adjustment using my existing invoice approval authority.
+                    </label>
+                    {% if form.invoice_adjustment_approved.errors %}<div class="err">{{ form.invoice_adjustment_approved.errors }}</div>{% endif %}
+                  {% endif %}
+                </details>
+              {% endif %}
+
+              <p class="rowTitle" style="margin-top:16px;">Payment Summary</p>
               <details class="invoice-extra-options" id="invoice-recorded-balance"{% if form.paid_amount.errors %} open{% endif %}>
                 <summary>Recorded payment balance (read only)</summary>
                 <label for="{{ form.paid_amount.id_for_label }}">Previously recorded amount</label>
@@ -606,15 +668,25 @@
               </div>
 
               {% if can_manage_invoice_costing and form.sewing_charge %}
-                <details class="internalCostBox invoice-extra-options" id="invoice-internal-costs"{% if form.sewing_charge.errors or form.other_internal_cost.errors or form.internal_cost_note.errors %} open{% endif %}>
+                <details class="internalCostBox invoice-extra-options" id="invoice-internal-costs"{% if form.sewing_charge.errors or form.internal_sewing_cost_per_piece.errors or form.other_internal_cost.errors or form.internal_cost_note.errors %} open{% endif %}>
                   <summary class="internalCostTitle">Internal Costing</summary>
                   <div class="internalCostWarn">
                     Internal only. This information will not appear on the client invoice or PDF.
                   </div>
 
+                  {% if form.internal_sewing_cost_per_piece %}
+                    <div class="mb-3">
+                      <label for="{{ form.internal_sewing_cost_per_piece.id_for_label }}">Internal sewing cost per piece</label>
+                      {{ form.internal_sewing_cost_per_piece }}
+                      {% if form.internal_sewing_cost_per_piece.errors %}<div class="err">{{ form.internal_sewing_cost_per_piece.errors }}</div>{% endif %}
+                      <div class="help">In the invoice currency. Total sewing cost = production quantity × sewing cost per piece.</div>
+                    </div>
+                    <div class="invoice-calculator-result" aria-live="polite">Calculated sewing cost: <output id="invoice-sewing-cost-preview">Enter quantity and cost per piece.</output></div>
+                  {% endif %}
+
                   <div class="row2">
                     <div class="mb-3">
-                      <label for="{{ form.sewing_charge.id_for_label }}">Sewing Charge</label>
+                      <label for="{{ form.sewing_charge.id_for_label }}">Total sewing cost</label>
                       {{ form.sewing_charge }}
                       {% if form.sewing_charge.errors %}<div class="err">{{ form.sewing_charge.errors }}</div>{% endif %}
                     </div>
@@ -631,6 +703,42 @@
                     {{ form.internal_cost_note }}
                     {% if form.internal_cost_note.errors %}<div class="err">{{ form.internal_cost_note.errors }}</div>{% endif %}
                   </div>
+                </details>
+              {% endif %}
+
+              {% if form.shipment_weight_kg %}
+                <details class="invoice-extra-options" id="invoice-shipping-calculator"{% if form.shipment_weight_kg.errors or form.chargeable_weight_kg.errors or form.fedex_rate_per_kg.errors or form.additional_shipping_charges.errors or form.shipping_treatment.errors %} open{% endif %}>
+                  <summary>Shipping Calculator</summary>
+                  <div class="help">{% if form.fedex_rate_per_kg %}Enter a confirmed FedEx rate in the invoice currency. No rate is assumed. The estimate is not a payment or an accounting posting.{% else %}Record shipment weights here. Shipping rates and internal costs require existing invoice costing access.{% endif %}</div>
+                  <div class="row2" style="margin-top:12px;">
+                    <div class="mb-3">
+                      <label for="{{ form.shipment_weight_kg.id_for_label }}">Actual shipment weight (kg)</label>
+                      {{ form.shipment_weight_kg }}
+                      {% if form.shipment_weight_kg.errors %}<div class="err">{{ form.shipment_weight_kg.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                      <label for="{{ form.chargeable_weight_kg.id_for_label }}">Chargeable shipment weight (kg)</label>
+                      {{ form.chargeable_weight_kg }}
+                      {% if form.chargeable_weight_kg.errors %}<div class="err">{{ form.chargeable_weight_kg.errors }}</div>{% endif %}
+                    </div>
+                    {% if form.fedex_rate_per_kg %}<div class="mb-3">
+                      <label for="{{ form.fedex_rate_per_kg.id_for_label }}">FedEx rate per kilogram</label>
+                      {{ form.fedex_rate_per_kg }}
+                      {% if form.fedex_rate_per_kg.errors %}<div class="err">{{ form.fedex_rate_per_kg.errors }}</div>{% endif %}
+                    </div>{% endif %}
+                    {% if form.additional_shipping_charges %}<div class="mb-3">
+                      <label for="{{ form.additional_shipping_charges.id_for_label }}">Additional shipping charges</label>
+                      {{ form.additional_shipping_charges }}
+                      {% if form.additional_shipping_charges.errors %}<div class="err">{{ form.additional_shipping_charges.errors }}</div>{% endif %}
+                    </div>{% endif %}
+                  </div>
+                  <div class="mb-3">
+                    <label for="{{ form.shipping_treatment.id_for_label }}">Shipping treatment</label>
+                    {{ form.shipping_treatment }}
+                    {% if form.shipping_treatment.errors %}<div class="err">{{ form.shipping_treatment.errors }}</div>{% endif %}
+                    <div class="help">Included and internal shipping do not increase the customer invoice. Separately charged shipping requires authorized price adjustment approval and is applied once.</div>
+                  </div>
+                  {% if form.fedex_rate_per_kg %}<div class="invoice-calculator-result" aria-live="polite">Shipping estimate: <output id="invoice-shipping-cost-preview">Enter chargeable weight and confirmed rate.</output></div>{% endif %}
                 </details>
               {% endif %}
 
@@ -697,6 +805,16 @@
     var invoiceMarket = byId("id_invoice_market");
     var invoiceType = byId("id_invoice_type");
     var depositPercent = byId("id_deposit_percentage");
+    var productionQuantity = byId("id_production_quantity");
+    var sewingPerPiece = byId("id_internal_sewing_cost_per_piece");
+    var sewingTotal = byId("id_sewing_charge");
+    var chargeableWeight = byId("id_chargeable_weight_kg");
+    var fedexRate = byId("id_fedex_rate_per_kg");
+    var shippingExtras = byId("id_additional_shipping_charges");
+    var shippingTreatment = byId("id_shipping_treatment");
+    var sewingPreview = byId("invoice-sewing-cost-preview");
+    var shippingPreview = byId("invoice-shipping-cost-preview");
+    var adjustedTotalPreview = byId("invoice-adjusted-total-preview");
 
     var balancePreview = byId("balancePreview");
     var curPreview = byId("curPreview");
@@ -741,7 +859,55 @@
       var b = t - p;
       if(b < 0) b = 0;
       if(balancePreview) balancePreview.textContent = fmt2(b);
+      if(adjustedTotalPreview) adjustedTotalPreview.textContent = fmt2(t);
       refreshDepositPreview();
+    }
+
+    function scaledUnits(el, places){
+      if(!el) return null;
+      var raw = el.value.trim();
+      var parts = /^(\d*)(?:\.(\d*))?$/.exec(raw);
+      if(!parts || !/\d/.test(raw)) return null;
+      var fraction = parts[2] || "";
+      if(/[1-9]/.test(fraction.slice(places))) return null;
+      return BigInt((parts[1] || "0") + fraction.slice(0, places).padEnd(places, "0"));
+    }
+
+    function exactMoney(cents){
+      return (cents / 100n).toString() + "." + (cents % 100n).toString().padStart(2, "0");
+    }
+
+    function refreshCostCalculators(syncAmounts){
+      var cur = currency ? ((currency.value || "").toString().trim()) : "";
+      var prefix = cur ? cur + " " : "";
+      if(sewingPreview){
+        var quantityUnits = scaledUnits(productionQuantity, 0);
+        var sewingCents = scaledUnits(sewingPerPiece, 2);
+        if(quantityUnits !== null && sewingCents !== null){
+          var sewingCost = exactMoney(quantityUnits * sewingCents);
+          sewingPreview.textContent = prefix + sewingCost;
+          if(syncAmounts && sewingTotal && !sewingTotal.disabled){ sewingTotal.value = sewingCost; }
+        } else {
+          sewingPreview.textContent = "Enter quantity and cost per piece.";
+        }
+      }
+      if(shippingPreview){
+        var weightUnits = scaledUnits(chargeableWeight, 2);
+        var rateCents = scaledUnits(fedexRate, 2);
+        var extraCents = !shippingExtras || shippingExtras.value.trim() === "" ? 0n : scaledUnits(shippingExtras, 2);
+        var complete = weightUnits !== null && rateCents !== null && extraCents !== null;
+        // Integer decimal units match the server's ROUND_HALF_UP without binary floating-point drift.
+        var shippingEstimate = complete ? exactMoney((weightUnits * rateCents + extraCents * 100n + 50n) / 100n) : "";
+        shippingPreview.textContent = complete ? prefix + shippingEstimate : "Enter chargeable weight and confirmed rate.";
+        if(syncAmounts && shipping && !shipping.disabled && shippingTreatment){
+          if(shippingTreatment.value === "separate" && complete){
+            // Assign the estimate once; never add it to an existing charge.
+            shipping.value = shippingEstimate;
+          } else if(shippingTreatment.value === "included" || shippingTreatment.value === "internal"){
+            setVal(shipping, 0);
+          }
+        }
+      }
     }
 
     function refreshDepositPreview(){
@@ -786,6 +952,14 @@
       });
     });
 
+    [productionQuantity, sewingPerPiece, chargeableWeight, fedexRate, shippingExtras, shippingTreatment].forEach(function(el){
+      if(!el) return;
+      el.addEventListener(el === shippingTreatment ? "change" : "input", function(){
+        refreshCostCalculators(true);
+        autoTotal();
+      });
+    });
+
     if(paid){
       paid.setAttribute("inputmode","decimal");
       paid.addEventListener("input", function(){
@@ -797,6 +971,7 @@
       currency.addEventListener("change", function(){
         refreshCurrency();
         refreshDepositPreview();
+        refreshCostCalculators(false);
       });
     }
 
@@ -847,6 +1022,7 @@
 
     if(calcBtn){
       calcBtn.addEventListener("click", function(){
+        refreshCostCalculators(true);
         autoTotal();
       });
     }
@@ -856,6 +1032,7 @@
     var formEl = saveBtn ? saveBtn.closest("form") : null;
     if(formEl && saveBtn){
       formEl.addEventListener("submit", function(){
+        refreshCostCalculators(true);
         autoTotal();
         saveBtn.disabled = true;
         saveBtn.style.opacity = "0.8";
@@ -863,6 +1040,7 @@
     }
 
     refreshCurrency();
+    refreshCostCalculators(false);
     autoTotal();
     refreshBalance();
     refreshDepositPreview();

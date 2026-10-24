@@ -1489,6 +1489,12 @@ class BDStaffMonthForm(forms.ModelForm):
 # Invoice form
 # --------------------------------------------------
 class InvoiceForm(forms.ModelForm):
+    customer_po_number = forms.CharField(required=False, max_length=128, label="Customer PO Number",
+        widget=forms.TextInput(attrs={"class": "form-control"}))
+    invoice_adjustment_reason = forms.CharField(required=False, max_length=2000, label="Adjustment reason",
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}))
+    invoice_adjustment_approved = forms.BooleanField(required=False,
+        label="I approve this invoice price adjustment", widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
     historical_entry_mode = forms.BooleanField(
         required=False,
         label="Historical Entry",
@@ -1519,6 +1525,9 @@ class InvoiceForm(forms.ModelForm):
             "sewing_charge",
             "other_internal_cost",
             "internal_cost_note",
+            "style_count", "production_quantity", "internal_sewing_cost_per_piece",
+            "shipment_weight_kg", "chargeable_weight_kg", "fedex_rate_per_kg",
+            "additional_shipping_charges", "shipping_treatment",
         ]
         widgets = {
             "invoice_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "Auto if blank"}),
@@ -1541,9 +1550,34 @@ class InvoiceForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        from crm.services.invoice_state import INVOICE_COST_INPUTS, can_manage_invoices, invoice_price_snapshot
+        self.actor = kwargs.pop("actor", None)
+        self.approved_price = kwargs.pop("approved_price", None)
         can_edit_internal_costs = kwargs.pop("can_edit_internal_costs", False)
         can_edit_historical_dates = kwargs.pop("can_edit_historical_dates", False)
         super().__init__(*args, **kwargs)
+        self.can_approve_invoice_adjustment = can_manage_invoices(self.actor)
+        if self.instance.pk and self.instance.invoice_region == "CA":
+            self.approved_price = invoice_price_snapshot(self.instance)
+        self.approved_source_total = (self.approved_price or {}).get("total_amount")
+        self.initial.setdefault("customer_po_number", self.instance.customer_po_number)
+        country_market = self.initial.get("invoice_market") or self.data.get("invoice_market") or self.instance.invoice_market
+        currency = self.initial.get("currency") or self.data.get("currency") or self.instance.currency
+        self.can_use_cost_inputs = country_market == "north_america" and currency == "CAD"
+        for name in INVOICE_COST_INPUTS:
+            if not self.can_use_cost_inputs:
+                self.fields.pop(name, None)
+                continue
+            field = self.fields[name]
+            if name == "shipping_treatment":
+                field.widget.attrs["class"] = "form-select"
+            else:
+                field.widget = forms.NumberInput(attrs={"class": "form-control", "min": "0", "step": "1" if name in {"style_count", "production_quantity"} else "0.01"})
+        if not self.approved_price:
+            self.fields.pop("invoice_adjustment_reason", None)
+            self.fields.pop("invoice_adjustment_approved", None)
+        elif not self.can_approve_invoice_adjustment:
+            self.fields.pop("invoice_adjustment_approved", None)
 
         if "invoice_number" in self.fields:
             self.fields["invoice_number"].required = False
@@ -1588,7 +1622,8 @@ class InvoiceForm(forms.ModelForm):
                 if field_name in self.fields:
                     self.fields[field_name].required = False
         else:
-            for field_name in ("sewing_charge", "other_internal_cost", "internal_cost_note"):
+            for field_name in ("sewing_charge", "other_internal_cost", "internal_cost_note",
+                               "internal_sewing_cost_per_piece", "fedex_rate_per_kg", "additional_shipping_charges"):
                 self.fields.pop(field_name, None)
 
     def _clean_money(self, field_name):
@@ -1641,16 +1676,79 @@ class InvoiceForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        if "historical_entry_mode" not in self.fields:
-            return cleaned
-
-        historical_mode = cleaned.get("historical_entry_mode")
-        invoice_date = cleaned.get("invoice_date")
-        if historical_mode and not invoice_date:
-            self.add_error("invoice_date", "Invoice Date is required when Historical Entry mode is enabled.")
-        if not historical_mode:
-            cleaned["invoice_date"] = None
+        from crm.services.invoice_state import INVOICE_COST_INPUTS, InvoiceStateError, validate_invoice_price_adjustment
+        from decimal import ROUND_HALF_UP
+        if "historical_entry_mode" in self.fields:
+            historical_mode = cleaned.get("historical_entry_mode")
+            invoice_date = cleaned.get("invoice_date")
+            if historical_mode and not invoice_date:
+                self.add_error("invoice_date", "Invoice Date is required when Historical Entry mode is enabled.")
+            if not historical_mode:
+                cleaned["invoice_date"] = None
+        if self.can_use_cost_inputs:
+            # Older callers may omit new optional controls; preserve known source values.
+            for name in INVOICE_COST_INPUTS:
+                if name in self.fields and name not in self.data and name not in self.errors:
+                    cleaned[name] = self.initial.get(name)
+            quantity = cleaned.get("production_quantity")
+            rate = cleaned.get("internal_sewing_cost_per_piece")
+            if rate is not None:
+                if not quantity:
+                    self.add_error("production_quantity", "Quantity is required to calculate sewing cost.")
+                else:
+                    cleaned["sewing_charge"] = (quantity * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if quantity and cleaned.get("style_count") and cleaned["style_count"] > quantity:
+                self.add_error("style_count", "Style count cannot exceed production quantity.")
+            weight, freight_rate = cleaned.get("chargeable_weight_kg"), cleaned.get("fedex_rate_per_kg")
+            treatment = cleaned.get("shipping_treatment")
+            extras = cleaned.get("additional_shipping_charges") or Decimal("0")
+            if (weight is not None or freight_rate is not None or extras or treatment == "separate") and "fedex_rate_per_kg" in self.fields:
+                if weight is None:
+                    self.add_error("chargeable_weight_kg", "Enter the carrier's chargeable weight.")
+                if freight_rate is None:
+                    self.add_error("fedex_rate_per_kg", "Enter a confirmed FedEx rate; no rate is assumed.")
+                if not treatment:
+                    self.add_error("shipping_treatment", "Choose how shipping is treated.")
+            actual_weight = cleaned.get("shipment_weight_kg")
+            if actual_weight is not None and weight is not None and weight < actual_weight:
+                self.add_error("chargeable_weight_kg", "Chargeable weight cannot be less than actual weight.")
+            if treatment == "separate":
+                if not self.can_approve_invoice_adjustment:
+                    self.add_error("shipping_treatment", "An authorized invoice approver must approve separate shipping.")
+                elif weight is not None and freight_rate is not None:
+                    cleaned["shipping_amount"] = (weight * freight_rate + extras).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            elif treatment in {"included", "internal"}:
+                cleaned["shipping_amount"] = Decimal("0.00")
+        total = max(Decimal("0"), (cleaned.get("subtotal") or Decimal("0")) +
+                    (cleaned.get("shipping_amount") or Decimal("0")) +
+                    (cleaned.get("tax_amount") or Decimal("0")) -
+                    (cleaned.get("discount_amount") or Decimal("0")))
+        cleaned["total_amount"] = total
+        if self.approved_price and not self.errors:
+            values = {**cleaned, "total_amount": total}
+            try:
+                changed = validate_invoice_price_adjustment(values, self.approved_price, actor=self.actor,
+                    reason=cleaned.get("invoice_adjustment_reason"), approved=cleaned.get("invoice_adjustment_approved"))
+                if changed and self.instance.pk and (self.instance.status != "draft" or self.instance.invoice_status != "DRAFT" or self.instance.paid_amount):
+                    raise InvoiceStateError("Issued or paid invoice prices cannot be changed in this form.")
+            except InvoiceStateError as exc:
+                self.add_error(None, str(exc))
         return cleaned
+
+    def clean_customer_po_number(self):
+        value = self.cleaned_data.get("customer_po_number", "").strip()
+        if "\n" in value or "\r" in value:
+            raise forms.ValidationError("Enter a single customer PO reference.")
+        return value
+
+    def save(self, commit=True):
+        invoice = super().save(commit=False)
+        if "customer_po_number" in self.data or (not self.is_bound):
+            invoice.customer_po_number = self.cleaned_data.get("customer_po_number", "")
+        if commit:
+            invoice.save()
+            self.save_m2m()
+        return invoice
 
     def clean_paid_amount(self):
         return self._clean_money("paid_amount")

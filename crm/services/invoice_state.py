@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
@@ -23,10 +24,67 @@ SETTLEMENT_PARTIAL = "PARTIAL"
 SETTLEMENT_SETTLED = "SETTLED"
 
 MONEY = Decimal("0.01")
+INVOICE_PRICE_FIELDS = ("subtotal", "shipping_amount", "discount_amount", "tax_amount", "total_amount")
+INVOICE_COST_INPUTS = (
+    "style_count", "production_quantity", "internal_sewing_cost_per_piece",
+    "shipment_weight_kg", "chargeable_weight_kg", "fedex_rate_per_kg",
+    "additional_shipping_charges", "shipping_treatment",
+)
 
 
 class InvoiceStateError(ValueError):
     pass
+
+
+def can_manage_invoices(user):
+    """Existing invoice approval roles, shared by forms and service validation."""
+    from crm.services.operations_permissions import (
+        has_operations_role, ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE,
+    )
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    if has_operations_role(user, ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE):
+        return True
+    try:
+        access = user.access
+    except Exception:
+        return False
+    return bool(getattr(access, "can_accounting_ca", False) or getattr(access, "can_accounting_bd", False))
+
+
+def invoice_price_snapshot(invoice):
+    return {name: str(_money(getattr(invoice, name))) for name in INVOICE_PRICE_FIELDS} | {
+        "currency": invoice.currency,
+    }
+
+
+def validate_invoice_price_adjustment(values, original, *, actor=None, reason="", approved=False):
+    if not original:
+        return False
+    changed = any(_money(values.get(name)) != _money(original.get(name)) for name in INVOICE_PRICE_FIELDS)
+    changed = changed or values.get("currency") != original.get("currency")
+    if not changed:
+        return False
+    if not can_manage_invoices(actor):
+        raise InvoiceStateError("An authorized invoice approver must approve a price adjustment.")
+    if not str(reason or "").strip():
+        raise InvoiceStateError("A reason is required for an invoice price adjustment.")
+    if not approved:
+        raise InvoiceStateError("Explicit invoice price adjustment approval is required.")
+    return True
+
+
+def audit_invoice_price_adjustment(invoice, original, *, actor, reason):
+    # Mandatory approval evidence belongs in the same transaction as the invoice.
+    CRMAuditLog.objects.create(
+        actor=_actor_or_none(actor), module="invoice", record_id=str(invoice.pk),
+        record_label=invoice.invoice_number, action_type=CRMAuditLog.ACTION_APPROVED,
+        field_name="price_adjustment", previous_value=json.dumps(original, sort_keys=True),
+        new_value=json.dumps({**invoice_price_snapshot(invoice), "reason": str(reason).strip()}, sort_keys=True),
+        target_url=reverse("invoice_view", args=[invoice.pk]),
+    )
 
 
 @dataclass(frozen=True)
@@ -152,7 +210,8 @@ def _sync_invoice_dependents(invoice: Invoice, actor, *, lifecycle: bool) -> Non
 
 
 @transaction.atomic
-def create_draft_invoice(invoice: Invoice, *, actor=None) -> Invoice:
+def create_draft_invoice(invoice: Invoice, *, actor=None, approved_price=None,
+                         adjustment_reason="", adjustment_approved=False) -> Invoice:
     if invoice.pk:
         raise InvoiceStateError("A new invoice write requires an unsaved Invoice instance.")
 
@@ -161,7 +220,13 @@ def create_draft_invoice(invoice: Invoice, *, actor=None) -> Invoice:
     invoice.approved_at = None
     invoice.approved_by = None
     invoice.paid_amount = Decimal("0.00")
+    adjusted = validate_invoice_price_adjustment(
+        invoice_price_snapshot(invoice), approved_price, actor=actor,
+        reason=adjustment_reason, approved=adjustment_approved,
+    )
     invoice.save()
+    if adjusted:
+        audit_invoice_price_adjustment(invoice, approved_price, actor=actor, reason=adjustment_reason)
     _audit_status_change(
         invoice,
         actor,
@@ -179,10 +244,30 @@ def save_invoice_details(
     *,
     protected_state: ProtectedInvoiceState,
     actor=None,
+    adjustment_reason="",
+    adjustment_approved=False,
 ) -> Invoice:
     if not invoice.pk:
         raise InvoiceStateError("Invoice detail updates require an existing invoice.")
 
+    locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+    # A verification may have completed after the edit form was loaded.
+    # Restore the current locked financial state, never a stale form snapshot.
+    protected_state = capture_protected_state(locked)
+    original = invoice_price_snapshot(locked)
+    changed = invoice_price_snapshot(invoice) != original
+    # Only new Canadian draft pricing can use the explicit adjustment control.
+    # Issued/paid financial records must use their established correction process.
+    adjusted = False
+    if locked.invoice_region == "CA" and changed:
+        if locked.status != "draft" or locked.invoice_status != "DRAFT" or locked.paid_amount:
+            raise InvoiceStateError("Issued or paid invoice prices cannot be changed in this form.")
+        if locked.payments.exists() or hasattr(locked, "financial_state"):
+            raise InvoiceStateError("An invoice with financial history cannot be repriced in this form.")
+        adjusted = validate_invoice_price_adjustment(
+            invoice_price_snapshot(invoice), original, actor=actor,
+            reason=adjustment_reason, approved=adjustment_approved,
+        )
     invoice.status = compatibility_status(
         current_status=protected_state.status,
         total_amount=invoice.total_amount,
@@ -193,6 +278,8 @@ def save_invoice_details(
     invoice.approved_at = protected_state.approved_at
     invoice.approved_by_id = protected_state.approved_by_id
     invoice.save()
+    if adjusted:
+        audit_invoice_price_adjustment(invoice, original, actor=actor, reason=adjustment_reason)
     _audit_status_change(invoice, actor, protected_state.status, invoice.status)
     _sync_invoice_dependents(invoice, actor, lifecycle=True)
     return invoice

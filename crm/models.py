@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from decimal import Decimal, ROUND_HALF_UP
 from .models_access import UserAccess
 from .models_platform import (
@@ -5715,6 +5716,44 @@ class Invoice(models.Model):
     other_internal_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     internal_cost_note = models.TextField(blank=True, null=True)
 
+    # Optional planning inputs. Historical invoices deliberately remain unset.
+    style_count = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)]
+    )
+    production_quantity = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)]
+    )
+    internal_sewing_cost_per_piece = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    shipment_weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    chargeable_weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    fedex_rate_per_kg = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    additional_shipping_charges = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    shipping_treatment = models.CharField(
+        max_length=12,
+        choices=[
+            ("included", "Included in approved price"),
+            ("separate", "Added separately with authorization"),
+            ("internal", "Internal expense only"),
+        ],
+        null=True,
+        blank=True,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -5749,6 +5788,41 @@ class Invoice(models.Model):
     @property
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
+
+    @property
+    def customer_po_number(self):
+        """Customer reference kept in existing notes, separate from our order number."""
+        for line in (self.notes or "").splitlines():
+            label, separator, value = line.partition(":")
+            if separator and label.strip().casefold() == "customer po":
+                return value.strip()
+        return ""
+
+    @customer_po_number.setter
+    def customer_po_number(self, value):
+        reference = str(value or "").strip()
+        if "\n" in reference or "\r" in reference:
+            raise ValidationError("Customer PO number must be a single line.")
+        remaining_lines = []
+        for line in (self.notes or "").splitlines(keepends=True):
+            label, separator, _ = line.partition(":")
+            if not (separator and label.strip().casefold() == "customer po"):
+                remaining_lines.append(line)
+        remaining_notes = "".join(remaining_lines)
+        self.notes = (
+            f"Customer PO: {reference}\n{remaining_notes}" if reference else remaining_notes
+        )
+
+    @property
+    def shipping_cost(self):
+        """Planning estimate only; customer charges use the existing shipping_amount."""
+        if self.chargeable_weight_kg is None or self.fedex_rate_per_kg is None:
+            return None
+        return (
+            self._decimal_or_zero(self.chargeable_weight_kg)
+            * self._decimal_or_zero(self.fedex_rate_per_kg)
+            + self._decimal_or_zero(self.additional_shipping_charges)
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     @property
     def effective_invoice_date(self):

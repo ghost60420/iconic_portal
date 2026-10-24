@@ -20,7 +20,9 @@ from crm.services.costing_currency import (
     normalize_costing_currency,
 )
 from crm.services.costing_engine import compute_costing
-from crm.services.invoice_state import create_draft_invoice
+from crm.services.invoice_state import (
+    INVOICE_COST_INPUTS, InvoiceStateError, create_draft_invoice, invoice_price_snapshot,
+)
 from crm.services.order_lifecycle import (
     create_lifecycle_from_invoice,
     create_lifecycle_from_production,
@@ -462,10 +464,18 @@ def build_quick_quotation_invoice(quick_costing):
         other_internal_cost=Decimal("0"),
         internal_cost_note="",
     )
+    if region == "CA" and currency == "CAD":
+        invoice.production_quantity = quick_costing.quantity or None
+        if quick_costing.making_cost_per_piece is not None:
+            invoice.internal_sewing_cost_per_piece = _quick_money_for_invoice(
+                summary.get("making_cost_per_piece"), source_currency, currency, exchange_rate,
+            )
+            invoice.sewing_charge = _money((invoice.production_quantity or 0) * invoice.internal_sewing_cost_per_piece)
     return invoice
 
 
-def create_invoice_from_quick_costing(quick_costing, user=None, *, invoice_details=None):
+def create_invoice_from_quick_costing(quick_costing, user=None, *, invoice_details=None,
+                                    adjustment_reason="", adjustment_approved=False):
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
@@ -497,8 +507,9 @@ def create_invoice_from_quick_costing(quick_costing, user=None, *, invoice_detai
             raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
 
         invoice = build_quick_quotation_invoice(quick_costing)
+        approved_price = invoice_price_snapshot(invoice) if invoice.invoice_region == "CA" else None
         for field, value in (invoice_details or {}).items():
-            if field not in {"invoice_number", "issue_date", "due_date", "invoice_date", "deposit_percentage", "notes", "shipping_amount", "discount_amount", "tax_amount"}:
+            if field not in {"invoice_number", "issue_date", "due_date", "invoice_date", "deposit_percentage", "notes", "shipping_amount", "discount_amount", "tax_amount", "sewing_charge", "other_internal_cost", "internal_cost_note", *INVOICE_COST_INPUTS}:
                 raise CostingWorkflowError("Unsupported invoice detail.")
             setattr(invoice, field, value)
         if not invoice.invoice_number:
@@ -508,7 +519,11 @@ def create_invoice_from_quick_costing(quick_costing, user=None, *, invoice_detai
                 Decimal("0"),
                 invoice.subtotal + invoice.shipping_amount + invoice.tax_amount - invoice.discount_amount,
             )
-        create_draft_invoice(invoice, actor=user)
+        try:
+            create_draft_invoice(invoice, actor=user, approved_price=approved_price,
+                adjustment_reason=adjustment_reason, adjustment_approved=adjustment_approved)
+        except InvoiceStateError as exc:
+            raise CostingWorkflowError(str(exc)) from exc
         quick_costing.status = QuickCosting.STATUS_INVOICED
         quick_costing.save(update_fields=["status", "updated_at"])
         return invoice, True

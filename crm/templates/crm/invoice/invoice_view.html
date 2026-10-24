@@ -625,7 +625,7 @@
             <strong>{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
-            <span>Sewing Charge</span>
+            <span>Total sewing cost</span>
             <strong>{{ invoice.sewing_charge|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
@@ -645,6 +645,35 @@
             <strong>{% if invoice.total_internal_cost %}{{ invoice.estimated_profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong>
           </div>
         </div>
+        {% if invoice.internal_sewing_cost_per_piece != None or invoice.shipment_weight_kg != None or invoice.chargeable_weight_kg != None or invoice.fedex_rate_per_kg != None or invoice.additional_shipping_charges != None or invoice.shipping_treatment %}
+          <details class="note" id="invoice-operational-cost-details">
+            <summary style="cursor:pointer;font-weight:900;">Internal costing and shipping inputs</summary>
+            <div class="internal-profit-grid" style="margin-top:10px;">
+              {% if invoice.internal_sewing_cost_per_piece != None %}
+                <div class="internal-profit-cell"><span>Sewing cost per piece</span><strong>{{ invoice.internal_sewing_cost_per_piece|finance_money:cur }}</strong></div>
+              {% endif %}
+              {% if invoice.shipment_weight_kg != None %}
+                <div class="internal-profit-cell"><span>Shipment weight</span><strong>{{ invoice.shipment_weight_kg|floatformat:2 }} kg</strong></div>
+              {% endif %}
+              {% if invoice.chargeable_weight_kg != None %}
+                <div class="internal-profit-cell"><span>Chargeable weight</span><strong>{{ invoice.chargeable_weight_kg|floatformat:2 }} kg</strong></div>
+              {% endif %}
+              {% if invoice.fedex_rate_per_kg != None %}
+                <div class="internal-profit-cell"><span>FedEx rate per kg</span><strong>{{ invoice.fedex_rate_per_kg|finance_money:cur }}</strong></div>
+              {% endif %}
+              {% if invoice.additional_shipping_charges != None %}
+                <div class="internal-profit-cell"><span>Additional shipping charges</span><strong>{{ invoice.additional_shipping_charges|finance_money:cur }}</strong></div>
+              {% endif %}
+              {% if invoice.shipping_cost != None %}
+                <div class="internal-profit-cell"><span>Shipping estimate</span><strong>{{ invoice.shipping_cost|finance_money:cur }}</strong></div>
+              {% endif %}
+              {% if invoice.shipping_treatment %}
+                <div class="internal-profit-cell"><span>Shipping treatment</span><strong>{{ invoice.get_shipping_treatment_display }}</strong></div>
+              {% endif %}
+            </div>
+            <p class="help">Shipping estimates do not create payments or expense postings. Customer charges appear in the invoice totals.</p>
+          </details>
+        {% endif %}
         {% if lifecycle_profit %}
           <div class="note" style="margin-top:12px;">
             <div style="margin-bottom:8px; color:#fde68a; font-weight:900;">Net profit formula</div>
@@ -704,10 +733,22 @@
               {% if invoice.customer %}{{ invoice.customer }}{% else %}Not set{% endif %}
             </div>
 
-            <div class="k">Order</div>
+            <div class="k">Customer PO number</div>
+            <div class="v">{{ invoice.customer_po_number|default:"Not provided" }}</div>
+
+            <div class="k">Internal production order</div>
             <div class="v">
               {% if invoice.order %}{{ invoice.order }}{% else %}Not linked{% endif %}
             </div>
+
+            {% if invoice.style_count != None %}
+              <div class="k">Number of styles</div>
+              <div class="v">{{ invoice.style_count }}</div>
+            {% endif %}
+            {% if invoice.production_quantity != None %}
+              <div class="k">Production quantity</div>
+              <div class="v">{{ invoice.production_quantity }}</div>
+            {% endif %}
 
             <div class="k">Market</div>
             <div class="v">{{ invoice_market_label }}</div>

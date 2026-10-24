@@ -56,6 +56,10 @@ from .services.historical_dates import (
     with_invoice_reporting_date,
 )
 from .services.invoice_state import (
+    INVOICE_COST_INPUTS,
+    InvoiceStateError,
+    can_manage_invoices,
+    invoice_price_snapshot,
     approve_invoice as approve_invoice_write,
     capture_protected_state,
     create_draft_invoice,
@@ -151,22 +155,6 @@ INVOICE_LAYOUT_TITLES = {
     ("bangladesh", "bulk"): "Bangladesh Bulk Production Invoice",
     ("bangladesh", "sewing_charge"): "Bangladesh Sewing Charge Invoice",
 }
-
-
-def can_manage_invoices(user):
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    if user.is_staff:
-        return True
-    if has_operations_role(user, ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE):
-        return True
-    try:
-        access = user.access
-    except Exception:
-        return False
-    return bool(getattr(access, "can_accounting_ca", False) or getattr(access, "can_accounting_bd", False))
 
 
 def superuser_only(user):
@@ -320,6 +308,9 @@ def _sanitize_invoice_internal_fields(inv: Invoice) -> Invoice:
     inv.sewing_charge = Decimal("0")
     inv.other_internal_cost = Decimal("0")
     inv.internal_cost_note = ""
+    inv.internal_sewing_cost_per_piece = None
+    inv.fedex_rate_per_kg = None
+    inv.additional_shipping_charges = None
     return inv
 
 
@@ -1150,6 +1141,7 @@ def _build_quick_quotation_invoice_prefill(quotation_id, user):
         "quotation_label": quick.quotation_number, "opportunity": opportunity,
         "source_opportunity_id": opportunity.pk if opportunity else "", "lead": lead, "customer": customer,
         "production_order": draft.order, "existing_invoices": [],
+        "customer_address": ", ".join(str(getattr(customer, name, "") or "") for name in ("address_line1", "address_line2", "city", "province", "postal_code", "country") if getattr(customer, name, "")),
         "has_existing_invoices": False, "duplicate_blocked": False,
         "opportunity_label": getattr(opportunity, "opportunity_id", "") or "Unavailable",
         "lead_label": getattr(lead, "lead_id", "") or "Unavailable",
@@ -1166,7 +1158,10 @@ def _build_quick_quotation_invoice_prefill(quotation_id, user):
         "production_message": "Invoice uses the approved quotation. Production release remains a separate authorized action.",
         "conversion_note": "Approved quotation calculations and currency conversion are preserved.",
     }
-    return {"initial": initial, "context": context, "quick_costing": quick, "draft": draft}
+    if draft.invoice_region == "CA" and draft.currency == "CAD":
+        initial.update({name: getattr(draft, name) for name in INVOICE_COST_INPUTS})
+    return {"initial": initial, "context": context, "quick_costing": quick, "draft": draft,
+            "approved_price": invoice_price_snapshot(draft) if draft.invoice_region == "CA" else None}
 
 
 def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
@@ -1253,6 +1248,7 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
     }
     context = {
         "source_title": f"Invoice from Quotation {quotation_label}",
+        "customer_address": ", ".join(str(getattr(customer, name, "") or "") for name in ("address_line1", "address_line2", "city", "province", "postal_code", "country") if getattr(customer, name, "")),
         "source_quotation_id": costing.pk,
         "costing_label": f"COST-{costing.pk}",
         "quotation_label": quotation_label,
@@ -1300,7 +1296,12 @@ def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
         "invoice_type_label": dict(Invoice.INVOICE_TYPE_CHOICES).get(invoice_type, "Bulk Production"),
         "production_message": "Invoice will be linked to this CEO-approved quotation. Production conversion still requires the existing approval workflow.",
     }
-    return {"initial": initial, "context": context, "amounts": amounts, "costing": costing}
+    if region == "CA" and currency == "CAD":
+        initial["production_quantity"] = costing.order_quantity or None
+        if costing.order_quantity and amounts["labor_total"]:
+            initial["internal_sewing_cost_per_piece"] = _money(_d(amounts["labor_total"]) / costing.order_quantity)
+    approved_price = invoice_price_snapshot(Invoice(currency=currency, subtotal=initial["subtotal"], total_amount=initial["subtotal"])) if region == "CA" else None
+    return {"initial": initial, "context": context, "amounts": amounts, "costing": costing, "approved_price": approved_price}
 
 
 def _lock_quotation_invoice_form(form, source_prefill, *, invoice_manager):
@@ -2243,6 +2244,8 @@ def invoice_add(request):
             invoice_data["invoice_market"] = "bangladesh" if locked_side == "BD" else "north_america"
         form = InvoiceForm(
             invoice_data,
+            actor=request.user,
+            approved_price=(quotation_prefill or {}).get("approved_price"),
             initial=initial,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
@@ -2256,9 +2259,16 @@ def invoice_add(request):
             )}
             if "invoice_date" in form.cleaned_data:
                 details["invoice_date"] = form.cleaned_data["invoice_date"]
+            draft = form.save(commit=False)
+            details["notes"] = draft.notes
+            for name in (*INVOICE_COST_INPUTS, "sewing_charge", "other_internal_cost", "internal_cost_note"):
+                if name in form.fields:
+                    details[name] = getattr(draft, name)
             try:
                 inv, created = create_invoice_from_quick_costing(
                     quotation_prefill["quick_costing"], user=request.user, invoice_details=details,
+                    adjustment_reason=form.cleaned_data.get("invoice_adjustment_reason", ""),
+                    adjustment_approved=form.cleaned_data.get("invoice_adjustment_approved", False),
                 )
             except CostingWorkflowError as exc:
                 form.add_error(None, str(exc))
@@ -2317,8 +2327,9 @@ def invoice_add(request):
                     inv.costing_header = source_costing
                     inv.opportunity = source_costing.opportunity
                     inv.customer = source_costing.customer or _opportunity_invoice_customer(source_costing.opportunity)
-                    inv.sewing_charge = _d(quotation_prefill["amounts"]["labor_total"])
-                    inv.other_internal_cost = _d(quotation_prefill["amounts"]["other_cost_total"])
+                    if not can_edit_internal_costs:
+                        inv.sewing_charge = _d(quotation_prefill["amounts"]["labor_total"])
+                        inv.other_internal_cost = _d(quotation_prefill["amounts"]["other_cost_total"])
                     inv.internal_cost_note = (
                         f"Auto-filled from CEO-approved quotation "
                         f"{source_costing.quotation_number or 'COST-' + str(source_costing.pk)}."
@@ -2334,7 +2345,10 @@ def invoice_add(request):
                     _apply_local_sewing_invoice_source(inv, local_order)
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
-                create_draft_invoice(inv, actor=request.user)
+                create_draft_invoice(inv, actor=request.user,
+                    approved_price=(quotation_prefill or {}).get("approved_price"),
+                    adjustment_reason=form.cleaned_data.get("invoice_adjustment_reason", ""),
+                    adjustment_approved=form.cleaned_data.get("invoice_adjustment_approved", False))
                 form.save_m2m()
                 if source_costing:
                     CostingAuditLog.objects.create(
@@ -2349,6 +2363,8 @@ def invoice_add(request):
     else:
         form = InvoiceForm(
             initial=initial,
+            actor=request.user,
+            approved_price=(quotation_prefill or {}).get("approved_price"),
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
@@ -2396,6 +2412,7 @@ def invoice_add_bd(request):
     if request.method == "POST":
         form = InvoiceForm(
             request.POST,
+            actor=request.user,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
@@ -2435,6 +2452,7 @@ def invoice_add_bd(request):
             initial.update(_local_sewing_invoice_initial(local_order))
         form = InvoiceForm(
             initial=initial,
+            actor=request.user,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
@@ -2463,6 +2481,7 @@ def invoice_edit(request, pk):
         form = InvoiceForm(
             request.POST,
             instance=inv,
+            actor=request.user,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
@@ -2487,18 +2506,26 @@ def invoice_edit(request, pk):
 
                 _sync_invoice_market_region(inv2)
                 _calc_totals(inv2)
-                save_invoice_details(
-                    inv2,
-                    protected_state=protected_state,
-                    actor=request.user,
-                )
-                form.save_m2m()
+                try:
+                    save_invoice_details(
+                        inv2,
+                        protected_state=protected_state,
+                        actor=request.user,
+                        adjustment_reason=form.cleaned_data.get("invoice_adjustment_reason", ""),
+                        adjustment_approved=form.cleaned_data.get("invoice_adjustment_approved", False),
+                    )
+                except InvoiceStateError as exc:
+                    form.add_error(None, str(exc))
+                else:
+                    form.save_m2m()
 
-            messages.success(request, "Invoice updated.")
-            return redirect("invoice_view", pk=inv.pk)
+            if not form.errors:
+                messages.success(request, "Invoice updated.")
+                return redirect("invoice_view", pk=inv.pk)
     else:
         form = InvoiceForm(
             instance=inv,
+            actor=request.user,
             can_edit_internal_costs=can_edit_internal_costs,
             can_edit_historical_dates=can_edit_historical_dates_flag,
         )
