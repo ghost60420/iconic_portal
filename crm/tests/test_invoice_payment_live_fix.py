@@ -214,6 +214,38 @@ class InvoicePaymentLiveFixTests(TestCase):
         self.assertFalse(FinanceOperation.objects.filter(invoice=invoice).exists())
         self.assertFalse(InvoicePayment.objects.filter(invoice=invoice).exists())
 
+    def test_payment_page_safely_renders_missing_customer_and_existing_name_fallbacks(self):
+        invoice = self.invoice("PAYMENT-MISSING-CUSTOMER", total="1800.00")
+        invoice.customer = None
+        invoice.save(update_fields=["customer"])
+        counts = (FinanceOperation.objects.count(), InvoicePayment.objects.count(), JournalEntry.objects.count())
+        response = self.client.get(reverse("invoice_payment_add", args=[invoice.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Customer not linked — contact Finance")
+        self.assertContains(response, invoice.invoice_number)
+        for field in ("payment_date", "payment_method", "payment_account", "amount", "notes"):
+            self.assertContains(response, f'name="{field}"')
+        self.assertEqual(response.context["invoice"].total_amount, Decimal("1800.00"))
+        self.assertEqual(response.context["invoice"].paid_amount, Decimal("0.00"))
+        self.assertEqual(response.context["invoice"].balance, Decimal("1800.00"))
+        self.assertEqual(counts, (FinanceOperation.objects.count(), InvoicePayment.objects.count(), JournalEntry.objects.count()))
+        invoice.refresh_from_db()
+        self.assertIsNone(invoice.customer_id)
+
+        invoice.customer = self.customer
+        invoice.save(update_fields=["customer"])
+        for brand, contact, expected in (
+            ("Payment Brand", "Buyer Name", "Payment Brand"),
+            ("", "Buyer Name", "Buyer Name"),
+            ("", "", "Customer not linked — contact Finance"),
+        ):
+            with self.subTest(brand=brand, contact=contact):
+                self.customer.account_brand = brand
+                self.customer.contact_name = contact
+                self.customer.save(update_fields=["account_brand", "contact_name"])
+                page = self.client.get(reverse("invoice_payment_add", args=[invoice.pk]))
+                self.assertContains(page, f"Customer: <strong>{expected}</strong>", html=True)
+
     def test_reference_is_optional_and_missing_period_is_shown_inline(self):
         invoice = self.invoice("LIVE-OPTIONAL-REFERENCE", total="50.00")
 

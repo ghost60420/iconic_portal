@@ -2,7 +2,7 @@
 {% block content %}
 <main style="max-width:900px;margin:auto;padding:20px">
   <h1>Customer payment — {{ invoice.invoice_number }}</h1>
-  <p>Customer: <strong>{{ invoice.customer.account_brand|default:invoice.customer.contact_name|default:"Customer not linked — contact Finance" }}</strong></p>
+  <p>Customer: <strong>{% firstof invoice.customer.account_brand invoice.customer.contact_name "Customer not linked — contact Finance" %}</strong></p>
   <p><a href="{% url 'invoice_view' invoice.pk %}">Back to invoice</a></p>
   {% include "crm/invoice/partials/payment_verification.html" %}
   {% include "crm/invoice/partials/payment_entry.html" %}
