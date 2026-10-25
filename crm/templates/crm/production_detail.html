@@ -2,6 +2,7 @@
 {% load static crm_people platform_tools crm_extras %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-revisions-20260710">
+<link rel="stylesheet" href="{% static 'crm/production_stages.css' %}?v=production-stage-controls-1">
 {% include "crm/partials/production_density_assets.html" %}
 
 <div class="production-detail crm-modern-bridge crm-production-bridge" data-crm-density="compact">
@@ -38,7 +39,7 @@
         </div>
         <div class="production-hero-badges">
           {% include "crm/partials/production_type_indicator.html" with production_opportunity=order.opportunity only %}
-          <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
+          <span class="production-status-badge {{ operational_status }}" data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</span>
           <span class="production-priority-badge {{ priority_badge.tone }}">{{ priority_badge.label }} priority</span>
           {% if order_delayed %}
             <span class="production-priority-badge risk">Delayed</span>
@@ -53,7 +54,7 @@
           {% else %}
             <span class="production-priority-badge good">On track</span>
           {% endif %}
-          <span class="production-progress-pill">{{ percent_done }}% complete</span>
+          <span class="production-progress-pill" data-stage-progress-label>{{ percent_done }}% complete</span>
         </div>
       </div>
     </div>
@@ -130,7 +131,7 @@
         <h2>Bangladesh Financial Summary</h2>
         <p>Local sewing financials in BDT. Production workflow continues below.</p>
       </div>
-      <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
+      <span class="production-status-badge {{ operational_status }}" data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</span>
     </div>
     <div class="production-approved-grid">
       <article><span>Service Type</span><strong>Bangladesh Local Sewing</strong></article>
@@ -153,14 +154,14 @@
       <article><span>Daily output</span><strong>{% if local_sewing.daily_output != None %}{{ local_sewing.daily_output|floatformat:2 }} pcs{% else %}N/A{% endif %}</strong></article>
       <article><span>Completed quantity</span><strong>{{ local_sewing.completed_quantity }}</strong></article>
       <article><span>Rejected quantity</span><strong>{{ local_sewing.rejected_quantity }}</strong></article>
-      <article><span>Status</span><strong>{{ operational_status_label }}</strong></article>
+      <article><span>Status</span><strong data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</strong></article>
     </div>
   </section>
   {% endif %}
   <nav class="production-mobile-action-bar" aria-label="Factory quick actions">
     <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--primary">Next Stage</a>
     {% if stages %}
-      <a href="{% url 'production_stage_edit' stages.0.id %}" class="production-btn production-btn--ghost">Stages</a>
+      <a href="#stage-progress" class="production-btn production-btn--ghost">Stages</a>
     {% endif %}
     <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
   </nav>
@@ -194,7 +195,7 @@
         <h2>Production Summary</h2>
         <p>Operational production status used for dashboards, filters, and management reporting.</p>
       </div>
-      <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
+      <span class="production-status-badge {{ operational_status }}" data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</span>
     </div>
 
     {% if opportunity.production_type == "third_party" %}
@@ -280,8 +281,8 @@
     </article>
     <article class="production-snapshot-card">
       <span>Current Operational Status</span>
-      <strong>{{ operational_status_label }}</strong>
-      <small>{{ percent_done }}% complete</small>
+      <strong data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</strong>
+      <small data-stage-progress-label>{{ percent_done }}% complete</small>
     </article>
     <article class="production-snapshot-card">
       <span>Sample or Bulk</span>
@@ -338,7 +339,7 @@
         {% endfor %}
         <article><span>Delivery date</span><strong>{{ order.bulk_deadline|date:"M j, Y"|default:"Not scheduled" }}</strong></article>
         <article><span>Production manager</span><strong>{% if order.assigned_production_manager %}{{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}{% else %}Not assigned{% endif %}</strong></article>
-        <article><span>Current production status</span><strong>{{ operational_status_label }}</strong></article>
+        <article><span>Current production status</span><strong data-stage-operational-status="{{ operational_status }}">{{ operational_status_label }}</strong></article>
         <article><span>Shipping status</span><strong>{% if latest_shipment %}{{ latest_shipment.get_status_display }}{% else %}Not started{% endif %}</strong></article>
         <article><span>Notes</span><strong>{{ order.notes|default:"-" }}</strong></article>
         <article><span>Locked at</span><strong>{{ order.approved_price_locked_at|date:"M j, Y H:i" }}</strong></article>
@@ -358,94 +359,7 @@
 
   <section class="production-detail-grid">
     <main class="production-main-column">
-      <article class="production-panel" id="stage-progress">
-        <div class="production-panel-head">
-          <div>
-            <h2>Stage Progress Tracker</h2>
-            <p>Click a stage to move it forward. Use Next Stage to advance the order through the factory flow.</p>
-          </div>
-          <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Next Stage</a>
-        </div>
-
-        <div class="production-progress-summary">
-          <div>
-            <strong>{{ percent_done }}%</strong>
-            <span>{% if order_delayed %}Review delay risk{% else %}Factory progress{% endif %}</span>
-          </div>
-          <div class="production-progress-bar" aria-hidden="true">
-            <span class="{% if order_delayed %}risk{% endif %}" style="width: {{ percent_done }}%;"></span>
-          </div>
-        </div>
-
-        <div class="production-control-tracker" aria-label="Manufacturing stage tracker">
-          {% for card in production_visual_stages %}
-            <article class="production-control-stage {{ card.status }}">
-              <div class="production-control-stage-top">
-                <span class="production-stage-dot"></span>
-                <strong>{{ card.label }}</strong>
-              </div>
-              <small>{{ card.status_label }}</small>
-              <span>{{ card.date|date:"M j, Y"|default:"No timestamp" }}</span>
-              <em>{{ card.assigned_to }}</em>
-              <a href="{{ card.edit_url }}">Edit stage</a>
-            </article>
-          {% endfor %}
-        </div>
-
-        <div class="production-stage-subhead">
-          <strong>Quick stage updates</strong>
-          <span>Tap a stage card to start or complete that production step.</span>
-        </div>
-
-        <div class="production-stage-timeline">
-          {% for stage in stages %}
-            <form method="post" action="{% url 'production_stage_click' stage.id %}" class="production-stage-form">
-              {% csrf_token %}
-              <button type="submit" class="production-stage-node
-                {% if stage.status == 'done' %}done
-                {% elif stage.status == 'in_progress' %}current
-                {% elif stage.status == 'delay' %}delay
-                {% elif stage.status == 'hold' %}hold
-                {% else %}planned{% endif %}"
-                title="Update {{ stage.display_name|default:stage.get_stage_key_display }}"
-              >
-                <span class="production-stage-dot"></span>
-                <strong>{{ stage.display_name|default:stage.get_stage_key_display }}</strong>
-                <small>{{ stage.get_status_display }}</small>
-              </button>
-            </form>
-          {% empty %}
-            <div class="production-empty-inline">No stages created yet for this order.</div>
-          {% endfor %}
-        </div>
-
-        <details class="production-subdetails">
-          <summary>Stage dates and manual edits</summary>
-          <div class="production-stage-table">
-            {% for stage in stages %}
-              <div class="production-stage-row">
-                <div>
-                  <a href="{% url 'production_stage_edit' stage.id %}">{{ stage.display_name|default:stage.get_stage_key_display }}</a>
-                  <span>{{ stage.get_status_display }}</span>
-                </div>
-                <div>
-                  <span>Planned</span>
-                  <strong>{{ stage.planned_start|date:"Y-m-d"|default:"-" }} to {{ stage.planned_end|date:"Y-m-d"|default:"-" }}</strong>
-                </div>
-                <div>
-                  <span>Actual</span>
-                  <strong>{{ stage.actual_start|date:"Y-m-d"|default:"-" }} to {{ stage.actual_end|date:"Y-m-d"|default:"-" }}</strong>
-                </div>
-                {% if stage.notes %}
-                  <div class="production-stage-note">{{ stage.notes }}</div>
-                {% endif %}
-              </div>
-            {% empty %}
-              <div class="production-empty-inline">No stage dates available.</div>
-            {% endfor %}
-          </div>
-        </details>
-      </article>
+      {% include "crm/partials/production_stages.html" %}
 
       <article class="production-panel production-lines-panel">
         <div class="production-panel-head">
@@ -1291,6 +1205,7 @@
   </section>
 </div>
 
+<script src="{% static 'crm/production_stages.js' %}?v=production-stage-controls-1" defer></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     function parseNum(value) {

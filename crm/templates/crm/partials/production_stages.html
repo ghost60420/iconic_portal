@@ -1,0 +1,103 @@
+<article class="production-panel" id="stage-progress" data-production-stages>
+  <div class="production-panel-head">
+    <div>
+      <h2>Production Stages</h2>
+      <p>Edit planned dates and notes, or use a quick update to start or complete a stage.</p>
+    </div>
+    <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Next Stage</a>
+  </div>
+
+  <div class="production-stage-message" role="status" aria-live="polite" hidden></div>
+  <div class="production-progress-summary">
+    <div>
+      <strong data-stage-percent>{{ percent_done }}%</strong>
+      <span data-stage-progress-description>{% if order_delayed %}Review delay risk{% else %}Factory progress{% endif %}</span>
+    </div>
+    <div class="production-progress-bar" aria-hidden="true">
+      <span data-stage-progress-bar class="{% if order_delayed %}risk{% endif %}" style="width: {{ percent_done }}%;"></span>
+    </div>
+  </div>
+
+  <div class="production-control-tracker" aria-label="Production stages">
+    {% for stage in stages %}
+      <article class="production-control-stage {{ stage.status }}" data-stage-card="{{ stage.pk }}">
+        <div class="production-control-stage-top">
+          <span class="production-stage-dot"></span>
+          <strong>{{ stage.display_name|default:stage.get_stage_key_display }}</strong>
+        </div>
+        <small data-stage-status>{{ stage.get_status_display }}</small>
+        <span>Planned: <span data-stage-planned>{{ stage.planned_start|date:"Y-m-d"|default:"—" }} to {{ stage.planned_end|date:"Y-m-d"|default:"—" }}</span></span>
+        <span>Started: <span data-stage-started>{% if stage.actual_started_at %}{{ stage.actual_started_at|date:"Y-m-d H:i T" }}{% else %}{{ stage.actual_start|date:"Y-m-d"|default:"—" }}{% endif %}</span></span>
+        <span>Completed: <span data-stage-completed>{% if stage.actual_completed_at %}{{ stage.actual_completed_at|date:"Y-m-d H:i T" }}{% else %}{{ stage.actual_end|date:"Y-m-d"|default:"—" }}{% endif %}</span></span>
+        <span class="production-stage-note" data-stage-notes {% if not stage.notes %}hidden{% endif %}>{{ stage.notes }}</span>
+        {% if can_edit_production %}
+          <button type="button" class="production-btn production-btn--tiny production-btn--ghost" data-stage-edit-url="{% url 'production_stage_edit' stage.pk %}" data-stage-id="{{ stage.pk }}" aria-haspopup="dialog" aria-controls="production-stage-dialog">Edit Stage</button>
+        {% endif %}
+      </article>
+    {% empty %}
+      <div class="production-empty-inline">No stages created yet for this order.</div>
+    {% endfor %}
+  </div>
+
+  <div class="production-stage-subhead">
+    <strong>Quick Stage Updates</strong>
+    <span>{% if can_edit_production %}Start a planned stage or complete a stage in progress.{% else %}Current status of the same production stages.{% endif %}</span>
+  </div>
+  <div class="production-stage-timeline" aria-label="Quick stage updates">
+    {% for stage in stages %}
+      <form method="post" action="{% url 'production_stage_click' stage.pk %}" class="production-stage-form" data-stage-quick="{{ stage.pk }}">
+        {% csrf_token %}
+        <input type="hidden" name="expected_status" value="{{ stage.status }}">
+        <input type="hidden" name="version" value="{{ stage.edit_version }}">
+        <button type="submit" class="production-stage-node {% if stage.status == 'in_progress' %}current{% else %}{{ stage.status }}{% endif %}" {% if not can_edit_production %}disabled{% endif %} title="Update {{ stage.display_name|default:stage.get_stage_key_display }}">
+          <span class="production-stage-dot"></span>
+          <strong>{{ stage.display_name|default:stage.get_stage_key_display }}</strong>
+          <small data-stage-status>{{ stage.get_status_display }}</small>
+        </button>
+      </form>
+    {% empty %}
+      <div class="production-empty-inline">No stages available.</div>
+    {% endfor %}
+  </div>
+
+  {% if can_edit_production %}
+    <noscript><div class="production-empty-inline">Enable JavaScript to edit stages on this page.</div></noscript>
+    <dialog id="production-stage-dialog" class="production-stage-dialog" aria-labelledby="production-stage-dialog-title">
+      <form method="post" id="production-stage-dialog-form">
+        {% csrf_token %}
+        <input type="hidden" name="version">
+        <h2 id="production-stage-dialog-title">Edit Stage</h2>
+        <p class="production-stage-dialog-description">Actual start and completion times are recorded automatically when the status changes.</p>
+        <div class="production-stage-dialog-error" role="alert" tabindex="-1" hidden></div>
+        <div class="production-stage-dialog-fields">
+          <div class="production-stage-dialog-wide">
+            <label for="production-stage-name">Stage Name</label>
+            <input type="text" id="production-stage-name" readonly>
+          </div>
+          <div class="production-stage-dialog-wide">
+            <label for="production-stage-status">Status</label>
+            <select id="production-stage-status" name="status" required>
+              {% for value, label in stage_status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="production-stage-planned-start">Planned Start Date</label>
+            <input type="date" id="production-stage-planned-start" name="planned_start">
+          </div>
+          <div>
+            <label for="production-stage-planned-end">Planned End Date</label>
+            <input type="date" id="production-stage-planned-end" name="planned_end">
+          </div>
+          <div class="production-stage-dialog-wide">
+            <label for="production-stage-notes">Notes</label>
+            <textarea id="production-stage-notes" name="notes" rows="4"></textarea>
+          </div>
+        </div>
+        <div class="production-stage-dialog-actions">
+          <button type="submit" class="production-btn production-btn--primary" id="production-stage-save">Save Stage</button>
+          <button type="button" class="production-btn production-btn--ghost" data-stage-cancel>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+  {% endif %}
+</article>

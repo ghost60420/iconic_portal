@@ -6575,7 +6575,9 @@ class ProductionStage(models.Model):
     STAGE_CHOICES = [
         ("development", "Development"),
         ("sampling", "Sampling"),
+        ("fabric", "Fabric"),
         ("cutting", "Cutting"),
+        ("printing", "Printing"),
         ("sewing", "Sewing"),
         ("ironing", "Ironing"),
         ("qc", "QC"),
@@ -6613,6 +6615,8 @@ class ProductionStage(models.Model):
     planned_end = models.DateField(null=True, blank=True)
     actual_start = models.DateField(null=True, blank=True)
     actual_end = models.DateField(null=True, blank=True)
+    actual_started_at = models.DateTimeField(null=True, blank=True)
+    actual_completed_at = models.DateTimeField(null=True, blank=True)
 
     status = models.CharField(
         max_length=20,
@@ -6652,6 +6656,51 @@ class ProductionStage(models.Model):
         return False
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        saving_status = update_fields is None or "status" in update_fields
+        if not self._state.adding and saving_status:
+            previous = type(self).objects.filter(pk=self.pk).values(
+                "status", "actual_start", "actual_end",
+                "actual_started_at", "actual_completed_at",
+            ).first()
+            if previous:
+                # Timestamp history is immutable during ordinary stage edits,
+                # including saves from an object loaded before another update.
+                for field_name in ("actual_started_at", "actual_completed_at"):
+                    if previous[field_name] is not None:
+                        setattr(self, field_name, previous[field_name])
+
+                changed_fields = set()
+                if previous["status"] != self.status:
+                    now = timezone.now()
+                    starts = self.status == "in_progress" or (
+                        self.status == "done" and previous["status"] == "planned"
+                    )
+                    for timestamp_field, date_field, transition in (
+                        ("actual_started_at", "actual_start", starts),
+                        ("actual_completed_at", "actual_end", self.status == "done"),
+                    ):
+                        if not transition:
+                            continue
+                        # A legacy actual date is evidence of an earlier event;
+                        # its unknown time must never be invented or backfilled.
+                        if previous[date_field] is not None:
+                            setattr(self, date_field, previous[date_field])
+                            continue
+                        if getattr(self, timestamp_field) is None:
+                            setattr(self, timestamp_field, now)
+                            changed_fields.add(timestamp_field)
+                        if getattr(self, date_field) is None:
+                            timestamp = getattr(self, timestamp_field)
+                            local_timestamp = (
+                                timezone.localtime(timestamp)
+                                if timezone.is_aware(timestamp) else timestamp
+                            )
+                            setattr(self, date_field, local_timestamp.date())
+                            changed_fields.add(date_field)
+                if update_fields is not None and changed_fields:
+                    kwargs["update_fields"] = set(update_fields) | changed_fields | {"updated_at"}
+
         super().save(*args, **kwargs)
 
         if self.order_id:
@@ -6664,7 +6713,9 @@ class ProductionStage(models.Model):
 DEFAULT_PRODUCTION_STAGES = [
     ("development", "Development", "#4caf50"),
     ("sampling", "Sampling", "#66bb6a"),
+    ("fabric", "Fabric", "#26a69a"),
     ("cutting", "Cutting", "#ffee58"),
+    ("printing", "Printing", "#ec4899"),
     ("sewing", "Sewing", "#29b6f6"),
     ("ironing", "Ironing", "#8e24aa"),
     ("qc", "QC", "#ff7043"),
@@ -6686,6 +6737,12 @@ def create_default_stages(sender, instance, created, **kwargs):
         return
 
     for key, label, color in DEFAULT_PRODUCTION_STAGES:
+        if (
+            key in {"fabric", "printing"}
+            and instance.order_type == "sewing_charge"
+            and instance.factory_location == "bd"
+        ):
+            continue
         ProductionStage.objects.create(
             order=instance,
             stage_key=key,

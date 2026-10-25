@@ -106,6 +106,23 @@ class ProductionOperationalStatusTests(SimpleTestCase):
 
         self.assertEqual(get_production_operational_status(order), "planning")
 
+    def test_explicit_fabric_and_printing_stages_are_recognized(self):
+        for stage, expected in (("fabric", "fabric_sourcing"), ("printing", "printing")):
+            with self.subTest(stage=stage):
+                order = self._order(stages=[self._stage(stage, "in_progress")])
+                self.assertEqual(get_production_operational_status(order), expected)
+
+    def test_completed_printing_does_not_return_to_inferred_printing(self):
+        order = self._order(title="Printed shirt", stages=[
+            self._stage("cutting", "done"), self._stage("printing", "done"),
+        ])
+        self.assertEqual(get_production_operational_status(order), "sewing")
+
+    def test_explicit_fabric_completion_is_not_overridden_by_legacy_quantity(self):
+        order = self._order(fabric_required_kg=100, fabric_received_kg=0,
+                            stages=[self._stage("fabric", "done")])
+        self.assertEqual(get_production_operational_status(order), "planning")
+
     def test_cancelled_order_uses_legacy_closed_lost_fallback(self):
         order = self._order(status="closed_lost")
 

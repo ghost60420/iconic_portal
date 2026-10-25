@@ -130,8 +130,8 @@ def derive_production_operational_status(order):
     - Legacy ProductionOrder.status is used only for cancelled compatibility.
     - Completed packing/finishing means production is ready to ship, not shipped.
     - Sample shipments on sampling orders map to sample_sent, not final shipped.
-    - ProductionStage has no fabric_sourcing or printing stage today; those are
-      inferred from existing order fabric fields and print-related order notes.
+    - Explicit Fabric/Printing updates take precedence over the legacy inferred
+      values. Orders without those records retain the existing fallback.
     - No fields are written here; this is dashboard/reporting logic only.
     """
     stages = _related_list(order, "stages")
@@ -170,7 +170,10 @@ def derive_production_operational_status(order):
     if _stage_active(stage_lookup, "sewing"):
         return OPERATIONAL_STATUS_SEWING
 
-    if _needs_print(order) and _stage_done(stage_lookup, "cutting") and not _stage_done(stage_lookup, "sewing"):
+    if _stage_active(stage_lookup, "printing"):
+        return OPERATIONAL_STATUS_PRINTING
+
+    if _needs_print(order) and _stage_done(stage_lookup, "cutting") and not _stage_done(stage_lookup, "sewing", "printing"):
         return OPERATIONAL_STATUS_PRINTING
 
     if _stage_active(stage_lookup, "cutting"):
@@ -187,7 +190,9 @@ def derive_production_operational_status(order):
 
     required_kg = _decimal(getattr(order, "fabric_required_kg", None))
     received_kg = _decimal(getattr(order, "fabric_received_kg", None))
-    if required_kg and received_kg < required_kg:
+    if _stage_active(stage_lookup, "fabric") or (
+        required_kg and received_kg < required_kg and not _stage_done(stage_lookup, "fabric")
+    ):
         return OPERATIONAL_STATUS_FABRIC_SOURCING
 
     if _stage_active(stage_lookup, "development", "sampling"):

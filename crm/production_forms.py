@@ -314,8 +314,6 @@ class ProductionStageForm(forms.ModelForm):
             "status",
             "planned_start",
             "planned_end",
-            "actual_start",
-            "actual_end",
             "notes",
         ]
         widgets = {
@@ -334,18 +332,6 @@ class ProductionStageForm(forms.ModelForm):
                     "type": "date",
                 }
             ),
-            "actual_start": forms.DateInput(
-                attrs={
-                    "class": "form-control form-control-sm bg-dark text-light border-secondary",
-                    "type": "date",
-                }
-            ),
-            "actual_end": forms.DateInput(
-                attrs={
-                    "class": "form-control form-control-sm bg-dark text-light border-secondary",
-                    "type": "date",
-                }
-            ),
             "notes": forms.Textarea(
                 attrs={
                     "class": "form-control form-control-sm bg-dark text-light border-secondary",
@@ -353,3 +339,11 @@ class ProductionStageForm(forms.ModelForm):
                 }
             ),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("planned_start")
+        end = cleaned.get("planned_end")
+        if start and end and end < start:
+            self.add_error("planned_end", "Planned end date cannot be before planned start date.")
+        return cleaned

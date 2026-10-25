@@ -25,6 +25,7 @@ MODEL_CONFIG = {
     "Opportunity": ("opportunities", "opportunity_detail"),
     "CostingHeader": ("quotations", "cost_sheet_detail"),
     "ProductionOrder": ("production", "production_detail"),
+    "ProductionStage": ("production", "production_detail"),
     "Invoice": ("invoices", "invoice_view"),
     "InvoicePayment": ("invoices", "invoice_view"),
     "Shipment": ("shipments", "shipment_detail"),
@@ -72,6 +73,9 @@ def model_snapshot(instance):
 
 
 def record_label(instance):
+    if instance.__class__.__name__ == "ProductionStage":
+        label = instance.display_name or instance.get_stage_key_display()
+        return f"Stage #{instance.pk}: {label}"[:220]
     if instance.__class__.__name__ == "InvoicePayment":
         invoice_number = getattr(getattr(instance, "invoice", None), "invoice_number", "")
         if invoice_number:
@@ -91,6 +95,8 @@ def target_url(instance):
     pk = instance.pk
     if instance.__class__.__name__ == "InvoicePayment":
         pk = instance.invoice_id
+    elif instance.__class__.__name__ == "ProductionStage":
+        pk = instance.order_id
     try:
         return reverse(url_name, args=[pk]) if pk else ""
     except NoReverseMatch:
@@ -131,6 +137,8 @@ def schedule_audit(instance, *, created=False, before=None, deleted=False):
     audit_record_id = instance.pk
     if instance.__class__.__name__ == "InvoicePayment":
         audit_record_id = instance.invoice_id
+    elif instance.__class__.__name__ == "ProductionStage":
+        audit_record_id = instance.order_id
     common = {
         "actor": actor,
         "module": module,
@@ -138,12 +146,18 @@ def schedule_audit(instance, *, created=False, before=None, deleted=False):
         "record_label": record_label(instance),
         "target_url": target_url(instance),
     }
+    # Stage changes appear in their production order's existing audit history.
+    # Qualifying each field retains the exact stage ID even for repeated types.
+    def audit_field(field_name):
+        if instance.__class__.__name__ == "ProductionStage":
+            return f"stage[{instance.pk}].{field_name}"
+        return field_name
 
     if deleted:
         rows = [
             CRMAuditLog(
                 action_type=CRMAuditLog.ACTION_DELETED,
-                field_name="record",
+                field_name=audit_field("record"),
                 previous_value=common["record_label"] or common["record_id"],
                 new_value="",
                 **common,
@@ -158,7 +172,7 @@ def schedule_audit(instance, *, created=False, before=None, deleted=False):
         rows = [
             CRMAuditLog(
                 action_type=action,
-                field_name="record",
+                field_name=audit_field("record"),
                 previous_value="",
                 new_value=common["record_label"] or common["record_id"],
                 **common,
@@ -175,7 +189,7 @@ def schedule_audit(instance, *, created=False, before=None, deleted=False):
             rows.append(
                 CRMAuditLog(
                     action_type=_action_for_change(instance, field_name, old_value, new_value),
-                    field_name=field_name,
+                    field_name=audit_field(field_name),
                     previous_value=old_value,
                     new_value=new_value,
                     **common,

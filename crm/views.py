@@ -465,37 +465,7 @@ def production_detail(request, pk):
 
 @require_POST
 def production_stage_click(request, stage_id):
-    """
-    Click stage to auto save dates
-    planned -> in_progress sets actual_start
-    in_progress -> done sets actual_end
-    done -> no change
-    """
-    stage = get_object_or_404(ProductionStage, pk=stage_id)
-    today = timezone.localdate()
-
-    if stage.status == "planned":
-        stage.status = "in_progress"
-        if not stage.actual_start:
-            stage.actual_start = today
-        stage.save(update_fields=["status", "actual_start"])
-        sync_operational_status(stage.order)
-        messages.success(request, "Stage started and date saved.")
-
-    elif stage.status == "in_progress":
-        stage.status = "done"
-        if not stage.actual_start:
-            stage.actual_start = today
-        if not stage.actual_end:
-            stage.actual_end = today
-        stage.save(update_fields=["status", "actual_start", "actual_end"])
-        sync_operational_status(stage.order)
-        messages.success(request, "Stage completed and date saved.")
-
-    else:
-        messages.info(request, "Stage is already done.")
-
-    return redirect("production_detail", pk=stage.order_id)
+    return _update_production_stage(request, stage_id, quick=True)
 
 
 def production_stage_edit(request, stage_id):
@@ -2727,29 +2697,6 @@ def _production_any_stage_done(stage_lookup, keys):
     return any(stage_lookup.get(key) and stage_lookup[key].status == "done" for key in keys)
 
 
-def _production_stage_card(label, key, status, *, date_value=None, assigned_to=None, note="", stage=None, edit_url=""):
-    if stage:
-        status = stage.status or status
-        date_value = stage.actual_end or stage.actual_start or stage.planned_end or stage.planned_start
-        note = stage.notes or note
-        label = stage.display_name or label
-        if stage.is_late and status != "done":
-            status = "delay"
-        edit_url = reverse("production_stage_edit", args=[stage.pk])
-
-    return SimpleNamespace(
-        key=key,
-        label=label,
-        status=status or "planned",
-        status_label=_stage_status_label(status or "planned"),
-        date=date_value,
-        assigned_to=assigned_to or "Factory team",
-        note=note,
-        stage=stage,
-        edit_url=edit_url,
-    )
-
-
 def _production_order_needs_print(order):
     print_text = " ".join(
         [
@@ -2761,113 +2708,6 @@ def _production_order_needs_print(order):
         ]
     ).lower()
     return any(token in print_text for token in ["print", "embroidery", "screen", "sublimation", "puff"])
-
-
-def _production_visual_stages(order, stages, shipments=None):
-    shipments = shipments or []
-    stage_lookup = _production_stage_lookup(stages)
-    assigned_to = _production_assignee_label(order)
-    inferred_stage_edit_url = reverse("production_edit", args=[order.pk])
-    cards = []
-
-    sampling_stage = stage_lookup.get("sampling") or stage_lookup.get("development")
-    cards.append(_production_stage_card("Sampling", "sampling", "planned", assigned_to=assigned_to, stage=sampling_stage))
-
-    required_kg = _safe_decimal_or_none(getattr(order, "fabric_required_kg", None)) or Decimal("0")
-    received_kg = _safe_decimal_or_none(getattr(order, "fabric_received_kg", None)) or Decimal("0")
-    if required_kg and received_kg >= required_kg:
-        fabric_status = "done"
-        fabric_note = f"{received_kg} kg received"
-    elif received_kg:
-        fabric_status = "in_progress"
-        fabric_note = f"{received_kg} kg received"
-    elif _production_any_stage_started(stage_lookup, ["cutting", "sewing", "qc", "finishing", "packing", "shipping"]):
-        fabric_status = "done"
-        fabric_note = "Fabric cleared for production"
-    else:
-        fabric_status = "planned"
-        fabric_note = "Fabric sourcing"
-    cards.append(
-        _production_stage_card(
-            "Fabric",
-            "fabric",
-            fabric_status,
-            date_value=getattr(order, "updated_at", None) if fabric_status != "planned" else None,
-            assigned_to=assigned_to,
-            note=fabric_note,
-            edit_url=inferred_stage_edit_url,
-        )
-    )
-
-    cutting_stage = stage_lookup.get("cutting")
-    cards.append(_production_stage_card("Cutting", "cutting", "planned", assigned_to=assigned_to, stage=cutting_stage))
-
-    needs_print = _production_order_needs_print(order)
-    if not needs_print:
-        print_status = "planned"
-        print_note = "Not specified"
-        print_date = None
-    elif _production_any_stage_started(stage_lookup, ["sewing", "qc", "finishing", "packing", "shipping"]):
-        print_status = "done"
-        print_note = "Artwork step cleared"
-        print_date = getattr(order, "updated_at", None)
-    elif _production_any_stage_done(stage_lookup, ["cutting"]):
-        print_status = "in_progress"
-        print_note = "Ready after cutting"
-        print_date = getattr(order, "updated_at", None)
-    else:
-        print_status = "planned"
-        print_note = "Awaiting cutting"
-        print_date = None
-    cards.append(
-        _production_stage_card(
-            "Printing",
-            "printing",
-            print_status,
-            date_value=print_date,
-            assigned_to=assigned_to,
-            note=print_note,
-            edit_url=inferred_stage_edit_url,
-        )
-    )
-
-    sewing_stage = stage_lookup.get("sewing")
-    cards.append(_production_stage_card("Sewing", "sewing", "planned", assigned_to=assigned_to, stage=sewing_stage))
-
-    qc_stage = stage_lookup.get("qc")
-    cards.append(_production_stage_card("QC", "qc", "planned", assigned_to=assigned_to, stage=qc_stage))
-
-    packing_stage = stage_lookup.get("packing") or stage_lookup.get("finishing") or stage_lookup.get("ironing")
-    cards.append(_production_stage_card("Packing", "packing", "planned", assigned_to=assigned_to, stage=packing_stage))
-
-    shipping_stage = stage_lookup.get("shipping")
-    delivered_or_shipped = [s for s in shipments if s.status in {"shipped", "out_for_delivery", "delivered"}]
-    if delivered_or_shipped:
-        latest = sorted(delivered_or_shipped, key=lambda s: s.ship_date or timezone.localdate(), reverse=True)[0]
-        shipment_status = "done" if latest.status == "delivered" else "in_progress"
-        shipment_note = latest.get_status_display()
-        shipment_date = latest.ship_date or latest.updated_at
-    elif shipping_stage:
-        shipment_status = shipping_stage.status
-        shipment_note = shipping_stage.notes or shipping_stage.get_status_display()
-        shipment_date = shipping_stage.actual_end or shipping_stage.actual_start or shipping_stage.planned_end
-    else:
-        shipment_status = "planned"
-        shipment_note = "Shipment pending"
-        shipment_date = None
-    cards.append(
-        _production_stage_card(
-            "Shipping",
-            "shipping",
-            shipment_status,
-            date_value=shipment_date,
-            assigned_to=assigned_to,
-            note=shipment_note,
-            stage=shipping_stage,
-        )
-    )
-
-    return cards
 
 
 def _production_stage_bucket(order, stages, shipments=None):
@@ -8914,7 +8754,9 @@ logger = logging.getLogger(__name__)
 STAGE_ORDER = {
     "development": 1,
     "sampling": 2,
+    "fabric": 2.5,
     "cutting": 3,
+    "printing": 3.5,
     "sewing": 4,
     "ironing": 5,
     "qc": 6,
@@ -10173,7 +10015,9 @@ def production_detail(request, pk):
         today,
         operational_status,
     )
-    production_visual_stages = _production_visual_stages(order, stages, shipments)
+    # Both stage sections use these same persisted records and version tokens.
+    for stage in stages:
+        stage.edit_version = stage.updated_at.isoformat()
     latest_shipment = shipments[0] if shipments else None
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
     approved_summary = order.approved_costing_summary or {}
@@ -10519,7 +10363,7 @@ def production_detail(request, pk):
         "operational_status_label": operational_status_label,
         "production_workflow_steps": production_workflow_steps,
         "next_required_action": next_required_action,
-        "production_visual_stages": production_visual_stages,
+        "stage_status_choices": ProductionStage.STATUS_CHOICES,
         "late_shipment": late_shipment,
         "shipment_pending": shipment_pending,
         "latest_shipment": latest_shipment,
@@ -10822,7 +10666,9 @@ def production_next_stage(request, pk):
     """
     Move order to next production stage.
     """
-    order = get_object_or_404(ProductionOrder, pk=pk)
+    order = get_object_or_404(
+        scope_production_orders(ProductionOrder.objects.all(), request.user), pk=pk,
+    )
     stages = get_sorted_stages(order)
 
     if not stages:
@@ -10845,18 +10691,12 @@ def production_next_stage(request, pk):
     else:
         next_stage = stages[-1]
 
-    today = timezone.now().date()
-
     for s in stages:
         if s.id == next_stage.id:
-            if s.actual_start is None:
-                s.actual_start = today
             s.status = "in_progress"
         else:
             if s.status == "in_progress":
                 s.status = "done"
-                if s.actual_end is None:
-                    s.actual_end = today
         s.save()
 
     order.current_stage = next_stage
@@ -10872,26 +10712,119 @@ def production_stage_edit(request, stage_id):
     """
     Edit one stage record.
     """
-    stage = get_object_or_404(ProductionStage, pk=stage_id)
+    return _update_production_stage(request, stage_id)
 
+
+def _stage_json_requested(request):
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+
+def _production_stage_payload(stage):
+    def date_text(value):
+        return value.isoformat() if value else ""
+
+    def timestamp_text(value):
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M %Z") if value else ""
+
+    return {
+        "id": stage.pk,
+        "name": stage.display_name or stage.get_stage_key_display(),
+        "status": stage.status,
+        "status_label": stage.get_status_display(),
+        "planned_start": date_text(stage.planned_start),
+        "planned_end": date_text(stage.planned_end),
+        "actual_start": date_text(stage.actual_start),
+        "actual_end": date_text(stage.actual_end),
+        "actual_started_at": date_text(stage.actual_started_at),
+        "actual_completed_at": date_text(stage.actual_completed_at),
+        "actual_started_display": timestamp_text(stage.actual_started_at),
+        "actual_completed_display": timestamp_text(stage.actual_completed_at),
+        "notes": stage.notes,
+        "version": stage.updated_at.isoformat(),
+    }
+
+
+def _production_stage_result(request, stage, *, message="Stage updated."):
+    if not _stage_json_requested(request):
+        messages.success(request, message)
+        return redirect("production_detail", pk=stage.order_id)
+    stages = list(stage.order.stages.all())
+    percent = int(100 * sum(s.status == "done" for s in stages) / len(stages)) if stages else 0
+    if is_bangladesh_local_sewing(stage.order):
+        sewing = calculate_local_sewing(stage.order, stages=stages)
+        if sewing["quantity"]:
+            percent = min(int(100 * sewing["completed_quantity"] / sewing["quantity"]), 100)
+    operational_status = get_production_operational_status(stage.order)
+    order_delayed = bool(
+        operational_status not in OPERATIONAL_FINISHED_STATUSES
+        and (
+            any(s.status == "delay" or s.is_late for s in stages)
+            or (stage.order.bulk_deadline and stage.order.bulk_deadline < timezone.localdate())
+        )
+    )
+    return JsonResponse({
+        "ok": True,
+        "message": message,
+        "stage": _production_stage_payload(stage),
+        "percent_done": percent,
+        "order_delayed": order_delayed,
+        "operational_status": operational_status,
+        "operational_status_label": OPERATIONAL_STATUS_LABELS.get(operational_status, "Planning"),
+    })
+
+
+def _update_production_stage(request, stage_id, *, quick=False):
+    try:
+        return _locked_production_stage_update(request, stage_id, quick=quick)
+    except OperationalError as exc:
+        # SQLite may reject a competing writer instead of waiting for a row
+        # lock. The atomic operation has rolled back; make the retry explicit.
+        if "locked" not in str(exc).lower():
+            raise
+        message = "Another employee is updating this stage. Reopen Edit Stage and try again."
+        if _stage_json_requested(request):
+            return JsonResponse({"ok": False, "message": message}, status=409)
+        return HttpResponse(message, status=409)
+
+
+@transaction.atomic
+def _locked_production_stage_update(request, stage_id, *, quick=False):
+    # Keep the existing can_production URL gate and the detail page's order scope.
+    orders = scope_production_orders(ProductionOrder.objects.all(), request.user)
+    stages = ProductionStage.objects.select_related("order").filter(order_id__in=orders.values("pk"))
     if request.method == "POST":
-        form = ProductionStageForm(request.POST, instance=stage)
+        stages = stages.select_for_update()
+    stage = get_object_or_404(stages, pk=stage_id)
+    stage.edit_version = stage.updated_at.isoformat()
+    if request.method == "GET" and _stage_json_requested(request):
+        return JsonResponse({"ok": True, "stage": _production_stage_payload(stage)})
+    if request.method not in {"GET", "POST"}:
+        return HttpResponse(status=405)
+    form = ProductionStageForm(request.POST or None, instance=stage)
+    if request.method == "POST":
+        stale = request.POST.get("version") != stage.edit_version
+        stale = stale or (quick and request.POST.get("expected_status") != stage.status)
+        if stale:
+            error = "This stage changed or was already saved. Reopen Edit Stage and review the latest values."
+            if _stage_json_requested(request):
+                return JsonResponse({"ok": False, "message": error, "stage": _production_stage_payload(stage)}, status=409)
+            messages.error(request, error)
+            return redirect("production_detail", pk=stage.order_id)
+        if quick:
+            next_status = {"planned": "in_progress", "in_progress": "done"}.get(stage.status)
+            if next_status:
+                stage.status = next_status
+                stage.save(update_fields=["status", "updated_at"])
+            return _production_stage_result(request, stage)
         if form.is_valid():
             form.save()
-            sync_operational_status(stage.order)
-            messages.success(request, "Stage updated.")
-            return redirect("production_detail", pk=stage.order_id)
-    else:
-        form = ProductionStageForm(instance=stage)
-
-    return render(
-        request,
-        "crm/production_stage_edit.html",
-        {
-            "stage": stage,
-            "form": form,
-        },
-    )
+            return _production_stage_result(request, stage)
+        if _stage_json_requested(request):
+            return JsonResponse({"ok": False, "message": "Please correct the stage details.", "errors": form.errors}, status=400)
+    return render(request, "crm/production_stage_edit.html", {"stage": stage, "form": form})
 
 
 def production_ai_help(request, pk):

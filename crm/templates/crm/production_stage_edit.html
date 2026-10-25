@@ -156,6 +156,7 @@
 
     <form method="post" class="stage-form-grid">
       {% csrf_token %}
+      <input type="hidden" name="version" value="{{ stage.edit_version }}">
 
       <div class="row g-3">
 
@@ -172,16 +173,6 @@
         <div class="col-md-4">
           <label class="stage-form-label">Planned end</label>
           {{ form.planned_end }}
-        </div>
-
-        <div class="col-md-4">
-          <label class="stage-form-label">Actual start</label>
-          {{ form.actual_start }}
-        </div>
-
-        <div class="col-md-4">
-          <label class="stage-form-label">Actual end</label>
-          {{ form.actual_end }}
         </div>
 
         <div class="col-12">

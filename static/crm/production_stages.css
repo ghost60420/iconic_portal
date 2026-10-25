@@ -1,0 +1,57 @@
+/* Isolated styles for stage editing within the existing production detail page. */
+.production-stage-dialog {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid #475569;
+  border-radius: 16px;
+  background: #111827;
+  color: #f1f5f9;
+  box-shadow: 0 24px 80px #0009;
+  color-scheme: dark;
+}
+.production-stage-dialog::backdrop { background: #020617b8; }
+.production-stage-dialog h2 { margin: 0 0 8px; color: #f8fafc; font-size: 21px; }
+.production-stage-dialog-description { margin: 0 0 20px; font-size: 13px; color: #cbd5e1; }
+.production-stage-dialog-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.production-stage-dialog-wide { grid-column: 1 / -1; }
+.production-stage-dialog-fields label { display: block; margin-bottom: 6px; font-size: 13px; color: #e2e8f0; }
+.production-stage-dialog-fields input,
+.production-stage-dialog-fields select,
+.production-stage-dialog-fields textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #0f172a;
+  color: #f8fafc;
+  font: inherit;
+}
+.production-stage-dialog-fields input[readonly] { background: #1e293b; color: #cbd5e1; }
+.production-stage-dialog-fields textarea { resize: vertical; }
+.production-stage-dialog :focus-visible { outline: 2px solid #f5d580; outline-offset: 3px; }
+.production-stage-dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.production-stage-dialog-actions button { min-height: 44px; }
+.production-stage-dialog-error,
+.production-stage-message { margin-bottom: 14px; padding: 12px; border: 1px solid #475569; border-radius: 8px; overflow-wrap: anywhere; }
+.production-stage-dialog-error,
+.production-stage-message[data-tone="error"] { background: #451a1a; border-color: #f87171; color: #fecaca; }
+.production-stage-message[data-tone="success"] { background: #123329; border-color: #34d399; color: #a7f3d0; }
+[data-production-stages] .production-stage-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-production-stages] .production-control-stage > button { align-self: flex-start; margin-top: auto; }
+[data-production-stages] button:disabled,
+.production-stage-dialog button:disabled { cursor: wait; opacity: .65; }
+[data-production-stages] [hidden] { display: none !important; }
+@media (max-width: 480px) {
+  .production-stage-dialog { padding: 18px; }
+  .production-stage-dialog-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .production-stage-dialog-fields input,
+  .production-stage-dialog-fields select,
+  .production-stage-dialog-fields textarea { font-size: 16px; }
+  .production-stage-dialog-actions button { flex: 1; justify-content: center; }
+}
