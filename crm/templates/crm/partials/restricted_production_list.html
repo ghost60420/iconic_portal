@@ -1,0 +1,42 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-badges-20260603">
+{% include "crm/partials/production_density_assets.html" %}
+<div class="production-page">
+  <section class="production-hero">
+    <div class="production-hero-copy">
+      <p class="production-eyebrow">Factory operations</p>
+      <h1>Assigned Production</h1>
+      <p class="production-subtitle">Open an assigned order to update stages, planned dates, quality checks, progress notes and photos.</p>
+    </div>
+  </section>
+  <section class="production-panel">
+    <form method="get" role="search">
+      <label for="restricted-production-query">Find an assigned order</label>
+      <input id="restricted-production-query" type="search" name="q" value="{{ search_query }}" placeholder="Order number or style" maxlength="200">
+      <button class="production-btn production-btn--primary" type="submit">Search</button>
+    </form>
+    <div class="table-responsive">
+      <table class="table">
+        <thead><tr><th>Order</th><th>Style</th><th>Quantity</th><th>Sample date</th><th>Production date</th></tr></thead>
+        <tbody>
+          {% for order in production_page %}
+            <tr>
+              <td><a href="{% url 'production_detail' order.id %}">{{ order.order_code }}</a></td>
+              <td>{{ order.style_name|default:"—" }}</td><td>{{ order.qty_total }}</td>
+              <td>{{ order.sample_deadline|date:"Y-m-d"|default:"—" }}</td><td>{{ order.bulk_deadline|date:"Y-m-d"|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5">No assigned production orders found. Your Iconic coordinator can assign orders using Assigned Production Manager.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if production_page.has_other_pages %}
+      <nav aria-label="Assigned production pages">
+        {% if production_page.has_previous %}<a class="production-btn" href="?q={{ search_query|urlencode }}&amp;page={{ production_page.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ production_page.number }} of {{ production_page.paginator.num_pages }}</span>
+        {% if production_page.has_next %}<a class="production-btn" href="?q={{ search_query|urlencode }}&amp;page={{ production_page.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+</div>

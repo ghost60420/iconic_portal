@@ -1,0 +1,66 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-revisions-20260710">
+<link rel="stylesheet" href="{% static 'crm/production_stages.css' %}?v=production-stage-controls-1">
+{% include "crm/partials/production_density_assets.html" %}
+<div class="production-detail crm-modern-bridge crm-production-bridge" data-crm-density="compact">
+  <section class="production-detail-hero">
+    <div class="production-hero-main">
+      <div class="production-thumb">{% if order.style_image_url %}<img src="{{ order.style_image_url }}" alt="Production style">{% else %}<span>PO</span>{% endif %}</div>
+      <div class="production-hero-copy">
+        <p class="production-eyebrow">Assigned production order</p>
+        <h1>{{ order.order_code }}</h1>
+        <div class="production-hero-title">{{ order.style_name|default:"Production order" }}</div>
+        <div class="production-hero-meta"><span>Quantity {{ order.qty_total }}</span><span>Production date {{ order.bulk_deadline|date:"Y-m-d"|default:"—" }}</span></div>
+      </div>
+    </div>
+    <a class="production-btn production-btn--ghost" href="{% url 'production_list' %}">Assigned orders</a>
+  </section>
+  {% include "crm/partials/production_stages.html" %}
+  <section class="production-panel">
+    <div class="production-panel-head"><h2>Manufacturing details</h2></div>
+    <dl>
+      <dt>Style</dt><dd>{{ order.style_name|default:"—" }}</dd>
+      <dt>Colors</dt><dd>{{ order.color_info|default:"—" }}</dd>
+      <dt>Size ratio</dt><dd>{{ order.size_ratio_note|linebreaksbr|default:"—" }}</dd>
+      <dt>Accessories</dt><dd>{{ order.accessories_note|linebreaksbr|default:"—" }}</dd>
+      <dt>Packaging</dt><dd>{{ order.packaging_note|linebreaksbr|default:"—" }}</dd>
+      <dt>Sample date</dt><dd>{{ order.sample_deadline|date:"Y-m-d"|default:"—" }}</dd>
+    </dl>
+    {% for line in order_lines %}
+      <article class="production-panel">
+        <h3>Line {{ line.line_no }} · {{ line.style_name }}</h3>
+        <p>Quantity {{ line.quantity|default_if_none:"—" }} · {{ line.color_info }}</p>
+        <p>{{ line.size_ratio_note|linebreaksbr }}</p>
+        <p>{{ line.accessories_note|linebreaksbr }}</p>
+        <p>{{ line.packaging_note|linebreaksbr }}</p>
+      </article>
+    {% endfor %}
+  </section>
+  <section class="production-panel" id="restricted-production-notes">
+    <div class="production-panel-head"><h2>Your progress notes</h2></div>
+    <form method="post">
+      {% csrf_token %}<input type="hidden" name="action" value="add_comment">
+      <label for="restricted-production-note">Production progress note</label>
+      <textarea id="restricted-production-note" name="comment_text" rows="3" maxlength="10000" required></textarea>
+      <button type="submit" class="production-btn production-btn--primary">Add progress note</button>
+    </form>
+    {% for note in progress_notes %}<article><small>{{ note.created_at|date:"Y-m-d H:i T" }}</small><p>{{ note.content|linebreaksbr }}</p></article>{% empty %}<p>No progress notes added yet.</p>{% endfor %}
+  </section>
+  <section class="production-panel" id="restricted-production-photos">
+    <div class="production-panel-head"><h2>Production photos and references</h2></div>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}<input type="hidden" name="action" value="add_progress_photo">
+      <label for="restricted-production-photo-stage">Stage</label>
+      <select id="restricted-production-photo-stage" name="progress_stage" required>{% for value, label in progress_photo_stage_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+      <label for="restricted-production-photo-caption">Caption</label>
+      <input id="restricted-production-photo-caption" type="text" name="progress_caption" maxlength="160">
+      <label for="restricted-production-photo-file">Photo (JPG, PNG or WEBP, up to 10 MB)</label>
+      <input id="restricted-production-photo-file" type="file" name="progress_photo" accept="image/jpeg,image/png,image/webp" required>
+      <button type="submit" class="production-btn production-btn--primary">Add production photo</button>
+    </form>
+    {% for photo in progress_photos %}
+      <figure><a href="{{ photo.url }}"><img src="{{ photo.url }}" alt="{{ photo.caption|default:photo.label }}" loading="lazy" style="max-width:240px;max-height:200px"></a><figcaption>{{ photo.label }} · {{ photo.uploaded_at|date:"Y-m-d H:i T" }}{% if photo.caption %} · {{ photo.caption }}{% endif %}</figcaption></figure>
+    {% empty %}<p>No production photos added yet.</p>{% endfor %}
+  </section>
+</div>
+<script src="{% static 'crm/production_stages.js' %}?v=production-stage-controls-1" defer></script>

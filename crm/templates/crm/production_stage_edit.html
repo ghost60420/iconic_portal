@@ -101,7 +101,7 @@
         Edit stage
       </div>
       <div class="stage-edit-sub">
-        {{ stage.order.title }}  
+        {% if restricted_production_access %}{{ stage.order.order_code }}{% else %}{{ stage.order.title }}{% endif %}
         · {{ stage.display_name|default:stage.get_stage_key_display }}
       </div>
     </div>

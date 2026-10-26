@@ -1,6 +1,9 @@
 {% extends "crm/base.html" %}
 {% load static crm_people platform_tools crm_extras %}
 {% block content %}
+{% if restricted_production_access %}
+  {% include "crm/partials/restricted_production_detail.html" %}
+{% else %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-revisions-20260710">
 <link rel="stylesheet" href="{% static 'crm/production_stages.css' %}?v=production-stage-controls-1">
 {% include "crm/partials/production_density_assets.html" %}
@@ -1253,4 +1256,5 @@
   <summary><span>Record History</span><small>Chronological audit timeline</small></summary>
   {% record_timeline_panel "production" order.pk %}
 </details>
+{% endif %}
 {% endblock %}

@@ -571,6 +571,20 @@
 </head>
 
 <body>
+  {% if restricted_production_access %}
+    <div class="crm-topbar">
+      <nav class="crm-main-nav" aria-label="Production navigation">
+        <a href="{% url 'production_list' %}" class="crm-nav-item primary"><strong>Assigned Production</strong></a>
+      </nav>
+      <div class="crm-spacer"></div>
+      <div class="crm-userbox">
+        <div class="crm-username">{{ request.user.get_full_name|default:request.user.username }}</div>
+        <form method="post" action="{% url 'logout' %}" class="crm-logout-form">
+          {% csrf_token %}<button type="submit" class="crm-nav-item">Logout</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
   {% can_manage_people request.user as can_manage_people_access %}
   {% can_manage_role_assignments request.user as can_manage_roles_access %}
   {% has_sales_profile request.user as has_sales_profile_access %}
@@ -872,6 +886,7 @@
       {% endif %}
     {% endif %}
     {% endwith %}
+  {% endif %}
   {% endif %}
 
   <div class="crm-wrapper">

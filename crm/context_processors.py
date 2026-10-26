@@ -10,10 +10,13 @@ from crm.services.operations_notifications import (
 )
 from crm.models import FavoriteRecord
 from crm.services.platform_tools import RECORD_CONFIGS, can_manage_archives, descriptor_from_request
+from crm.services.restricted_production import is_restricted_production_user
 
 
 def operations_header(request):
     user = getattr(request, "user", None)
+    if is_restricted_production_user(user):
+        return {"restricted_production_access": True, "crm_header_notifications": [], "crm_header_unread_count": 0}
     if not user or not getattr(user, "is_authenticated", False):
         return {"crm_header_notifications": [], "crm_header_unread_count": 0}
     route_name = getattr(getattr(request, "resolver_match", None), "url_name", "")
@@ -62,6 +65,8 @@ def operations_header(request):
 
 def platform_record_tools(request):
     user = getattr(request, "user", None)
+    if is_restricted_production_user(user):
+        return {}
     if not user or not getattr(user, "is_authenticated", False):
         return {}
     route_name = getattr(getattr(request, "resolver_match", None), "url_name", "")

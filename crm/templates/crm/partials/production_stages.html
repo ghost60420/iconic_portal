@@ -4,7 +4,7 @@
       <h2>Production Stages</h2>
       <p>Edit planned dates and notes, or use a quick update to start or complete a stage.</p>
     </div>
-    <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Next Stage</a>
+    {% if not restricted_production_access %}<a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Next Stage</a>{% endif %}
   </div>
 
   <div class="production-stage-message" role="status" aria-live="polite" hidden></div>

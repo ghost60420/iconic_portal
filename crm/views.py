@@ -9241,6 +9241,10 @@ def production_list(request):
     """
     List of all production orders with small dashboard numbers.
     """
+    from crm.services.restricted_production import is_restricted_production_user
+    if is_restricted_production_user(request.user):
+        from crm.services.restricted_production_views import restricted_production_list
+        return restricted_production_list(request)
     today = timezone.localdate()
     if request.method == "POST":
         order_id = request.POST.get("order_id")
@@ -9849,6 +9853,10 @@ def production_edit(request, pk):
 
 
 def production_detail(request, pk):
+    from crm.services.restricted_production import is_restricted_production_user
+    if is_restricted_production_user(request.user):
+        from crm.services.restricted_production_views import restricted_production_detail
+        return restricted_production_detail(request, pk)
     detail_prefetches = [
         "fabrics",
         "accessories",
@@ -10752,6 +10760,14 @@ def _production_stage_result(request, stage, *, message="Stage updated."):
         messages.success(request, message)
         return redirect("production_detail", pk=stage.order_id)
     stages = list(stage.order.stages.all())
+    from crm.services.restricted_production import is_restricted_production_user
+    if is_restricted_production_user(request.user):
+        stages = [item for item in stages if item.stage_key != "shipping"]
+        return JsonResponse({
+            "ok": True, "message": message, "stage": _production_stage_payload(stage),
+            "percent_done": int(100 * sum(item.status == "done" for item in stages) / len(stages)) if stages else 0,
+            "order_delayed": any(item.status == "delay" or item.is_late for item in stages),
+        })
     percent = int(100 * sum(s.status == "done" for s in stages) / len(stages)) if stages else 0
     if is_bangladesh_local_sewing(stage.order):
         sewing = calculate_local_sewing(stage.order, stages=stages)
@@ -10795,6 +10811,9 @@ def _locked_production_stage_update(request, stage_id, *, quick=False):
     # Keep the existing can_production URL gate and the detail page's order scope.
     orders = scope_production_orders(ProductionOrder.objects.all(), request.user)
     stages = ProductionStage.objects.select_related("order").filter(order_id__in=orders.values("pk"))
+    from crm.services.restricted_production import is_restricted_production_user
+    if is_restricted_production_user(request.user):
+        stages = stages.exclude(stage_key="shipping")
     if request.method == "POST":
         stages = stages.select_for_update()
     stage = get_object_or_404(stages, pk=stage_id)

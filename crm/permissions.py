@@ -7,6 +7,7 @@ from django.shortcuts import render
 
 from .models_access import UserAccess
 from .services.operations_permissions import get_access, operations_group_names, role_flag_decision
+from .services.restricted_production import is_restricted_production_user
 
 LIBRARY_FALLBACK_FLAGS = (
     "can_products",
@@ -58,6 +59,8 @@ def _has_flag(access, flag_name):
 def can_view_internal_costing(user):
     if not user or not getattr(user, "is_authenticated", False):
         return False
+    if is_restricted_production_user(user):
+        return False
     if user.is_superuser:
         return True
     role_decision = role_flag_decision(user, "can_view_internal_costing")
@@ -78,6 +81,9 @@ def require_access(flag_name):
 
             if not user.is_authenticated:
                 return HttpResponseForbidden("Login required")
+
+            if is_restricted_production_user(user):
+                return view_func(request, *args, **kwargs) if flag_name == "can_production" else HttpResponseForbidden("No access")
 
             if user.is_superuser:
                 return view_func(request, *args, **kwargs)
@@ -119,6 +125,9 @@ def require_any_access(*flag_names):
 
             if not user.is_authenticated:
                 return HttpResponseForbidden("Login required")
+
+            if is_restricted_production_user(user):
+                return view_func(request, *args, **kwargs) if "can_production" in flag_names else HttpResponseForbidden("No access")
 
             if user.is_superuser:
                 return view_func(request, *args, **kwargs)

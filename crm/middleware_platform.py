@@ -3,6 +3,7 @@ from time import perf_counter
 from django.db import connection
 
 from crm.services.platform_tools import descriptor_from_request, save_request_performance, track_recent_record
+from crm.services.restricted_production import is_restricted_production_user
 
 
 class CRMPlatformMiddleware:
@@ -22,6 +23,7 @@ class CRMPlatformMiddleware:
             and response.status_code == 200
             and user
             and getattr(user, "is_authenticated", False)
+            and not is_restricted_production_user(user)
         ):
             try:
                 track_recent_record(user, descriptor_from_request(request))

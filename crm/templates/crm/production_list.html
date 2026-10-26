@@ -1,6 +1,9 @@
 {% extends "crm/base.html" %}
 {% load static crm_people crm_extras %}
 {% block content %}
+{% if restricted_production_access %}
+  {% include "crm/partials/restricted_production_list.html" %}
+{% else %}
 <link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-badges-20260603">
 {% include "crm/partials/production_density_assets.html" %}
 
@@ -515,4 +518,5 @@
   </section>
 </div>
 
+{% endif %}
 {% endblock %}

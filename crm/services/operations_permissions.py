@@ -2,6 +2,7 @@ from django.db.models import Q
 
 from crm.models_access import UserAccess
 from crm.services.employee_identity import employee_lead_ownership_q
+from crm.services.restricted_production import RESTRICTED_PRODUCTION_GROUP, is_restricted_production_user
 
 
 ROLE_CEO = "CEO"
@@ -207,7 +208,7 @@ def operations_group_names(user):
     cached = getattr(user, "_operations_group_names", None)
     if cached is not None:
         return cached
-    names = set(user.groups.filter(name__in=OPERATIONS_ROLES).values_list("name", flat=True))
+    names = set(user.groups.filter(name__in=(*OPERATIONS_ROLES, RESTRICTED_PRODUCTION_GROUP)).values_list("name", flat=True))
     normalized = {name.casefold() for name in names}
     user._operations_group_names = normalized
     return normalized
@@ -227,6 +228,8 @@ FALLBACK_FLAGS = {
 
 def operations_role_names(user):
     if not user or not getattr(user, "is_authenticated", False):
+        return set()
+    if is_restricted_production_user(user):
         return set()
     if getattr(user, "is_superuser", False):
         return set(OPERATIONS_ROLES)
@@ -276,6 +279,8 @@ def can_release_production(user):
     """Use the existing Production permission for the operational release action."""
     if not user or not getattr(user, "is_authenticated", False) or not getattr(user, "is_active", False):
         return False
+    if is_restricted_production_user(user):
+        return False
     decision = role_flag_decision(user, "can_production")
     if decision is not None:
         return decision
@@ -298,6 +303,8 @@ def can_archive_invoices(user):
 def role_flag_decision(user, flag_name):
     if not user or not getattr(user, "is_authenticated", False):
         return False
+    if is_restricted_production_user(user):
+        return flag_name == "can_production"
     if getattr(user, "is_superuser", False):
         return True
     roles = operations_role_names(user)
@@ -318,6 +325,8 @@ def role_flag_decision(user, flag_name):
 def can_access_operations_module(user, module):
     if not user or not getattr(user, "is_authenticated", False):
         return False
+    if is_restricted_production_user(user):
+        return module == "production"
     if getattr(user, "is_superuser", False):
         return True
 
@@ -440,6 +449,8 @@ def scope_sales_opportunities(queryset, user):
 
 
 def scope_production_orders(queryset, user):
+    if is_restricted_production_user(user):
+        return queryset.filter(assigned_production_manager=user)
     if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN):
         return queryset
     if has_operations_role(user, ROLE_ACCOUNTS, ROLE_FINANCE):

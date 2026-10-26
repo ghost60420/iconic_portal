@@ -2,8 +2,36 @@ import json
 import traceback
 
 from django.http import HttpResponseForbidden
+from django.shortcuts import redirect
+from django.utils.deprecation import MiddlewareMixin
+from django.utils.cache import add_never_cache_headers, patch_vary_headers
 
 from crm.audit_context import reset_current_actor, set_current_actor
+
+
+class RestrictedProductionMiddleware(MiddlewareMixin):
+    """Account-only deny boundary before any existing module view is invoked."""
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        from crm.services.restricted_production import (
+            is_restricted_production_user, restricted_request_allowed,
+        )
+
+        if not is_restricted_production_user(getattr(request, "user", None)):
+            return None
+        if request.resolver_match.view_name in {"home", "main_dashboard"} and request.method in {"GET", "HEAD"}:
+            return redirect("production_list")
+        if not restricted_request_allowed(request):
+            return HttpResponseForbidden("Your account is limited to assigned production orders.")
+        return None
+
+    def process_response(self, request, response):
+        from crm.services.restricted_production import is_restricted_production_user
+
+        if is_restricted_production_user(getattr(request, "user", None)):
+            add_never_cache_headers(response)
+            patch_vary_headers(response, ("Cookie",))
+        return response
 
 
 def _safe_get_user(request):
